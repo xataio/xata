@@ -1,0 +1,11 @@
+- op: add
+  path: /rules/-
+  value:
+    apiGroups:
+      - xata.io
+    resources:
+      - branches
+    verbs:
+      - get
+      - update
+      - patch

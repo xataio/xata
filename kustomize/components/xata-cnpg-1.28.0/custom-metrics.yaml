@@ -1,0 +1,75 @@
+# This file contains a ConfigMap for custom metrics in CloudNativePG.
+# Any metric defined here will be available in the Prometheus metrics endpoint of the PostgreSQL cluster and picked up by hte OTEL collector.
+# https://cloudnative-pg.io/documentation/1.25/monitoring/#example-of-a-user-defined-metric
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cnpg-custom-metrics
+  namespace: xata-clusters
+  labels:
+    cnpg.io/reload: ""
+data:
+  metrics.yaml: |
+    pg_stat_activity_connections:
+      query: |
+        SELECT
+          COUNT(*) FILTER (WHERE state = 'active' AND pid <> pg_backend_pid()) AS active,
+          COUNT(*) FILTER (WHERE state IN ('idle', 'idle in transaction', 'idle in transaction (aborted)') AND pid <> pg_backend_pid()) AS idle
+        FROM
+          pg_stat_activity;
+      metrics:
+        - active:
+            usage: "GAUGE"
+            description: "Number of active connections"
+        - idle:
+            usage: "GAUGE"
+            description: "Number of idle connections"
+    pg_stat_io_total:
+      query: |
+        SELECT
+          sum(reads) AS reads,
+          sum(writes) AS writes,
+          sum(read_time) AS read_time_ms,
+          sum(write_time) AS write_time_ms
+        FROM pg_stat_io;
+      metrics:
+        - reads:
+            usage: "COUNTER"
+            description: "Total read operations"
+        - writes:
+            usage: "COUNTER"
+            description: "Total write operations"
+        - read_time_ms:
+            usage: "COUNTER"
+            description: "Cumulative read time in milliseconds"
+        - write_time_ms:
+            usage: "COUNTER"
+            description: "Cumulative write time in milliseconds"
+    pg_stat_statements_latency:
+      query: |
+        SELECT
+          CASE
+            WHEN normalized_query ILIKE 'select%' THEN 'read'
+            WHEN normalized_query ILIKE 'insert%' OR
+                 normalized_query ILIKE 'update%' OR
+                 normalized_query ILIKE 'delete%' THEN 'write'
+            ELSE 'other'
+          END AS query_type,
+          round(avg(s.mean_exec_time)::numeric, 3) AS avg_latency_ms,
+          sum(calls) AS total_calls
+        FROM (
+          SELECT
+            calls, mean_exec_time,
+            regexp_replace(query, '^\s+', '') AS normalized_query
+          FROM pg_stat_statements
+        ) s
+        GROUP BY query_type;
+      metrics:
+        - query_type:
+            usage: "LABEL"
+        - avg_latency_ms:
+            usage: "GAUGE"
+            description: "Average execution time per query type (ms)"
+        - total_calls:
+            usage: "COUNTER"
+            description: "Total calls per query type"

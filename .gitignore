@@ -2,5 +2,6 @@
 .cursor/
 .DS_Store
 .tilt-build/
+kustomize/**/charts/
 coverage
 tmp/

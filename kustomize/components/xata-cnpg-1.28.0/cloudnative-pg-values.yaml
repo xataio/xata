@@ -1,0 +1,16 @@
+fullnameOverride: cnpg-controller-manager
+
+replicaCount: 1
+
+config:
+  data:
+    CLUSTERS_ROLLOUT_DELAY: "10"
+    ENABLE_INSTANCE_MANAGER_INPLACE_UPDATES: "true"
+
+resources:
+  limits:
+    cpu: "1"
+    memory: 100Mi
+  requests:
+    cpu: 100m
+    memory: 100Mi

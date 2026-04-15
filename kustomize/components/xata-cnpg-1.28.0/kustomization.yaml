@@ -1,0 +1,45 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+helmCharts:
+  - name: cloudnative-pg
+    repo: oci://ghcr.io/xataio/xata-cnpg/charts
+    version: 0.0.0-g00047bef1
+    releaseName: cloudnative-pg
+    namespace: cnpg-system
+    valuesFile: cloudnative-pg-values.yaml
+resources:
+  - namespace.yaml
+  - https://github.com/xataio/cnpg-i-scale-to-zero/releases/download/v0.1.6/manifest.yaml
+  - network.yaml
+  - custom-metrics.yaml
+
+  # Pod and ServiceMonitor from the prometheus-operator. These are required by
+  # CNPG[1] since it wants to create this resource as monitored is enabled. We
+  # do not run Prometheus in our clusters, but we can still use the CRDs for
+  # discovery in OTEL and the like.
+  #
+  # [1]: https://cloudnative-pg.io/documentation/1.25/monitoring/#monitoring-the-operator
+  - https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.82.0/example/prometheus-operator-crd/monitoring.coreos.com_servicemonitors.yaml
+  - https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.82.0/example/prometheus-operator-crd/monitoring.coreos.com_podmonitors.yaml
+
+patches:
+  - path: patch-scale-to-zero-rbac.yaml.patch
+    target:
+      kind: ClusterRole
+      name: cnpg-scale-to-zero-sidecar-role
+  # Add dataplane tolerations to CNPG deployments (same as base/dataplane applies to its resources)
+  - target:
+      kind: Deployment
+      namespace: cnpg-system
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: dummy
+      spec:
+        template:
+          spec:
+            tolerations:
+              - key: "xata.io/workload"
+                value: "dataplane"
+                effect: "NoSchedule"
