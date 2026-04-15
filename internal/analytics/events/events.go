@@ -1,6 +1,9 @@
 package events
 
-import "time"
+import (
+	"sort"
+	"time"
+)
 
 type Event struct {
 	Name       string
@@ -165,5 +168,80 @@ func NewBranchRestoredFromBackupEvent(organizationID, projectID, sourceBranchID,
 			"source_branch":   sourceBranchID,
 			"restored_branch": newBranchID,
 		},
+	}
+}
+
+// BranchCreationSummaryMetrics is used for synthetic PostHog summary events,
+// not events generated directly by user interactions.
+type BranchCreationSummaryMetrics struct {
+	TotalBranchesAllTime      int
+	AiBranchesAllTime         int
+	NonConsoleBranchesAllTime int
+	CliBranchesAllTime        int
+	CiBranchesAllTime         int
+	TotalBranches7day         int
+	AiBranches7day            int
+	NonConsoleBranches7day    int
+	CliBranches7day           int
+	CiBranches7day            int
+}
+
+// This is a summary event that we generate from data warehouse data
+func NewBranchCreationSummaryEvent(organizationID string, metrics BranchCreationSummaryMetrics, timestamp time.Time) Event {
+	return Event{
+		Name:      "summary: branch creation",
+		OrgID:     organizationID,
+		Timestamp: timestamp,
+		Properties: map[string]any{
+			"organization":              organizationID,
+			"totalBranchesAllTime":      metrics.TotalBranchesAllTime,
+			"aiBranchesAllTime":         metrics.AiBranchesAllTime,
+			"nonConsoleBranchesAllTime": metrics.NonConsoleBranchesAllTime,
+			"cliBranchesAllTime":        metrics.CliBranchesAllTime,
+			"ciBranchesAllTime":         metrics.CiBranchesAllTime,
+			"totalBranches7day":         metrics.TotalBranches7day,
+			"aiBranches7day":            metrics.AiBranches7day,
+			"nonConsoleBranches7day":    metrics.NonConsoleBranches7day,
+			"cliBranches7day":           metrics.CliBranches7day,
+			"ciBranches7day":            metrics.CiBranches7day,
+		},
+	}
+}
+
+// CostSummaryMetric is used for synthetic PostHog summary events,
+// not events generated directly by user interactions.
+type CostSummaryMetric struct {
+	AllTime     float64
+	SevenDay    float64
+	CostAllTime float64
+	Cost7day    float64
+}
+
+// This is a summary event that we generate from data warehouse data
+func NewCostSummaryEvent(organizationID string, metrics map[string]CostSummaryMetric, timestamp time.Time) Event {
+	properties := map[string]any{
+		"organization": organizationID,
+	}
+
+	// This event creates properties for multiple orb "billable metrics" so that as we extend billing system to
+	// add more billable metrics they will automatically be added to this event
+	metricNames := make([]string, 0, len(metrics))
+	for metricName := range metrics {
+		metricNames = append(metricNames, metricName)
+	}
+	sort.Strings(metricNames)
+
+	for _, metricName := range metricNames {
+		properties[metricName+"AllTime"] = metrics[metricName].AllTime
+		properties[metricName+"7day"] = metrics[metricName].SevenDay
+		properties[metricName+"CostAllTime"] = metrics[metricName].CostAllTime
+		properties[metricName+"Cost7day"] = metrics[metricName].Cost7day
+	}
+
+	return Event{
+		Name:       "summary: cost",
+		OrgID:      organizationID,
+		Timestamp:  timestamp,
+		Properties: properties,
 	}
 }

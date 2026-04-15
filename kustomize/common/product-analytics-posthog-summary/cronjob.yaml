@@ -1,0 +1,56 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: product-analytics-posthog-summary
+  namespace: xata
+spec:
+  schedule: "0 12 * * *"
+  timeZone: "Etc/UTC"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 3
+      template:
+        spec:
+          nodeSelector:
+            karpenter.sh/nodepool: default
+          tolerations:
+            - effect: NoSchedule
+              key: xata.io/workload
+              value: controlplane
+          restartPolicy: OnFailure
+          containers:
+            - name: product-analytics-posthog-summary
+              image: ghcr.io/xataio/xata/product-analytics:latest
+              imagePullPolicy: IfNotPresent
+              command:
+                - /server
+                - posthog_summary
+              env:
+                - name: XATA_PRODUCT_ANALYTICS_PA_DATAWAREHOUSE_POSTGRES_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: product-analytics-datawarehouse-secrets
+                      key: pa-datawarehouse-postgres-url
+              envFrom:
+                - configMapRef:
+                    name: otel-config
+                - secretRef:
+                    name: posthog
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 200Mi
+                limits:
+                  cpu: 200m
+                  memory: 200Mi
+              securityContext:
+                runAsNonRoot: true
+                runAsUser: 1000
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
