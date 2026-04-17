@@ -254,7 +254,10 @@ func (c *ClustersService) CreatePostgresCluster(ctx context.Context, req *cluste
 		storageClass := ptr.Deref(branch.Spec.ClusterSpec.Storage.StorageClass, "")
 		image := branch.Spec.ClusterSpec.Image
 		cpuReq := branch.Spec.ClusterSpec.Resources.Requests.Cpu().String()
-		memReq := branch.Spec.ClusterSpec.Resources.Requests.Memory().String()
+		// Use the original memory from the request config for pool matching,
+		// not the reduced value from resourceRequirements (which subtracts
+		// the pooler memory reservation).
+		memReq := req.GetConfiguration().GetMemory()
 		log.Ctx(ctx).Info().
 			Str("storageClass", storageClass).
 			Str("image", image).
@@ -406,7 +409,7 @@ func (c *ClustersService) DescribePostgresCluster(ctx context.Context, request *
 			ImageName:                       branch.Spec.ClusterSpec.Image,
 			VcpuRequest:                     formatCPUResource(int(branch.Spec.ClusterSpec.Resources.Requests.Cpu().MilliValue())),
 			VcpuLimit:                       formatCPUResource(int(branch.Spec.ClusterSpec.Resources.Limits.Cpu().MilliValue())),
-			Memory:                          quantityGiString(*branch.Spec.ClusterSpec.Resources.Requests.Memory()),
+			Memory:                          quantityGiStringWithPoolerReservation(*branch.Spec.ClusterSpec.Resources.Requests.Memory()),
 			Hibernate:                       branch.Spec.ClusterSpec.Hibernation.IsEnabled(),
 			ScaleToZero:                     scaleToZero,
 			PostgresConfigurationParameters: resources.PostgresParametersToMap(branch.Spec.ClusterSpec.Postgres),

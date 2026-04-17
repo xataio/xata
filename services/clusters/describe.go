@@ -112,6 +112,11 @@ func quantityGi(q resource.Quantity) int32 {
 	return int32(q.Value() / (1024 * 1024 * 1024))
 }
 
-func quantityGiString(q resource.Quantity) string {
+// quantityGiStringWithPoolerReservation converts a memory quantity back to the
+// user-facing GB value by adding the pooler memory reservation before converting.
+// This undoes the subtraction applied in resourceRequirements so the describe
+// response matches the advertised instance RAM.
+func quantityGiStringWithPoolerReservation(q resource.Quantity) string {
+	q.Add(poolerMemoryReservation)
 	return fmt.Sprintf("%d", quantityGi(q))
 }

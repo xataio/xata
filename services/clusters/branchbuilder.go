@@ -390,8 +390,14 @@ func postgresParametersFromMap(params map[string]string) []v1alpha1.PostgresPara
 	return pgParams
 }
 
+// poolerMemoryReservation is the amount of memory reserved on each node for
+// the PgBouncer pooler pod. The cluster memory request and limit are reduced
+// by this amount so both PostgreSQL and PgBouncer fit on the same node.
+var poolerMemoryReservation = resource.MustParse("100Mi")
+
 // resourceRequirements converts ClusterConfiguration resource fields to
-// corev1.ResourceRequirements.
+// corev1.ResourceRequirements. The memory request and limit are reduced by
+// poolerMemoryReservation to leave room for the PgBouncer pooler pod.
 func resourceRequirements(cfg resourceConfigurer) corev1.ResourceRequirements {
 	var reqs corev1.ResourceRequirements
 
@@ -401,7 +407,9 @@ func resourceRequirements(cfg resourceConfigurer) corev1.ResourceRequirements {
 		reqs.Requests[corev1.ResourceCPU] = resource.MustParse(cfg.GetVcpuRequest())
 	}
 	if cfg.GetMemory() != "" {
-		reqs.Requests[corev1.ResourceMemory] = resource.MustParse(cfg.GetMemory())
+		mem := resource.MustParse(cfg.GetMemory())
+		mem.Sub(poolerMemoryReservation)
+		reqs.Requests[corev1.ResourceMemory] = mem
 	}
 
 	// Build Limits if values are provided
@@ -410,7 +418,9 @@ func resourceRequirements(cfg resourceConfigurer) corev1.ResourceRequirements {
 		reqs.Limits[corev1.ResourceCPU] = resource.MustParse(cfg.GetVcpuLimit())
 	}
 	if cfg.GetMemory() != "" {
-		reqs.Limits[corev1.ResourceMemory] = resource.MustParse(cfg.GetMemory())
+		mem := resource.MustParse(cfg.GetMemory())
+		mem.Sub(poolerMemoryReservation)
+		reqs.Limits[corev1.ResourceMemory] = mem
 	}
 
 	return reqs

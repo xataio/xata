@@ -127,11 +127,11 @@ func TestCreatePostgresCluster(t *testing.T) {
 				b.Spec.ClusterSpec.Resources = corev1.ResourceRequirements{
 					Requests: corev1.ResourceList{
 						corev1.ResourceCPU:    resource.MustParse("1"),
-						corev1.ResourceMemory: resource.MustParse("2Gi"),
+						corev1.ResourceMemory: resource.MustParse("1948Mi"),
 					},
 					Limits: corev1.ResourceList{
 						corev1.ResourceCPU:    resource.MustParse("2"),
-						corev1.ResourceMemory: resource.MustParse("2Gi"),
+						corev1.ResourceMemory: resource.MustParse("1948Mi"),
 					},
 				}
 				b.Spec.ClusterSpec.Postgres.Parameters = updatePostgresParam(b.Spec.ClusterSpec.Postgres.Parameters, "max_connections", "100")
@@ -164,11 +164,11 @@ func TestCreatePostgresCluster(t *testing.T) {
 				b.Spec.ClusterSpec.Resources = corev1.ResourceRequirements{
 					Requests: corev1.ResourceList{
 						corev1.ResourceCPU:    resource.MustParse("1"),
-						corev1.ResourceMemory: resource.MustParse("2Gi"),
+						corev1.ResourceMemory: resource.MustParse("1948Mi"),
 					},
 					Limits: corev1.ResourceList{
 						corev1.ResourceCPU:    resource.MustParse("2"),
-						corev1.ResourceMemory: resource.MustParse("2Gi"),
+						corev1.ResourceMemory: resource.MustParse("1948Mi"),
 					},
 				}
 				b.Spec.ClusterSpec.Postgres.Parameters = updatePostgresParam(b.Spec.ClusterSpec.Postgres.Parameters, "max_connections", "100")
@@ -609,11 +609,11 @@ func TestDescribePostgresCluster(t *testing.T) {
 								Resources: corev1.ResourceRequirements{
 									Requests: corev1.ResourceList{
 										corev1.ResourceCPU:    resource.MustParse("2"),
-										corev1.ResourceMemory: resource.MustParse("4Gi"),
+										corev1.ResourceMemory: resource.MustParse("3996Mi"),
 									},
 									Limits: corev1.ResourceList{
 										corev1.ResourceCPU:    resource.MustParse("4"),
-										corev1.ResourceMemory: resource.MustParse("4Gi"),
+										corev1.ResourceMemory: resource.MustParse("3996Mi"),
 									},
 								},
 								Postgres: &v1alpha1.PostgresConfiguration{
@@ -1510,11 +1510,11 @@ func exampleRequestsAndBranches() (*clustersv1.CreatePostgresClusterRequest, *v1
 					Resources: corev1.ResourceRequirements{
 						Requests: corev1.ResourceList{
 							corev1.ResourceCPU:    resource.MustParse("2"),
-							corev1.ResourceMemory: resource.MustParse("4Gi"),
+							corev1.ResourceMemory: resource.MustParse("3996Mi"),
 						},
 						Limits: corev1.ResourceList{
 							corev1.ResourceCPU:    resource.MustParse("4"),
-							corev1.ResourceMemory: resource.MustParse("4Gi"),
+							corev1.ResourceMemory: resource.MustParse("3996Mi"),
 						},
 					},
 					Postgres: &v1alpha1.PostgresConfiguration{
@@ -1656,11 +1656,11 @@ func exampleRequestsAndBranches() (*clustersv1.CreatePostgresClusterRequest, *v1
 					Resources: corev1.ResourceRequirements{
 						Requests: corev1.ResourceList{
 							corev1.ResourceCPU:    resource.MustParse("3"),
-							corev1.ResourceMemory: resource.MustParse("8Gi"),
+							corev1.ResourceMemory: resource.MustParse("8092Mi"),
 						},
 						Limits: corev1.ResourceList{
 							corev1.ResourceCPU:    resource.MustParse("6"),
-							corev1.ResourceMemory: resource.MustParse("8Gi"),
+							corev1.ResourceMemory: resource.MustParse("8092Mi"),
 						},
 					},
 					Postgres: &v1alpha1.PostgresConfiguration{
@@ -1722,11 +1722,11 @@ func parentBranch(opts ...parentBranchOption) *v1alpha1.Branch {
 				Resources: corev1.ResourceRequirements{
 					Requests: corev1.ResourceList{
 						corev1.ResourceCPU:    resource.MustParse("1"),
-						corev1.ResourceMemory: resource.MustParse("2Gi"),
+						corev1.ResourceMemory: resource.MustParse("1948Mi"),
 					},
 					Limits: corev1.ResourceList{
 						corev1.ResourceCPU:    resource.MustParse("2"),
-						corev1.ResourceMemory: resource.MustParse("2Gi"),
+						corev1.ResourceMemory: resource.MustParse("1948Mi"),
 					},
 				},
 				Postgres: &v1alpha1.PostgresConfiguration{
