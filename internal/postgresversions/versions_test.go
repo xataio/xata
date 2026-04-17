@@ -251,6 +251,89 @@ func TestBuildImageURLMultipleSources(t *testing.T) {
 	}
 }
 
+func TestParseImageVersion(t *testing.T) {
+	testCases := map[string]struct {
+		image   string
+		want    *ImageVersion
+		wantErr bool
+	}{
+		"short postgres image": {
+			image: "postgres:17.5",
+			want:  &ImageVersion{Offering: "postgres", Major: 17, Minor: 5},
+		},
+		"short analytics image": {
+			image: "analytics:17.7",
+			want:  &ImageVersion{Offering: "analytics", Major: 17, Minor: 7},
+		},
+		"short experimental image": {
+			image: "experimental:17.7",
+			want:  &ImageVersion{Offering: "experimental", Major: 17, Minor: 7},
+		},
+		"full registry path postgres": {
+			image: "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.5",
+			want:  &ImageVersion{Offering: "postgres", Major: 17, Minor: 5},
+		},
+		"full registry path with date suffix": {
+			image: "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.5-08092025",
+			want:  &ImageVersion{Offering: "postgres", Major: 17, Minor: 5},
+		},
+		"full registry path analytics": {
+			image: "ghcr.io/xataio/postgres-images/xata-analytics:17.7",
+			want:  &ImageVersion{Offering: "analytics", Major: 17, Minor: 7},
+		},
+		"pg 16": {
+			image: "postgres:16.3",
+			want:  &ImageVersion{Offering: "postgres", Major: 16, Minor: 3},
+		},
+		"pg 18": {
+			image: "postgres:18.0",
+			want:  &ImageVersion{Offering: "postgres", Major: 18, Minor: 0},
+		},
+		"double digit minor": {
+			image: "postgres:14.10",
+			want:  &ImageVersion{Offering: "postgres", Major: 14, Minor: 10},
+		},
+		"rc version": {
+			image:   "postgres:18rc1",
+			wantErr: true,
+		},
+		"no colon": {
+			image:   "postgres-latest",
+			wantErr: true,
+		},
+		"major only no minor": {
+			image:   "postgres:17",
+			wantErr: true,
+		},
+		"non-numeric major": {
+			image:   "postgres:abc.5",
+			wantErr: true,
+		},
+		"non-numeric minor": {
+			image:   "postgres:17.abc",
+			wantErr: true,
+		},
+	}
+
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			got, err := ParseImageVersion(tc.image)
+			if tc.wantErr {
+				if err == nil {
+					t.Errorf("ParseImageVersion(%q): expected error, got nil", tc.image)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("ParseImageVersion(%q): unexpected error: %v", tc.image, err)
+			}
+			if *got != *tc.want {
+				t.Errorf("ParseImageVersion(%q) = %+v, want %+v", tc.image, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestValidateImage(t *testing.T) {
 	testCases := []struct {
 		name        string

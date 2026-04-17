@@ -71,6 +71,14 @@ type MajorVersion struct {
 	Supported bool     `yaml:"supported"` // true/false
 }
 
+// ImageVersion represents a PostgreSQL image information (offering, major,
+// minor)
+type ImageVersion struct {
+	Offering string `yaml:"offering"`
+	Major    int    `yaml:"major"`
+	Minor    int    `yaml:"minor"`
+}
+
 var postgresVersions *PostgreSQLVersions
 
 // init loads the versions from the embedded YAML file
@@ -319,10 +327,48 @@ func GetMajorForVersion(version string) string {
 	return before
 }
 
-// ValidateImage validates an image string and returns the offering and major version
-// It checks that the image exists in the list of available images
-// e.g., "analytics:17.5" -> ("analytics", "17", nil)
-// e.g., "postgres:16.3" -> ("postgres", "16", nil)
+// ParseImageVersion parses an image string. It checks it exists in the list of
+// the image string can be the short version e.g "analytics:17.5" or the long version
+// "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.5-08092025"
+// available images and returns the (offering, major, minor) information
+func ParseImageVersion(image string) (*ImageVersion, error) {
+	short := ShortImageName(image)
+
+	offering, version, ok := strings.Cut(short, ":")
+	if !ok {
+		return nil, fmt.Errorf("invalid image format, expected 'offering:version'")
+	}
+
+	// Strip any date suffix (e.g., "17.5-08092025" -> "17.5")
+	if dashIndex := strings.Index(version, "-"); dashIndex != -1 {
+		version = version[:dashIndex]
+	}
+
+	majorStr, minorStr, ok := strings.Cut(version, ".")
+	if !ok {
+		return nil, fmt.Errorf("invalid version format, expected 'major.minor'")
+	}
+
+	major, err := strconv.Atoi(majorStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid major version %q: %w", majorStr, err)
+	}
+
+	minor, err := strconv.Atoi(minorStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid minor version %q: %w", minorStr, err)
+	}
+
+	return &ImageVersion{
+		Offering: offering,
+		Major:    major,
+		Minor:    minor,
+	}, nil
+}
+
+// ValidateImage validates an image string. It checks that the image exists in
+// the list of available images e.g., "analytics:17.5" -> ("analytics", "17",
+// nil) e.g., "postgres:16.3" -> ("postgres", "16", nil)
 func ValidateImage(image string) error {
 	parts := strings.Split(image, ":")
 	if len(parts) != 2 {

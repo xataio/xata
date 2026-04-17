@@ -802,7 +802,7 @@ func (s *handler) validateBranchFromConfiguration(ctx context.Context, organizat
 
 func (s *handler) prepareCreateClusterFromConfiguration(ctx context.Context, organizationID spec.OrganizationID, projectID, branchName string, payload spec.BranchFromConfiguration) (ClusterServicePayload, error) {
 	// validate image - from this moment on, the image is in the correct format, no need for prefix, suffix, extra validation
-	validImageFormat, err := s.validateImage(ctx, organizationID, string(payload.Configuration.Image))
+	validImageFormat, err := s.validateImage(ctx, organizationID, payload.Configuration.Image)
 	if err != nil {
 		return ClusterServicePayload{}, ErrorInvalidParam{BranchName: branchName, Param: "configuration", Message: "invalid image: " + err.Error()}
 	}
@@ -987,6 +987,37 @@ func (s *handler) validateImage(ctx context.Context, organizationID spec.Organiz
 		return imageURL, nil
 	}
 	return "", fmt.Errorf("image %s is not valid", image)
+}
+
+func (s *handler) validateImageUpgrade(ctx context.Context, organizationID spec.OrganizationID, newImage, currentImage string) (string, error) {
+	// if the new image a valid one?
+	newImageURL, err := s.validateImage(ctx, organizationID, newImage)
+	if err != nil {
+		return "", err
+	}
+
+	// make sure the offering is the same and that the minor is bigger than the current one
+	newImageInfo, err := s.imageProvider.ParseImageVersion(newImageURL)
+	if err != nil {
+		return "", err
+	}
+	currentImageInfo, err := s.imageProvider.ParseImageVersion(currentImage)
+	if err != nil {
+		return "", err
+	}
+
+	if newImageInfo.Offering != currentImageInfo.Offering {
+		return "", fmt.Errorf("incompatible offering: %s is not compatible with %s", newImageInfo.Offering, currentImageInfo.Offering)
+	}
+	if newImageInfo.Major != currentImageInfo.Major {
+		return "", fmt.Errorf("no major version upgrades supported: %d is different than current %d", newImageInfo.Major, currentImageInfo.Major)
+	}
+
+	if newImageInfo.Minor < currentImageInfo.Minor {
+		return "", fmt.Errorf("new minor: %d is older than current  %d", newImageInfo.Minor, currentImageInfo.Minor)
+	}
+
+	return newImageURL, nil
 }
 
 // allocateCell allocates a cell in the region
@@ -1196,7 +1227,8 @@ func (s *handler) UpdateBranch(c echo.Context, organizationID spec.OrganizationI
 			var cluster *clustersv1.DescribePostgresClusterResponse
 			needsClusterInfo := (body.InstanceType != nil && *body.InstanceType != FallbackInstanceType) ||
 				body.PostgresConfigurationParameters != nil ||
-				body.PreloadLibraries != nil
+				body.PreloadLibraries != nil ||
+				body.Image != nil
 			if needsClusterInfo {
 				cluster, err = client.DescribePostgresCluster(c.Request().Context(), &clustersv1.DescribePostgresClusterRequest{Id: branchID})
 				if err != nil {
@@ -1380,6 +1412,18 @@ func (s *handler) UpdateBranch(c echo.Context, organizationID spec.OrganizationI
 				config.BackupConfiguration = backupConfig
 			}
 
+			// Handle image minor version upgrades
+			if body.Image != nil {
+				// It can be argued that this should be decided by the operator. However - more than what
+				// the operator supports - there should be a way for us to allow/disallow certain
+				// upgrades - there can be business reasons for this and so it needs to happen here.
+				imageURL, err := s.validateImageUpgrade(c.Request().Context(), organizationID, *body.Image, cluster.Configuration.ImageName)
+				if err != nil {
+					return ErrorInvalidParam{BranchName: branch.ID, Param: "image", Message: err.Error()}
+				}
+				config.ImageName = &imageURL
+			}
+
 			_, err = client.UpdatePostgresCluster(c.Request().Context(), &clustersv1.UpdatePostgresClusterRequest{
 				Id:                  branch.ID,
 				UpdateConfiguration: &config,
@@ -1459,7 +1503,8 @@ func hasClusterConfigChanged(body *spec.UpdateBranchJSONRequestBody) bool {
 		body.ScaleToZero != nil ||
 		body.PostgresConfigurationParameters != nil ||
 		body.PreloadLibraries != nil ||
-		body.BackupConfiguration != nil
+		body.BackupConfiguration != nil ||
+		body.Image != nil
 }
 
 // Delete a branch

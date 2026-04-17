@@ -3288,12 +3288,13 @@ func TestUpdateBranch(t *testing.T) {
 	mockClusters := protomocks.NewClustersServiceClient(t)
 	mockCells := cellsmock.NewCellsMock(t, mockClusters)
 	mockPostgresConfig := postgrescfgmocks.NewPostgresConfigProvider(t)
+	mockImageProvider := postgresversionsmocks.NewImageProvider(t)
 
 	feat := openfeaturetest.NewClient(nil)
 	sched := &scheduler.Scheduler{DefaultStrategy: &strategy.AlwaysPrimary{}}
 	mockAnalytics := analyticsmocks.NewClient(t)
 	mockAnalytics.EXPECT().Track(mock.Anything, mock.Anything).Return().Maybe()
-	handler := NewAPIHandler(feat, mockStore, mockCells, "testdomain:5432", createNewSigNozClient(t), sched, mockAnalytics, mockPostgresConfig, nil)
+	handler := NewAPIHandler(feat, mockStore, mockCells, "testdomain:5432", createNewSigNozClient(t), sched, mockAnalytics, mockPostgresConfig, mockImageProvider)
 	e := apitest.New(t).WithOpenAPISpec(projectsSpec).WithClaims(apitest.TestClaims)
 
 	updateBranchTests := []struct {
@@ -4355,6 +4356,163 @@ func TestUpdateBranch(t *testing.T) {
 			},
 			wantError:     true,
 			expectedError: ErrorInvalidParam{BranchName: "123", Param: "backupConfiguration", Message: "backup configuration cannot be specified when backups are disabled in the selected region"},
+		},
+		{
+			name:      "update branch image minor upgrade works",
+			projectID: "project_id",
+			branchID:  "123",
+			jsonBody:  map[string]string{"image": "postgres:17.7"},
+			setupMocks: func() {
+				branch := store.Branch{
+					ID:          "123",
+					Name:        "newTest",
+					Description: new("newDesc"),
+					Region:      "region-id-1",
+				}
+				mockStore.EXPECT().UpdateBranch(mock.Anything, apitest.TestOrganization, "project_id", "123", updateBranchConfig(nil, nil), mock.Anything).Run(func(ctx context.Context, organizationID string, projectID string, branchID string, cfg *store.UpdateBranchConfiguration, provisionFn func(*store.Branch) error) {
+					err := provisionFn(&branch)
+					assert.Nil(t, err)
+				}).Return(&branch, nil).Once()
+				mockClusters.EXPECT().GetPostgresClusterCredentials(mock.Anything, &clustersv1.GetPostgresClusterCredentialsRequest{Id: "123", Username: "superuser"}).Return(&clustersv1.GetPostgresClusterCredentialsResponse{
+					Username: "user",
+					Password: "pass",
+				}, nil).Once()
+				mockStore.EXPECT().GetRegion(mock.Anything, apitest.TestOrganization, "region-id-1").Return(&store.Region{ID: "region-id-1", GatewayHostPort: ""}, nil).Once()
+				mockClusters.EXPECT().DescribePostgresCluster(mock.Anything, &clustersv1.DescribePostgresClusterRequest{Id: "123"}).Return(&clustersv1.DescribePostgresClusterResponse{
+					Id: "123",
+					Configuration: &clustersv1.ClusterConfiguration{
+						ImageName: "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.5",
+					},
+				}, nil).Once()
+				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{"postgres:17.7"}).Once()
+				mockImageProvider.EXPECT().BuildImageURL("postgres:17.7").Return("ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.7").Once()
+				mockImageProvider.EXPECT().ParseImageVersion("ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.7").Return(&postgresversions.ImageVersion{Offering: "postgres", Major: 17, Minor: 7}, nil).Once()
+				mockImageProvider.EXPECT().ParseImageVersion("ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.5").Return(&postgresversions.ImageVersion{Offering: "postgres", Major: 17, Minor: 5}, nil).Once()
+				mockClusters.EXPECT().UpdatePostgresCluster(mock.Anything, &clustersv1.UpdatePostgresClusterRequest{
+					Id: "123",
+					UpdateConfiguration: &clustersv1.UpdateClusterConfiguration{
+						ImageName: new("ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.7"),
+					},
+				}).Return(&clustersv1.UpdatePostgresClusterResponse{}, nil).Once()
+			},
+			wantError: false,
+		},
+		{
+			name:      "update branch image with different offering fails",
+			projectID: "project_id",
+			branchID:  "123",
+			jsonBody:  map[string]string{"image": "postgres:17.7"},
+			setupMocks: func() {
+				branch := store.Branch{
+					ID:          "123",
+					Name:        "newTest",
+					Description: new("newDesc"),
+					Region:      "region-id-1",
+				}
+				mockStore.EXPECT().UpdateBranch(mock.Anything, apitest.TestOrganization, "project_id", "123", updateBranchConfig(nil, nil), mock.Anything).Run(func(ctx context.Context, organizationID string, projectID string, branchID string, cfg *store.UpdateBranchConfiguration, provisionFn func(*store.Branch) error) {
+					err := provisionFn(&branch)
+					assert.Error(t, err)
+				}).Return(nil, ErrorInvalidParam{BranchName: "123", Param: "image", Message: "incompatible offering: postgres is not compatible with analytics"}).Once()
+				mockClusters.EXPECT().DescribePostgresCluster(mock.Anything, &clustersv1.DescribePostgresClusterRequest{Id: "123"}).Return(&clustersv1.DescribePostgresClusterResponse{
+					Id: "123",
+					Configuration: &clustersv1.ClusterConfiguration{
+						ImageName: "ghcr.io/xataio/postgres-images/xata-analytics:17.5",
+					},
+				}, nil).Once()
+				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{"postgres:17.7"}).Once()
+				mockImageProvider.EXPECT().BuildImageURL("postgres:17.7").Return("ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.7").Once()
+				mockImageProvider.EXPECT().ParseImageVersion("ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.7").Return(&postgresversions.ImageVersion{Offering: "postgres", Major: 17, Minor: 7}, nil).Once()
+				mockImageProvider.EXPECT().ParseImageVersion("ghcr.io/xataio/postgres-images/xata-analytics:17.5").Return(&postgresversions.ImageVersion{Offering: "analytics", Major: 17, Minor: 5}, nil).Once()
+			},
+			wantError:     true,
+			expectedError: ErrorInvalidParam{BranchName: "123", Param: "image", Message: "incompatible offering: postgres is not compatible with analytics"},
+		},
+		{
+			name:      "update branch image with major version change fails",
+			projectID: "project_id",
+			branchID:  "123",
+			jsonBody:  map[string]string{"image": "postgres:18.0"},
+			setupMocks: func() {
+				branch := store.Branch{
+					ID:          "123",
+					Name:        "newTest",
+					Description: new("newDesc"),
+					Region:      "region-id-1",
+				}
+				mockStore.EXPECT().UpdateBranch(mock.Anything, apitest.TestOrganization, "project_id", "123", updateBranchConfig(nil, nil), mock.Anything).Run(func(ctx context.Context, organizationID string, projectID string, branchID string, cfg *store.UpdateBranchConfiguration, provisionFn func(*store.Branch) error) {
+					err := provisionFn(&branch)
+					assert.Error(t, err)
+				}).Return(nil, ErrorInvalidParam{BranchName: "123", Param: "image", Message: "no major version upgrades supported: 18 is different than current 17"}).Once()
+				mockClusters.EXPECT().DescribePostgresCluster(mock.Anything, &clustersv1.DescribePostgresClusterRequest{Id: "123"}).Return(&clustersv1.DescribePostgresClusterResponse{
+					Id: "123",
+					Configuration: &clustersv1.ClusterConfiguration{
+						ImageName: "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.5",
+					},
+				}, nil).Once()
+				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{"postgres:18.0"}).Once()
+				mockImageProvider.EXPECT().BuildImageURL("postgres:18.0").Return("ghcr.io/xataio/postgres-images/cnpg-postgres-plus:18.0").Once()
+				mockImageProvider.EXPECT().ParseImageVersion("ghcr.io/xataio/postgres-images/cnpg-postgres-plus:18.0").Return(&postgresversions.ImageVersion{Offering: "postgres", Major: 18, Minor: 0}, nil).Once()
+				mockImageProvider.EXPECT().ParseImageVersion("ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.5").Return(&postgresversions.ImageVersion{Offering: "postgres", Major: 17, Minor: 5}, nil).Once()
+			},
+			wantError:     true,
+			expectedError: ErrorInvalidParam{BranchName: "123", Param: "image", Message: "no major version upgrades supported: 18 is different than current 17"},
+		},
+		{
+			name:      "update branch image with minor downgrade fails",
+			projectID: "project_id",
+			branchID:  "123",
+			jsonBody:  map[string]string{"image": "postgres:17.3"},
+			setupMocks: func() {
+				branch := store.Branch{
+					ID:          "123",
+					Name:        "newTest",
+					Description: new("newDesc"),
+					Region:      "region-id-1",
+				}
+				mockStore.EXPECT().UpdateBranch(mock.Anything, apitest.TestOrganization, "project_id", "123", updateBranchConfig(nil, nil), mock.Anything).Run(func(ctx context.Context, organizationID string, projectID string, branchID string, cfg *store.UpdateBranchConfiguration, provisionFn func(*store.Branch) error) {
+					err := provisionFn(&branch)
+					assert.Error(t, err)
+				}).Return(nil, ErrorInvalidParam{BranchName: "123", Param: "image", Message: "new minor: 3 is older than current  5"}).Once()
+				mockClusters.EXPECT().DescribePostgresCluster(mock.Anything, &clustersv1.DescribePostgresClusterRequest{Id: "123"}).Return(&clustersv1.DescribePostgresClusterResponse{
+					Id: "123",
+					Configuration: &clustersv1.ClusterConfiguration{
+						ImageName: "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.5",
+					},
+				}, nil).Once()
+				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{"postgres:17.3"}).Once()
+				mockImageProvider.EXPECT().BuildImageURL("postgres:17.3").Return("ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.3").Once()
+				mockImageProvider.EXPECT().ParseImageVersion("ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.3").Return(&postgresversions.ImageVersion{Offering: "postgres", Major: 17, Minor: 3}, nil).Once()
+				mockImageProvider.EXPECT().ParseImageVersion("ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.5").Return(&postgresversions.ImageVersion{Offering: "postgres", Major: 17, Minor: 5}, nil).Once()
+			},
+			wantError:     true,
+			expectedError: ErrorInvalidParam{BranchName: "123", Param: "image", Message: "new minor: 3 is older than current  5"},
+		},
+		{
+			name:      "update branch image with invalid image fails",
+			projectID: "project_id",
+			branchID:  "123",
+			jsonBody:  map[string]string{"image": "postgres:99.99"},
+			setupMocks: func() {
+				branch := store.Branch{
+					ID:          "123",
+					Name:        "newTest",
+					Description: new("newDesc"),
+					Region:      "region-id-1",
+				}
+				mockStore.EXPECT().UpdateBranch(mock.Anything, apitest.TestOrganization, "project_id", "123", updateBranchConfig(nil, nil), mock.Anything).Run(func(ctx context.Context, organizationID string, projectID string, branchID string, cfg *store.UpdateBranchConfiguration, provisionFn func(*store.Branch) error) {
+					err := provisionFn(&branch)
+					assert.Error(t, err)
+				}).Return(nil, ErrorInvalidParam{BranchName: "123", Param: "image", Message: "image postgres:99.99 is not valid"}).Once()
+				mockClusters.EXPECT().DescribePostgresCluster(mock.Anything, &clustersv1.DescribePostgresClusterRequest{Id: "123"}).Return(&clustersv1.DescribePostgresClusterResponse{
+					Id: "123",
+					Configuration: &clustersv1.ClusterConfiguration{
+						ImageName: "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.5",
+					},
+				}, nil).Once()
+				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{"postgres:17.5"}).Once()
+			},
+			wantError:     true,
+			expectedError: ErrorInvalidParam{BranchName: "123", Param: "image", Message: "image postgres:99.99 is not valid"},
 		},
 	}
 	for _, tt := range updateBranchTests {

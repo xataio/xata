@@ -10,6 +10,7 @@ type ImageProvider interface {
 	BuildImageURL(imageName string) string
 	GetMajorForVersion(version string) string
 	ExtractVersionFromImageName(imageName string) string
+	ParseImageVersion(image string) (*ImageVersion, error)
 	ValidateImage(image string) error
 }
 
@@ -41,6 +42,11 @@ func (p *DefaultImageProvider) GetMajorForVersion(version string) string {
 // ExtractVersionFromImageName implements ImageProvider
 func (p *DefaultImageProvider) ExtractVersionFromImageName(imageName string) string {
 	return ExtractVersionFromImageName(imageName)
+}
+
+// ParseImageVersion implements ImageProvider
+func (p *DefaultImageProvider) ParseImageVersion(image string) (*ImageVersion, error) {
+	return ParseImageVersion(image)
 }
 
 // ValidateImage implements ImageProvider

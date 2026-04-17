@@ -1983,6 +1983,9 @@ components:
           type: array
           items:
             type: string
+        image:
+          description: PostgreSQL image to use for the database instances
+          type: string
     ClusterConfiguration:
       description: Configuration details for a database cluster backing a branch
       type: object
