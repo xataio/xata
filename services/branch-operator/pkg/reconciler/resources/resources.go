@@ -247,6 +247,7 @@ func PoolerSpec(clusterName string, instances int32, hibernated bool, poolMode a
 		"max_client_conn":         maxClientConn,
 		"max_prepared_statements": "1000",
 		"query_wait_timeout":      "120",
+		"server_idle_timeout":     "60",
 	}
 	if defaultPoolSize != "" {
 		params["default_pool_size"] = defaultPoolSize

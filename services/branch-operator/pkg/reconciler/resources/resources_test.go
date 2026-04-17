@@ -523,6 +523,7 @@ func TestPoolerSpec(t *testing.T) {
 						"max_client_conn":         "100",
 						"max_prepared_statements": "1000",
 						"query_wait_timeout":      "120",
+						"server_idle_timeout":     "60",
 					},
 				},
 				ServiceTemplate: &apiv1.ServiceTemplateSpec{
@@ -576,6 +577,7 @@ func TestPoolerSpec(t *testing.T) {
 						"max_client_conn":         "100",
 						"max_prepared_statements": "1000",
 						"query_wait_timeout":      "120",
+						"server_idle_timeout":     "60",
 					},
 				},
 				ServiceTemplate: &apiv1.ServiceTemplateSpec{
@@ -633,6 +635,7 @@ func TestPoolerSpec(t *testing.T) {
 						"max_client_conn":         "100",
 						"max_prepared_statements": "1000",
 						"query_wait_timeout":      "120",
+						"server_idle_timeout":     "60",
 					},
 				},
 				ServiceTemplate: &apiv1.ServiceTemplateSpec{
@@ -693,6 +696,7 @@ func TestPoolerSpec(t *testing.T) {
 						"max_client_conn":         "100",
 						"max_prepared_statements": "1000",
 						"query_wait_timeout":      "120",
+						"server_idle_timeout":     "60",
 					},
 				},
 				ServiceTemplate: &apiv1.ServiceTemplateSpec{
@@ -752,6 +756,7 @@ func TestPoolerSpec(t *testing.T) {
 						"max_prepared_statements": "1000",
 						"query_wait_timeout":      "120",
 						"default_pool_size":       "180",
+						"server_idle_timeout":     "60",
 					},
 				},
 				ServiceTemplate: &apiv1.ServiceTemplateSpec{
