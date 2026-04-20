@@ -2,10 +2,12 @@ package reconciler
 
 import (
 	"context"
+	"maps"
 	"strconv"
 
 	apiv1 "github.com/xataio/xata-cnpg/api/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	apiv1ac "github.com/xataio/xata-cnpg/pkg/client/applyconfiguration/api/v1"
+	metav1ac "k8s.io/client-go/applyconfigurations/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -23,54 +25,39 @@ const (
 	SkipWALArchivingAnnotation = "cnpg.io/skipWalArchiving"
 )
 
-// createOrUpdateCluster creates or updates the CNPG Cluster for the given Branch.
+// reconcileCluster creates or updates the CNPG Cluster for the given Branch
+// using server-side apply.
 func (r *BranchReconciler) reconcileCluster(
 	ctx context.Context,
 	branch *v1alpha1.Branch,
-) (controllerutil.OperationResult, error) {
-	// Skip reconciliation if the Branch has no Cluster name
+) error {
 	if !branch.HasClusterName() {
-		return controllerutil.OperationResultNone, nil
-	}
-
-	cluster := &apiv1.Cluster{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      branch.ClusterName(),
-			Namespace: r.ClustersNamespace,
-		},
-	}
-
-	result, err := controllerutil.CreateOrUpdate(ctx, r.Client, cluster, func() error {
-		// Ensure the owner reference is set on the Cluster
-		if err := controllerutil.SetControllerReference(branch, cluster, r.Scheme); err != nil {
-			return err
-		}
-
-		// Ensure labels are set on the Cluster
-		ensureLabels(&cluster.ObjectMeta, branch.Spec.InheritedMetadata)
-
-		// Ensure annotations are set on the Cluster
-		reconcileClusterAnnotations(&cluster.ObjectMeta, branch)
-
-		// Build the complete cluster configuration from the Branch spec and the
-		// reconciler configuration
-		cfg := resources.ClusterConfig{
-			ClusterSpec:       branch.Spec.ClusterSpec,
-			BackupSpec:        branch.Spec.BackupSpec,
-			InheritedMetadata: branch.Spec.InheritedMetadata,
-			RestoreSpec:       branch.Spec.Restore,
-			Tolerations:       r.Tolerations,
-			EnforceZone:       r.EnforceZone,
-			ImagePullSecrets:  r.ImagePullSecrets,
-		}
-
-		// Set the spec for the Cluster
-		cluster.Spec = resources.ClusterSpec(branch.Name, branch.ClusterName(), cfg)
-
 		return nil
-	})
+	}
 
-	return result, err
+	cfg := resources.ClusterConfig{
+		ClusterSpec:       branch.Spec.ClusterSpec,
+		BackupSpec:        branch.Spec.BackupSpec,
+		InheritedMetadata: branch.Spec.InheritedMetadata,
+		RestoreSpec:       branch.Spec.Restore,
+		Tolerations:       r.Tolerations,
+		EnforceZone:       r.EnforceZone,
+		ImagePullSecrets:  r.ImagePullSecrets,
+	}
+
+	ac := apiv1ac.Cluster(branch.ClusterName(), r.ClustersNamespace).
+		WithLabels(clusterLabels(branch.Spec.InheritedMetadata)).
+		WithAnnotations(clusterAnnotations(branch)).
+		WithOwnerReferences(metav1ac.OwnerReference().
+			WithAPIVersion(v1alpha1.GroupVersion.String()).
+			WithKind("Branch").
+			WithName(branch.Name).
+			WithUID(branch.UID).
+			WithBlockOwnerDeletion(true).
+			WithController(true)).
+		WithSpec(resources.ClusterSpec(branch.Name, branch.ClusterName(), cfg))
+
+	return r.Apply(ctx, ac, client.FieldOwner(OperatorName), client.ForceOwnership)
 }
 
 // reconcileOwnedClusters ensures that only the Cluster named in the Branch
@@ -114,46 +101,44 @@ func (r *BranchReconciler) reconcileOwnedClusters(
 	return result, nil
 }
 
-// reconcileClusterAnnotations reconciles the cluster-level annotations for a
-// Branch
-func reconcileClusterAnnotations(m *metav1.ObjectMeta, branch *v1alpha1.Branch) {
-	if m.Annotations == nil {
-		m.Annotations = make(map[string]string)
+// clusterAnnotations builds the annotation map for a CNPG Cluster resource
+func clusterAnnotations(branch *v1alpha1.Branch) map[string]string {
+	annotations := map[string]string{
+		BranchAnnotation:   branch.Name,
+		PodPatchAnnotation: `[{"op": "add", "path": "/spec/enableServiceLinks", "value": false}]`,
 	}
 
 	cSpec := branch.Spec.ClusterSpec
-	// Reconcile the scale-to-zero annotations
 	if cSpec.ScaleToZero != nil && cSpec.ScaleToZero.Enabled {
-		m.Annotations[ScaleToZeroEnabledAnnotation] = kubeTrue
-		m.Annotations[ScaleToZeroInactivityAnnotation] = strconv.Itoa(int(cSpec.ScaleToZero.InactivityPeriodMinutes))
+		annotations[ScaleToZeroEnabledAnnotation] = kubeTrue
+		annotations[ScaleToZeroInactivityAnnotation] = strconv.Itoa(int(cSpec.ScaleToZero.InactivityPeriodMinutes))
 	} else {
-		m.Annotations[ScaleToZeroEnabledAnnotation] = kubeFalse
-		delete(m.Annotations, ScaleToZeroInactivityAnnotation)
+		annotations[ScaleToZeroEnabledAnnotation] = kubeFalse
 	}
 
-	// Reconcile the hibernation annotation
-	if cSpec.Hibernation != nil {
-		switch *cSpec.Hibernation {
-		case v1alpha1.HibernationModeEnabled:
-			m.Annotations[HibernationAnnotation] = "on"
-		case v1alpha1.HibernationModeDisabled:
-			m.Annotations[HibernationAnnotation] = "off"
-		}
+	if cSpec.Hibernation != nil && *cSpec.Hibernation == v1alpha1.HibernationModeEnabled {
+		annotations[HibernationAnnotation] = "on"
 	} else {
-		delete(m.Annotations, HibernationAnnotation)
+		annotations[HibernationAnnotation] = "off"
 	}
 
 	bSpec := branch.Spec.BackupSpec
-	// Reconcile the WAL archiving annotation
 	if bSpec.IsWALArchivingDisabled() {
-		m.Annotations[SkipWALArchivingAnnotation] = "enabled"
+		annotations[SkipWALArchivingAnnotation] = "enabled"
 	} else {
-		delete(m.Annotations, SkipWALArchivingAnnotation)
+		annotations[SkipWALArchivingAnnotation] = "disabled"
 	}
 
-	// Reconcile the branch name annotation
-	m.Annotations[BranchAnnotation] = branch.Name
+	return annotations
+}
 
-	// Reconcile the podPatch annotation
-	m.Annotations[PodPatchAnnotation] = `[{"op": "add", "path": "/spec/enableServiceLinks", "value": false}]`
+// clusterLabels builds the label map for a CNPG Cluster resource
+func clusterLabels(inheritedMetadata *v1alpha1.InheritedMetadata) map[string]string {
+	labels := map[string]string{
+		"app.kubernetes.io/managed-by": OperatorName,
+	}
+	if inheritedMetadata != nil && inheritedMetadata.Labels != nil {
+		maps.Copy(labels, inheritedMetadata.Labels)
+	}
+	return labels
 }

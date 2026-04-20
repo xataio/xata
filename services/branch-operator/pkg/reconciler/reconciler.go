@@ -129,7 +129,7 @@ func (r *BranchReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	}
 
 	// Reconcile the CNPG Cluster for the branch
-	_, err = r.reconcileCluster(ctx, branch)
+	err = r.reconcileCluster(ctx, branch)
 	if err != nil {
 		log.Error(err, "reconciling Cluster")
 		return ctrl.Result{}, err

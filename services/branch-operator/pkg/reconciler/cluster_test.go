@@ -211,8 +211,8 @@ func TestClusterReconciliation(t *testing.T) {
 				return getK8SObject(ctx, br.Name, &cluster)
 			})
 
-			// Expect the WAL archiving annotation to not be set on the Cluster
-			require.NotContains(t, cluster.Annotations, reconciler.SkipWALArchivingAnnotation)
+			// WAL archiving is enabled, so the skip annotation should be "disabled"
+			require.Equal(t, "disabled", cluster.Annotations[reconciler.SkipWALArchivingAnnotation])
 
 			// Disable WAL archiving on the Branch
 			err := retryOnConflict(ctx, br, func(b *v1alpha1.Branch) {
