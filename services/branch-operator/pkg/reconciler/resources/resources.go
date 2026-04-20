@@ -238,7 +238,7 @@ func Secret(name, namespace, username, password string) *v1.Secret {
 // It creates a PgBouncer instance in transaction mode with max_client_conn
 // set to the maximum. When hibernated, instances is set to 0.
 // When defaultPoolSize is non-empty, it is set verbatim on PgBouncer.
-func PoolerSpec(clusterName string, instances int32, hibernated bool, poolMode apiv1.PgBouncerPoolMode, maxClientConn, defaultPoolSize string, podLabels map[string]string, imagePullSecrets []string) apiv1.PoolerSpec {
+func PoolerSpec(clusterName string, instances int32, hibernated bool, poolMode apiv1.PgBouncerPoolMode, maxClientConn, defaultPoolSize string, podLabels map[string]string, imagePullSecrets []string, tolerations []v1.Toleration) apiv1.PoolerSpec {
 	if hibernated {
 		instances = 0
 	}
@@ -278,6 +278,7 @@ func PoolerSpec(clusterName string, instances int32, hibernated bool, poolMode a
 	podSpec := v1.PodSpec{
 		EnableServiceLinks: new(false),
 		ImagePullSecrets:   pullSecrets,
+		Tolerations:        tolerations,
 		Containers: []v1.Container{
 			{
 				Name: "pgbouncer",

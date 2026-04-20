@@ -801,7 +801,7 @@ func TestPoolerSpec(t *testing.T) {
 
 	for name, tc := range testcases {
 		t.Run(name, func(t *testing.T) {
-			got := resources.PoolerSpec(tc.clusterName, tc.instances, tc.hibernated, tc.poolMode, tc.maxClientConn, tc.defaultPoolSize, tc.podLabels, tc.imagePullSecrets)
+			got := resources.PoolerSpec(tc.clusterName, tc.instances, tc.hibernated, tc.poolMode, tc.maxClientConn, tc.defaultPoolSize, tc.podLabels, tc.imagePullSecrets, nil)
 
 			require.Equal(t, tc.want, got)
 		})

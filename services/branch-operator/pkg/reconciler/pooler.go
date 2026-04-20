@@ -61,6 +61,7 @@ func (r *BranchReconciler) reconcilePooler(
 			defaultPoolSize(branch),
 			branch.Spec.InheritedMetadata.GetLabels(),
 			r.ImagePullSecrets,
+			r.Tolerations,
 		)
 
 		return nil
