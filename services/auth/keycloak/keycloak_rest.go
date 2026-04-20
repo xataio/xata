@@ -277,7 +277,7 @@ func (r *restKC) CreateInvitation(ctx context.Context, realm string, organizatio
 	}
 
 	if !r.isSuccessStatus(resp.StatusCode(), http.StatusCreated, http.StatusNoContent, http.StatusOK) {
-		return fmt.Errorf("unexpected status code: %d", resp.StatusCode())
+		return ErrInvitationFailed{Email: email}
 	}
 
 	return nil

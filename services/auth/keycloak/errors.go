@@ -78,3 +78,15 @@ func (e ErrInvitationConflict) Error() string {
 func (e ErrInvitationConflict) StatusCode() int {
 	return http.StatusConflict
 }
+
+type ErrInvitationFailed struct {
+	Email string
+}
+
+func (e ErrInvitationFailed) Error() string {
+	return fmt.Sprintf("failed to send invitation to %s", e.Email)
+}
+
+func (e ErrInvitationFailed) StatusCode() int {
+	return http.StatusUnprocessableEntity
+}
