@@ -4,6 +4,8 @@ import (
 	"context"
 	"log"
 	"os"
+	"path/filepath"
+	"syscall"
 
 	"xata/internal/o11y"
 
@@ -87,7 +89,9 @@ func Setup(opts Options) *Env {
 		Configure().Set("service-cluster-ip-range", "10.96.0.0/12")
 
 	// Start the test environment
+	unlock := acquireEnvtestAssetsLock(path)
 	cfg, err := testEnv.Start()
+	unlock()
 	if err != nil {
 		log.Fatalf("start test environment: %v", err)
 	}
@@ -147,6 +151,31 @@ func Setup(opts Options) *Env {
 		Manager: mgr,
 		cancel:  cancel,
 		testEnv: testEnv,
+	}
+}
+
+func acquireEnvtestAssetsLock(binaryAssetsDirectory string) func() {
+	if err := os.MkdirAll(binaryAssetsDirectory, 0o700); err != nil {
+		log.Fatalf("create envtest assets directory: %v", err)
+	}
+
+	lockFile, err := os.OpenFile(filepath.Join(binaryAssetsDirectory, ".envtest.lock"), os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		log.Fatalf("open envtest assets lock: %v", err)
+	}
+
+	if err := syscall.Flock(int(lockFile.Fd()), syscall.LOCK_EX); err != nil {
+		_ = lockFile.Close()
+		log.Fatalf("lock envtest assets: %v", err)
+	}
+
+	return func() {
+		if err := syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN); err != nil {
+			log.Fatalf("unlock envtest assets: %v", err)
+		}
+		if err := lockFile.Close(); err != nil {
+			log.Fatalf("close envtest assets lock: %v", err)
+		}
 	}
 }
 
