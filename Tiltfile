@@ -72,6 +72,11 @@ def create_minio_resource():
 def create_resources():
     install_snapshots_and_hostpath()
 
+    k8s_yaml(secret_from_dict("metastore-reader-credentials", namespace = "xata", inputs = {
+        'metastore_reader_user': 'metastore_reader',
+        'metastore_reader_password': 'changeme',
+    }))
+
     # Use OSS kustomize overlay
     k8s_yaml(kustomize('kustomize/overlays/local', flags=KUSTOMIZE_FLAGS))
     secret_settings(disable_scrub=True)

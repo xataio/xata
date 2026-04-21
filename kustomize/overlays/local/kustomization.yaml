@@ -9,7 +9,6 @@ resources:
   - ../../base/xata
   - ../../base/otel
   - postgres
-  - ../../common/db-bootstrap
   - auth
   - api-gateway
   - gateway

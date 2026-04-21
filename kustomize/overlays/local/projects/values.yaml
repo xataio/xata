@@ -1,5 +1,19 @@
 image:
   repository: xatatech/projects
   tag: latest
-postgres.port: 5432
+
+postgres:
+  host: postgres
+  port: "5432"
+  existingSecret: xata-secrets
+  userKey: username
+  passwordKey: password
+  bootstrap:
+    enabled: true
+
+metastoreReader:
+  existingSecret: metastore-reader-credentials
+  userKey: metastore_reader_user
+  passwordKey: metastore_reader_password
+
 defaultRegion: local

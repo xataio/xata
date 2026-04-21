@@ -37,6 +37,8 @@ postgres:
   existingSecret: ""
   userKey: username
   passwordKey: password
+  bootstrap:
+    enabled: false
 
 metastoreReader:
   enabled: false

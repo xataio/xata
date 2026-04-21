@@ -1,0 +1,91 @@
+{{- if .Values.postgres.bootstrap.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  namespace: {{ .Release.Namespace }}
+  name: bootstrap-db
+  annotations:
+    kustomize.toolkit.fluxcd.io/force: enabled
+spec:
+  template:
+    spec:
+      containers:
+        - name: create-db
+          image: postgres:15.4
+          command:
+            - /bin/sh
+            - -c
+            - |
+              for DB in projects keycloakdb auth acmedns; do
+                PGPASSWORD=$POSTGRES_PASSWORD psql -h $POSTGRES_HOST -U $POSTGRES_USER -tc "SELECT 1 FROM pg_database WHERE datname = '$DB'" | grep -q 1 || \
+                (PGPASSWORD=$POSTGRES_PASSWORD psql -h $POSTGRES_HOST -U $POSTGRES_USER -c "CREATE DATABASE $DB" && \
+                PGPASSWORD=$POSTGRES_PASSWORD psql -h $POSTGRES_HOST -U $POSTGRES_USER -c "GRANT ALL PRIVILEGES ON DATABASE $DB TO $POSTGRES_USER")
+              done
+
+              PGPASSWORD=$POSTGRES_PASSWORD psql -h $POSTGRES_HOST -U $POSTGRES_USER -tc "SELECT 1 FROM pg_roles WHERE rolname = '$METASTORE_READER_USER'" | grep -q 1 || \
+              PGPASSWORD=$POSTGRES_PASSWORD psql -h $POSTGRES_HOST -U $POSTGRES_USER -c "CREATE ROLE $METASTORE_READER_USER WITH LOGIN PASSWORD '$METASTORE_READER_PASSWORD'"
+
+              for DB in projects keycloakdb; do
+                echo "Granting read permissions to $METASTORE_READER_USER on database $DB"
+                PGPASSWORD=$POSTGRES_PASSWORD psql -h $POSTGRES_HOST -U $POSTGRES_USER -d $DB <<EOF
+                GRANT CONNECT ON DATABASE $DB TO $METASTORE_READER_USER;
+                GRANT USAGE ON SCHEMA public TO $METASTORE_READER_USER;
+                GRANT SELECT ON ALL TABLES IN SCHEMA public TO $METASTORE_READER_USER;
+                ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO $METASTORE_READER_USER;
+                GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO $METASTORE_READER_USER;
+                ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE ON SEQUENCES TO $METASTORE_READER_USER;
+              EOF
+
+                if [ "$DB" = "keycloakdb" ]; then
+                  if PGPASSWORD=$POSTGRES_PASSWORD psql -h $POSTGRES_HOST -U $POSTGRES_USER -d $DB -tAc "SELECT to_regclass('public.user_attribute')" | grep -q user_attribute; then
+                    echo "Configuring filtered access to user_attribute for $METASTORE_READER_USER"
+                    PGPASSWORD=$POSTGRES_PASSWORD psql -h $POSTGRES_HOST -U $POSTGRES_USER -d $DB \
+                      -c "ALTER TABLE public.user_attribute ENABLE ROW LEVEL SECURITY;" \
+                      -c "DROP POLICY IF EXISTS metastore_reader_user_attribute_select ON public.user_attribute;" \
+                      -c "CREATE POLICY metastore_reader_user_attribute_select ON public.user_attribute FOR SELECT TO $METASTORE_READER_USER USING (name <> 'awsCustomerId');"
+                  else
+                    echo "Skipping user_attribute policy because the table does not exist"
+                  fi
+                fi
+              done
+          securityContext:
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1000
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+          env:
+            - name: POSTGRES_HOST
+              value: {{ .Values.postgres.host | quote }}
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.postgres.existingSecret }}
+                  key: {{ .Values.postgres.userKey }}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.postgres.existingSecret }}
+                  key: {{ .Values.postgres.passwordKey }}
+            - name: METASTORE_READER_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.metastoreReader.existingSecret }}
+                  key: {{ .Values.metastoreReader.userKey }}
+            - name: METASTORE_READER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.metastoreReader.existingSecret }}
+                  key: {{ .Values.metastoreReader.passwordKey }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      restartPolicy: Never
+  backoffLimit: 4
+{{- end }}
