@@ -5,7 +5,6 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"xata/services/branch-operator/api/v1alpha1"
@@ -42,31 +41,26 @@ func (r *BranchReconciler) reconcileAdditionalServiceRO(
 }
 
 // reconcileAdditionalServicePooler ensures that the pooler additional service
-// exists for the given Branch. When no pooler is configured, it ensures the
-// service is deleted. Like the rw/r/ro additional services, this runs on every
-// cell — on cells without local pooler pods, the selector matches nothing and
-// Cilium routes to the remote cell.
+// exists for the given Branch once the pooler has been enabled. When the pooler
+// is not enabled, the service is left untouched: if one already exists from a
+// previous enabled state it persists with a selector that matches no pods, and
+// if none exists it is not created. Like the rw/r/ro additional services, this
+// runs on every cell — on cells without local pooler pods, the selector matches
+// nothing and Cilium routes to the remote cell.
 func (r *BranchReconciler) reconcileAdditionalServicePooler(
 	ctx context.Context,
 	branch *v1alpha1.Branch,
 ) (controllerutil.OperationResult, error) {
+	if !branch.Spec.Pooler.IsEnabled() {
+		return controllerutil.OperationResultNone, nil
+	}
+
 	name := "branch-" + branch.Name + "-pooler"
 	svc := &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: r.ClustersNamespace,
 		},
-	}
-
-	if !branch.Spec.Pooler.IsEnabled() {
-		err := r.Get(ctx, client.ObjectKeyFromObject(svc), svc)
-		if err != nil {
-			return controllerutil.OperationResultNone, client.IgnoreNotFound(err)
-		}
-		if err := r.Delete(ctx, svc); err != nil {
-			return controllerutil.OperationResultNone, err
-		}
-		return controllerutil.OperationResultUpdated, nil
 	}
 
 	poolerName := branch.Name + PoolerSuffix
