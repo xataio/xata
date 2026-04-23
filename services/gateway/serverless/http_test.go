@@ -11,6 +11,7 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 
 	"xata/services/gateway/metrics"
 	"xata/services/gateway/serverless/spec"
@@ -894,6 +895,18 @@ func TestQuery_IPFilter(t *testing.T) {
 		return &session.Branch{ID: "test-branch", Address: "127.0.0.1:5432"}, nil
 	})
 
+	// Stub dialer: always fails so we can verify that connection errors are
+	// surfaced as HTTP 500 without needing a real Postgres backend.
+	dialer := session.NewClusterDialer(
+		session.ClusterDialerConfiguration{
+			ReactivateTimeout:   time.Second,
+			StatusCheckInterval: 100 * time.Millisecond,
+		},
+		session.WithDialer(func(context.Context, string, string) (net.Conn, error) {
+			return nil, errors.New("stub dialer: no backend")
+		}),
+	)
+
 	connStr := "postgres://user:pass@host/db"
 
 	tests := map[string]struct {
@@ -914,6 +927,7 @@ func TestQuery_IPFilter(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			h := &handler{
 				resolver: resolver,
+				dialer:   dialer,
 				tracer:   tracer,
 				metrics:  gwMetrics,
 				ipFilter: tc.filter,
@@ -937,4 +951,87 @@ func TestQuery_IPFilter(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestConnect(t *testing.T) {
+	const branchAddr = "branch-test-rw.xata-clusters.svc.cluster.local:5432"
+	info := &connectionInfo{User: "bob", Password: "hunter2", Database: "mydb"}
+
+	t.Run("dials exactly once via ClusterDialer", func(t *testing.T) {
+		var dialed []string
+		dialer := session.NewClusterDialer(
+			session.ClusterDialerConfiguration{
+				ReactivateTimeout:   time.Second,
+				StatusCheckInterval: 100 * time.Millisecond,
+			},
+			session.WithDialer(func(_ context.Context, _, address string) (net.Conn, error) {
+				dialed = append(dialed, address)
+				return nil, errors.New("stub: no backend")
+			}),
+		)
+		h := &handler{dialer: dialer}
+
+		_, err := h.connect(context.Background(), &session.Branch{ID: "b", Address: branchAddr}, info)
+		require.Error(t, err)
+		// Regression: pgx used to call DialFunc once per IP a default
+		// "localhost" host resolved to. The dialer must see exactly one
+		// attempt per connect, targeting branch.Address.
+		require.Equal(t, []string{branchAddr}, dialed)
+	})
+
+	errCases := map[string]struct{ address, wantErr string }{
+		"missing port":      {"host-only", "split branch address"},
+		"non-numeric port":  {"host:abc", "parse branch port"},
+		"port out of range": {"host:70000", "parse branch port"},
+	}
+	for name, tc := range errCases {
+		t.Run(name, func(t *testing.T) {
+			h := &handler{dialer: session.NewClusterDialer(session.ClusterDialerConfiguration{})}
+			_, err := h.connect(context.Background(), &session.Branch{ID: "b", Address: tc.address}, info)
+			require.ErrorContains(t, err, tc.wantErr)
+		})
+	}
+}
+
+func TestNewServerlessConfig(t *testing.T) {
+	var dialCalls int
+	params := pgxConnParams{
+		Host: "pg.internal", Port: 5433,
+		User: "alice", Password: "hunter2", Database: "mydb",
+		RuntimeParams: map[string]string{"application_name": "gateway-test"},
+		DialFunc: func(context.Context, string, string) (net.Conn, error) {
+			dialCalls++
+			return nil, errors.New("stub")
+		},
+	}
+
+	cfg, err := newServerlessConfig(params)
+	require.NoError(t, err)
+
+	require.Equal(t, "pg.internal", cfg.Host)
+	require.Equal(t, uint16(5433), cfg.Port)
+	require.Equal(t, "alice", cfg.User)
+	require.Equal(t, "hunter2", cfg.Password)
+	require.Equal(t, "mydb", cfg.Database)
+	require.Equal(t, params.RuntimeParams, cfg.RuntimeParams)
+
+	// Invariants that guard against reintroducing the multi-dial bug.
+	require.Empty(t, cfg.Fallbacks)
+	require.NotNil(t, cfg.LookupFunc)
+	ips, err := cfg.LookupFunc(context.Background(), "ignored.invalid")
+	require.NoError(t, err)
+	require.NotEmpty(t, ips)
+
+	_, _ = cfg.DialFunc(context.Background(), "tcp", "ignored:5432")
+	require.Equal(t, 1, dialCalls)
+
+	t.Run("zero Host/Port keep sentinel defaults", func(t *testing.T) {
+		cfg, err := newServerlessConfig(pgxConnParams{
+			User: "u", Database: "d",
+			DialFunc: func(context.Context, string, string) (net.Conn, error) { return nil, errors.New("stub") },
+		})
+		require.NoError(t, err)
+		require.Equal(t, "unused", cfg.Host)
+		require.Equal(t, uint16(5432), cfg.Port)
+	})
 }

@@ -18,6 +18,7 @@ import (
 	"xata/services/gateway/session"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/labstack/echo/v4"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel/trace"
@@ -109,23 +110,73 @@ func (h *handler) Query(c echo.Context, params spec.QueryParams) error {
 	return c.JSON(http.StatusOK, response)
 }
 
-func (h *handler) connect(ctx context.Context, branch *session.Branch, connInfo *connectionInfo) (*pgx.Conn, error) {
-	connConfig, err := pgx.ParseConfig("")
+// pgxConnParams carries the per-request fields for newServerlessConfig.
+// Host/Port are optional — leave them zero when DialFunc ignores the target.
+type pgxConnParams struct {
+	Host, User, Password, Database string
+	Port                           uint16
+	RuntimeParams                  map[string]string
+	DialFunc                       pgconn.DialFunc
+}
+
+// newServerlessConfig returns a pgx ConnConfig wired for a custom DialFunc.
+// pgx's built-in resolver and host fallbacks are disabled because every
+// serverless handler delegates network I/O to its own DialFunc — otherwise a
+// host like "localhost" (which pgx.ParseConfig("") falls through to on a
+// scratch image) would cause one DialFunc call per resolved IP.
+func newServerlessConfig(p pgxConnParams) (*pgx.ConnConfig, error) {
+	cfg, err := pgx.ParseConfig("host=unused sslmode=disable")
 	if err != nil {
 		return nil, fmt.Errorf("parse config: %w", err)
 	}
 
-	connConfig.Host = branch.Address
-	connConfig.User = connInfo.User
-	connConfig.Password = connInfo.Password
-	connConfig.Database = connInfo.Database
-	connConfig.TLSConfig = nil
-
-	connConfig.DialFunc = func(ctx context.Context, _, _ string) (net.Conn, error) {
-		return h.dialer.Dial(ctx, "tcp", branch)
+	cfg.Fallbacks = nil
+	cfg.LookupFunc = func(context.Context, string) ([]string, error) {
+		return []string{"127.0.0.1"}, nil // dummy — DialFunc ignores it
 	}
 
-	return pgx.ConnectConfig(ctx, connConfig)
+	if p.Host != "" {
+		cfg.Host = p.Host
+	}
+	if p.Port != 0 {
+		cfg.Port = p.Port
+	}
+	cfg.User = p.User
+	cfg.Password = p.Password
+	cfg.Database = p.Database
+	if p.RuntimeParams != nil {
+		cfg.RuntimeParams = p.RuntimeParams
+	}
+	cfg.DialFunc = p.DialFunc
+
+	return cfg, nil
+}
+
+// connect opens a pgx connection to branch via the handler's ClusterDialer.
+func (h *handler) connect(ctx context.Context, branch *session.Branch, connInfo *connectionInfo) (*pgx.Conn, error) {
+	host, portStr, err := net.SplitHostPort(branch.Address)
+	if err != nil {
+		return nil, fmt.Errorf("split branch address %q: %w", branch.Address, err)
+	}
+	port, err := strconv.ParseUint(portStr, 10, 16)
+	if err != nil {
+		return nil, fmt.Errorf("parse branch port %q: %w", portStr, err)
+	}
+
+	cfg, err := newServerlessConfig(pgxConnParams{
+		Host:     host,
+		Port:     uint16(port),
+		User:     connInfo.User,
+		Password: connInfo.Password,
+		Database: connInfo.Database,
+		DialFunc: func(ctx context.Context, _, _ string) (net.Conn, error) {
+			return h.dialer.Dial(ctx, "tcp", branch)
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	return pgx.ConnectConfig(ctx, cfg)
 }
 
 type queryOptions struct {

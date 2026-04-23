@@ -102,26 +102,26 @@ func pipelineAuth(ctx context.Context, dialFunc pgconn.DialFunc, wsConn net.Conn
 		return nil, fmt.Errorf("parse startup params: %w", err)
 	}
 
-	cfg, err := pgconn.ParseConfig("sslmode=disable")
+	cfg, err := newServerlessConfig(pgxConnParams{
+		User:          user,
+		Password:      password,
+		Database:      database,
+		RuntimeParams: params,
+		DialFunc:      dialFunc,
+	})
 	if err != nil {
-		return nil, fmt.Errorf("parse pgconn config: %w", err)
+		return nil, err
 	}
-	cfg.User = user
-	cfg.Database = database
-	cfg.Password = password
-	cfg.DialFunc = dialFunc
-	cfg.RuntimeParams = params
 
 	authCtx, cancel := context.WithTimeout(ctx, authTimeout)
 	defer cancel()
 
-	conn, err := pgconn.ConnectConfig(authCtx, cfg)
+	conn, err := pgconn.ConnectConfig(authCtx, &cfg.Config)
 	if err != nil {
 		if conn != nil {
 			conn.Close(ctx)
 		}
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) {
+		if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok {
 			buf, _ := pgWireError(pgErr).Encode(nil)
 			if _, writeErr := wsConn.Write(buf); writeErr != nil {
 				return nil, fmt.Errorf("forward error to client: %w (original: %w)", writeErr, err)
