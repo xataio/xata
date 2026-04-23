@@ -87,19 +87,7 @@ otelCollector:
             max_recv_msg_size_mib: 16
           http:
             endpoint: 0.0.0.0:4318
-      jaeger:
-        protocols:
-          grpc:
-            endpoint: 0.0.0.0:14250
-          thrift_http:
-            endpoint: 0.0.0.0:14268
-      httplogreceiver/heroku:
-        endpoint: 0.0.0.0:8081
-        source: heroku
-      httplogreceiver/json:
-        endpoint: 0.0.0.0:8082
-        source: json
-      # Scrape CNPG Postgres metrics
+      # Scrape CNPG Postgres metrics and auto-discover annotated pods
       prometheus:
         config:
           scrape_configs:
@@ -151,6 +139,93 @@ otelCollector:
                   target_label: k8s_namespace_name
                 - source_labels: [__meta_kubernetes_pod_label_cnpg_io_poolerName]
                   target_label: pooler_name
+            # Scrape cAdvisor for container filesystem throughput metrics
+            - job_name: cadvisor
+              scrape_interval: 30s
+              scheme: https
+              tls_config:
+                insecure_skip_verify: true
+              bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+              kubernetes_sd_configs:
+                - role: node
+              relabel_configs:
+                - action: replace
+                  target_label: __metrics_path__
+                  replacement: /metrics/cadvisor
+              metric_relabel_configs:
+                - source_labels: [__name__]
+                  action: keep
+                  regex: container_fs_(reads|writes)_bytes_total
+                - source_labels: [namespace]
+                  action: keep
+                  regex: xata-clusters
+                - source_labels: [pod]
+                  target_label: k8s_pod_name
+                - source_labels: [namespace]
+                  target_label: k8s_namespace_name
+            # Auto-discover pods with a port named "metrics"
+            - job_name: metrics-port
+              scheme: http
+              tls_config:
+                insecure_skip_verify: true
+              kubernetes_sd_configs:
+                - role: pod
+              relabel_configs:
+                - source_labels: [__meta_kubernetes_pod_container_port_name]
+                  action: keep
+                  regex: metrics(-.*)?
+                - source_labels: [__meta_kubernetes_pod_ip, __meta_kubernetes_pod_container_port_number]
+                  action: replace
+                  regex: (.+);(.+)
+                  replacement: $1:$2
+                  target_label: __address__
+                - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scheme]
+                  action: replace
+                  regex: (https)
+                  target_label: __scheme__
+                  replacement: https
+                - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+                  action: replace
+                  target_label: __metrics_path__
+                  regex: (.+)
+                  replacement: $1
+                - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+                  action: drop
+                  regex: (false)
+            # Auto-discover pods with prometheus.io/scrape annotation
+            - job_name: annotation-scrape
+              scheme: http
+              tls_config:
+                insecure_skip_verify: true
+              kubernetes_sd_configs:
+                - role: pod
+              relabel_configs:
+                - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+                  action: keep
+                  regex: true
+                - source_labels: [__meta_kubernetes_pod_container_port_name]
+                  action: drop
+                  regex: metrics(-.*)?
+                - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scheme]
+                  action: replace
+                  regex: (https)
+                  target_label: __scheme__
+                  replacement: https
+                - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+                  action: replace
+                  target_label: __metrics_path__
+                  regex: (.+)
+                  replacement: $1
+                - source_labels: [__meta_kubernetes_pod_ip, __meta_kubernetes_pod_annotation_prometheus_io_port]
+                  action: replace
+                  regex: (.+);(\d+)
+                  replacement: $1:$2
+                  target_label: __address__
+                - source_labels: [__address__]
+                  action: replace
+                  regex: (.+):$
+                  replacement: $1:80
+                  target_label: __address__
       # Collect container CPU/memory/network metrics from kubelet
       kubeletstats:
         collection_interval: 30s
@@ -198,6 +273,14 @@ otelCollector:
       zpages:
         endpoint: localhost:55679
     processors:
+      resource:
+        attributes:
+          - key: deployment.environment.name
+            value: local
+            action: upsert
+          - key: cluster.name
+            value: kind
+            action: upsert
       batch:
         send_batch_size: 50000
         timeout: 1s
@@ -205,6 +288,35 @@ otelCollector:
         send_batch_max_size: 25000
         send_batch_size: 20000
         timeout: 1s
+      resourcedetection:
+        detectors: ["env", "system"]
+      k8sattributes:
+        auth_type: "serviceAccount"
+        passthrough: false
+        extract:
+          metadata:
+            - k8s.pod.name
+            - k8s.pod.uid
+            - k8s.deployment.name
+            - k8s.namespace.name
+            - k8s.node.name
+            - k8s.pod.start_time
+            - k8s.container.name
+            - k8s.replicaset.name
+            - k8s.daemonset.name
+            - k8s.statefulset.name
+            - k8s.cronjob.name
+            - k8s.job.name
+          labels:
+            - tag_name: app.label.component
+              key: app.kubernetes.io/component
+              from: pod
+        pod_association:
+          - sources:
+              - from: resource_attribute
+                name: k8s.pod.uid
+          - sources:
+              - from: connection
       signozspanmetrics/delta:
         aggregation_temporality: AGGREGATION_TEMPORALITY_DELTA
         dimensions:
@@ -233,6 +345,19 @@ otelCollector:
           - 40s
           - 60s
         metrics_exporter: signozclickhousemetrics
+      filter/drop-cnpg-settings:
+        metrics:
+          exclude:
+            match_type: strict
+            metric_names:
+              - cnpg_pg_settings_setting
+      filter/drop-otelcol-internals:
+        metrics:
+          exclude:
+            match_type: strict
+            metric_names:
+              - otelcol_k8s.pod.association_total
+              - otelcol_otelcol.k8s.pod.association_total
     service:
       extensions:
         - health_check
@@ -240,45 +365,53 @@ otelCollector:
         - pprof
       pipelines:
         logs:
+          receivers:
+            - otlp
+          processors:
+            - resource
+            - resourcedetection
+            - k8sattributes
+            - batch
           exporters:
             - clickhouselogsexporter
             - metadataexporter
             - signozmeter
-          processors:
-            - batch
-          receivers:
-            - otlp
-            - httplogreceiver/heroku
-            - httplogreceiver/json
         metrics:
-          exporters:
-            - metadataexporter
-            - signozclickhousemetrics
-            - signozmeter
-          processors:
-            - batch
           receivers:
             - otlp
             - prometheus
             - kubeletstats
-        metrics/meter:
-          exporters:
-            - signozclickhousemeter
           processors:
-            - batch/meter
+            - resource
+            - resourcedetection
+            - k8sattributes
+            - batch
+            - filter/drop-cnpg-settings
+            - filter/drop-otelcol-internals
+          exporters:
+            - metadataexporter
+            - signozclickhousemetrics
+            - signozmeter
+        metrics/meter:
           receivers:
             - signozmeter
+          processors:
+            - batch/meter
+          exporters:
+            - signozclickhousemeter
         traces:
+          receivers:
+            - otlp
+          processors:
+            - resource
+            - resourcedetection
+            - k8sattributes
+            - signozspanmetrics/delta
+            - batch
           exporters:
             - clickhousetraces
             - metadataexporter
             - signozmeter
-          processors:
-            - signozspanmetrics/delta
-            - batch
-          receivers:
-            - otlp
-            - jaeger
       telemetry:
         logs:
           encoding: json

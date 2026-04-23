@@ -1,0 +1,68 @@
+# Standalone OTel Collector DaemonSet for container log collection
+# Chart: https://charts.signoz.io / signoz/k8s-infra
+#
+# The main SigNoz collector can't run filelog because its OpAMP config
+# manager replaces custom receivers on connect. This deploys a separate
+# otel-collector-contrib DaemonSet that owns the filelog pipeline and
+# forwards logs via OTLP to the main collector.
+
+otelCollectorEndpoint: signoz-local-otel-collector.signoz.svc.cluster.local:4317
+otelInsecure: true
+
+clusterName: kind
+
+# -- Log collection via filelog receiver (DaemonSet)
+presets:
+  logsCollection:
+    enabled: true
+    startAt: end
+    includeFilePath: true
+    blacklist:
+      enabled: true
+      signozLogs: true
+      namespaces:
+        - kube-system
+
+# -- OTel Agent (DaemonSet) — collects logs from /var/log/pods
+otelAgent:
+  enabled: true
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+  config:
+    processors:
+      # Parse JSON log bodies to extract severity from the "level" field,
+      # and for CNPG PostgreSQL/PgBouncer logs extract the nested record
+      # message and map PostgreSQL severity levels to standard ones.
+      transform/logs:
+        error_mode: ignore
+        log_statements:
+          - context: log
+            conditions:
+              - IsMatch(body, "^\\{.*\\}$")
+            statements:
+              - merge_maps(cache, ParseJSON(body), "upsert")
+              - set(severity_text, cache["level"]) where cache["level"] != nil
+              - set(attributes["logger"], cache["logger"]) where cache["logger"] != nil
+              # CNPG PostgreSQL/PgBouncer logs: extract nested record
+              - set(severity_text, cache["record"]["error_severity"]) where cache["record"]["error_severity"] != nil
+              - set(severity_text, cache["record"]["level"]) where cache["record"]["level"] != nil and cache["logger"] == "pgbouncer-manager"
+              - set(body, cache["record"]["message"]) where cache["record"]["message"] != nil
+              - set(body, cache["record"]["msg"]) where cache["record"]["msg"] != nil and cache["logger"] == "pgbouncer-manager"
+              - replace_pattern(severity_text, "^LOG$", "INFO")
+              - replace_pattern(severity_text, "^NOTICE$", "INFO")
+              - replace_pattern(severity_text, "^WARNING$", "WARN")
+              - replace_pattern(severity_text, "^(ERROR|FATAL|PANIC|CRITICAL)$", "ERROR")
+              - replace_pattern(severity_text, "^DEBUG[1-5]$", "DEBUG")
+    service:
+      pipelines:
+        logs:
+          processors: [transform/logs, batch]
+
+# -- Disable the cluster-wide Deployment collector (not needed locally)
+otelDeployment:
+  enabled: false
