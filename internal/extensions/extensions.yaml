@@ -1,7 +1,7 @@
 # PostgreSQL extensions available in each image offering
 # This file is automatically updated by a sync workflow from the postgres-images repo
 
-last_updated: "2026-04-22T11:20:17Z"
+last_updated: "2026-04-24T17:45:40Z"
 updated_by: workflow
 offerings:
   analytics:
@@ -240,11 +240,6 @@ offerings:
           description: "Earth distance calculations"
           docs_url: "https://www.postgresql.org/docs/current/earthdistance.html"
           preload_required: false
-        - name: file_fdw
-          version: "1.0"
-          description: "Foreign data wrapper for flat file access"
-          docs_url: "https://www.postgresql.org/docs/current/file-fdw.html"
-          preload_required: false
         - name: intagg
           version: "1.1"
           description: "Integer aggregator (deprecated in favor of array_agg)"
@@ -334,11 +329,6 @@ offerings:
           version: "1.1"
           description: "UUID generation functions"
           docs_url: "https://www.postgresql.org/docs/current/uuid-ossp.html"
-          preload_required: false
-        - name: xml2
-          version: "1.1"
-          description: "XPath querying and XSLT support"
-          docs_url: "https://www.postgresql.org/docs/current/xml2.html"
           preload_required: false
         - name: postgis_raster
           version: "3.6.3"
@@ -570,11 +560,6 @@ offerings:
           description: "Earth distance calculations"
           docs_url: "https://www.postgresql.org/docs/current/earthdistance.html"
           preload_required: false
-        - name: file_fdw
-          version: "1.0"
-          description: "Foreign data wrapper for flat file access"
-          docs_url: "https://www.postgresql.org/docs/current/file-fdw.html"
-          preload_required: false
         - name: intagg
           version: "1.1"
           description: "Integer aggregator (deprecated in favor of array_agg)"
@@ -664,11 +649,6 @@ offerings:
           version: "1.1"
           description: "UUID generation functions"
           docs_url: "https://www.postgresql.org/docs/current/uuid-ossp.html"
-          preload_required: false
-        - name: xml2
-          version: "1.2"
-          description: "XPath querying and XSLT support"
-          docs_url: "https://www.postgresql.org/docs/current/xml2.html"
           preload_required: false
         - name: postgis_raster
           version: "3.6.3"
@@ -941,11 +921,6 @@ offerings:
           description: "Earth distance calculations"
           docs_url: "https://www.postgresql.org/docs/current/earthdistance.html"
           preload_required: false
-        - name: file_fdw
-          version: "1.0"
-          description: "Foreign data wrapper for flat file access"
-          docs_url: "https://www.postgresql.org/docs/current/file-fdw.html"
-          preload_required: false
         - name: intagg
           version: "1.1"
           description: "Integer aggregator (deprecated in favor of array_agg)"
@@ -1030,11 +1005,6 @@ offerings:
           version: "1.1"
           description: "UUID generation functions"
           docs_url: "https://www.postgresql.org/docs/current/uuid-ossp.html"
-          preload_required: false
-        - name: xml2
-          version: "1.1"
-          description: "XPath querying and XSLT support"
-          docs_url: "https://www.postgresql.org/docs/current/xml2.html"
           preload_required: false
         - name: postgis_raster
           version: "3.6.3"
@@ -1281,11 +1251,6 @@ offerings:
           description: "Earth distance calculations"
           docs_url: "https://www.postgresql.org/docs/current/earthdistance.html"
           preload_required: false
-        - name: file_fdw
-          version: "1.0"
-          description: "Foreign data wrapper for flat file access"
-          docs_url: "https://www.postgresql.org/docs/current/file-fdw.html"
-          preload_required: false
         - name: intagg
           version: "1.1"
           description: "Integer aggregator (deprecated in favor of array_agg)"
@@ -1370,11 +1335,6 @@ offerings:
           version: "1.1"
           description: "UUID generation functions"
           docs_url: "https://www.postgresql.org/docs/current/uuid-ossp.html"
-          preload_required: false
-        - name: xml2
-          version: "1.1"
-          description: "XPath querying and XSLT support"
-          docs_url: "https://www.postgresql.org/docs/current/xml2.html"
           preload_required: false
         - name: postgis_raster
           version: "3.6.3"
@@ -1631,11 +1591,6 @@ offerings:
           description: "Earth distance calculations"
           docs_url: "https://www.postgresql.org/docs/current/earthdistance.html"
           preload_required: false
-        - name: file_fdw
-          version: "1.0"
-          description: "Foreign data wrapper for flat file access"
-          docs_url: "https://www.postgresql.org/docs/current/file-fdw.html"
-          preload_required: false
         - name: intagg
           version: "1.1"
           description: "Integer aggregator (deprecated in favor of array_agg)"
@@ -1725,11 +1680,6 @@ offerings:
           version: "1.1"
           description: "UUID generation functions"
           docs_url: "https://www.postgresql.org/docs/current/uuid-ossp.html"
-          preload_required: false
-        - name: xml2
-          version: "1.1"
-          description: "XPath querying and XSLT support"
-          docs_url: "https://www.postgresql.org/docs/current/xml2.html"
           preload_required: false
         - name: postgis_raster
           version: "3.6.3"
@@ -1981,11 +1931,6 @@ offerings:
           description: "Earth distance calculations"
           docs_url: "https://www.postgresql.org/docs/current/earthdistance.html"
           preload_required: false
-        - name: file_fdw
-          version: "1.0"
-          description: "Foreign data wrapper for flat file access"
-          docs_url: "https://www.postgresql.org/docs/current/file-fdw.html"
-          preload_required: false
         - name: intagg
           version: "1.1"
           description: "Integer aggregator (deprecated in favor of array_agg)"
@@ -2075,11 +2020,6 @@ offerings:
           version: "1.1"
           description: "UUID generation functions"
           docs_url: "https://www.postgresql.org/docs/current/uuid-ossp.html"
-          preload_required: false
-        - name: xml2
-          version: "1.1"
-          description: "XPath querying and XSLT support"
-          docs_url: "https://www.postgresql.org/docs/current/xml2.html"
           preload_required: false
         - name: postgis_raster
           version: "3.6.3"
@@ -2306,11 +2246,6 @@ offerings:
           description: "Earth distance calculations"
           docs_url: "https://www.postgresql.org/docs/current/earthdistance.html"
           preload_required: false
-        - name: file_fdw
-          version: "1.0"
-          description: "Foreign data wrapper for flat file access"
-          docs_url: "https://www.postgresql.org/docs/current/file-fdw.html"
-          preload_required: false
         - name: intagg
           version: "1.1"
           description: "Integer aggregator (deprecated in favor of array_agg)"
@@ -2400,11 +2335,6 @@ offerings:
           version: "1.1"
           description: "UUID generation functions"
           docs_url: "https://www.postgresql.org/docs/current/uuid-ossp.html"
-          preload_required: false
-        - name: xml2
-          version: "1.2"
-          description: "XPath querying and XSLT support"
-          docs_url: "https://www.postgresql.org/docs/current/xml2.html"
           preload_required: false
         - name: postgis_raster
           version: "3.6.3"
@@ -2682,11 +2612,6 @@ offerings:
           description: "Earth distance calculations"
           docs_url: "https://www.postgresql.org/docs/current/earthdistance.html"
           preload_required: false
-        - name: file_fdw
-          version: "1.0"
-          description: "Foreign data wrapper for flat file access"
-          docs_url: "https://www.postgresql.org/docs/current/file-fdw.html"
-          preload_required: false
         - name: intagg
           version: "1.1"
           description: "Integer aggregator (deprecated in favor of array_agg)"
@@ -2776,11 +2701,6 @@ offerings:
           version: "1.1"
           description: "UUID generation functions"
           docs_url: "https://www.postgresql.org/docs/current/uuid-ossp.html"
-          preload_required: false
-        - name: xml2
-          version: "1.1"
-          description: "XPath querying and XSLT support"
-          docs_url: "https://www.postgresql.org/docs/current/xml2.html"
           preload_required: false
         - name: postgis_raster
           version: "3.6.3"
@@ -3032,11 +2952,6 @@ offerings:
           description: "Earth distance calculations"
           docs_url: "https://www.postgresql.org/docs/current/earthdistance.html"
           preload_required: false
-        - name: file_fdw
-          version: "1.0"
-          description: "Foreign data wrapper for flat file access"
-          docs_url: "https://www.postgresql.org/docs/current/file-fdw.html"
-          preload_required: false
         - name: intagg
           version: "1.1"
           description: "Integer aggregator (deprecated in favor of array_agg)"
@@ -3126,11 +3041,6 @@ offerings:
           version: "1.1"
           description: "UUID generation functions"
           docs_url: "https://www.postgresql.org/docs/current/uuid-ossp.html"
-          preload_required: false
-        - name: xml2
-          version: "1.1"
-          description: "XPath querying and XSLT support"
-          docs_url: "https://www.postgresql.org/docs/current/xml2.html"
           preload_required: false
         - name: postgis_raster
           version: "3.6.3"
@@ -3362,11 +3272,6 @@ offerings:
           description: "Earth distance calculations"
           docs_url: "https://www.postgresql.org/docs/current/earthdistance.html"
           preload_required: false
-        - name: file_fdw
-          version: "1.0"
-          description: "Foreign data wrapper for flat file access"
-          docs_url: "https://www.postgresql.org/docs/current/file-fdw.html"
-          preload_required: false
         - name: intagg
           version: "1.1"
           description: "Integer aggregator (deprecated in favor of array_agg)"
@@ -3456,11 +3361,6 @@ offerings:
           version: "1.1"
           description: "UUID generation functions"
           docs_url: "https://www.postgresql.org/docs/current/uuid-ossp.html"
-          preload_required: false
-        - name: xml2
-          version: "1.2"
-          description: "XPath querying and XSLT support"
-          docs_url: "https://www.postgresql.org/docs/current/xml2.html"
           preload_required: false
         - name: postgis_raster
           version: "3.6.3"
