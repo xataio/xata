@@ -9,7 +9,7 @@ helmCharts:
     valuesFile: cloudnative-pg-values.yaml
 resources:
   - namespace.yaml
-  - https://github.com/xataio/cnpg-i-scale-to-zero/releases/download/v0.1.7/manifest.yaml
+  - https://github.com/xataio/cnpg-i-scale-to-zero/releases/download/v0.1.8/manifest.yaml
   - network.yaml
   - custom-metrics.yaml
 

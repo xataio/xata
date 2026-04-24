@@ -3,7 +3,7 @@ kind: Component
 
 resources:
   - https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.28/releases/cnpg-1.28.0.yaml
-  - https://github.com/xataio/cnpg-i-scale-to-zero/releases/download/v0.1.7/manifest.yaml
+  - https://github.com/xataio/cnpg-i-scale-to-zero/releases/download/v0.1.8/manifest.yaml
 
   - network.yaml
   - custom-metrics.yaml
