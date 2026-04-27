@@ -23,7 +23,7 @@ import (
 // +kubebuilder:rbac:groups=xata.io,resources=branches,verbs=get;list;watch
 // +kubebuilder:rbac:groups=xata.io,resources=branches/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=xata.io,resources=xvols,verbs=get;list;watch;patch
+// +kubebuilder:rbac:groups=xata.io,resources=xvols,verbs=get;list;watch;create;patch
 // +kubebuilder:rbac:groups="",resources=persistentvolumeclaims,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch
 // +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch
