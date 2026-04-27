@@ -70,6 +70,34 @@ func (sc *SigNozClient) GetMetric(ctx context.Context, start, end time.Time, met
 		return nil, err
 	}
 
+	// Parse response
+	branchMetrics := BranchMetrics{
+		Start:  start,
+		End:    end,
+		Metric: metric,
+		Unit:   sigNozMetricName[metric].unit,
+		Series: []MetricSeries{},
+	}
+
+	results, err := sc.queryRange(ctx, reqBody)
+	if err != nil {
+		return nil, err
+	}
+	if results == nil {
+		return &branchMetrics, nil
+	}
+
+	series, err := parseMetricResults(results, queryToAgg)
+	if err != nil {
+		return nil, err
+	}
+	branchMetrics.Series = series
+
+	return &branchMetrics, nil
+}
+
+// queryRange sends a v5 query and returns the raw results, or nil if the response carries none.
+func (sc *SigNozClient) queryRange(ctx context.Context, reqBody signoz.QueryRangeV5JSONRequestBody) ([]any, error) {
 	response, err := sc.client.QueryRangeV5WithResponse(ctx, reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("query range v5: %w", err)
@@ -87,85 +115,46 @@ func (sc *SigNozClient) GetMetric(ctx context.Context, start, end time.Time, met
 		return nil, fmt.Errorf("unexpected status: %s", response.JSON200.Status)
 	}
 
-	// Parse response
-	branchMetrics := BranchMetrics{
-		Start:  start,
-		End:    end,
-		Metric: metric,
-		Unit:   sigNozMetricName[metric].unit,
-		Series: []MetricSeries{},
-	}
-
 	queryData := response.JSON200.Data.Data
 	if queryData == nil || queryData.Results == nil {
-		return &branchMetrics, nil
-	}
-
-	series, err := parseQueryResults(*queryData.Results, queryToAgg)
-	if err != nil {
-		return nil, err
-	}
-	branchMetrics.Series = series
-
-	return &branchMetrics, nil
-}
-
-// parseQueryResults extracts metric series from SigNoz query results
-func parseQueryResults(results []any, queryToAgg map[string]string) ([]MetricSeries, error) {
-	data, err := json.Marshal(results)
-	if err != nil {
-		return nil, fmt.Errorf("marshal results: %w", err)
-	}
-
-	var parsedResults []signoz.Querybuildertypesv5TimeSeriesData
-	if err := json.Unmarshal(data, &parsedResults); err != nil {
-		return nil, fmt.Errorf("unmarshal time series data: %w", err)
-	}
-
-	series := make([]MetricSeries, 0)
-	for _, result := range parsedResults {
-		resultSeries, err := parseResult(result, queryToAgg)
-		if err != nil {
-			return nil, err
-		}
-		series = append(series, resultSeries...)
-	}
-
-	return series, nil
-}
-
-// parseResult extracts metric series from a single query result
-func parseResult(result signoz.Querybuildertypesv5TimeSeriesData, queryToAgg map[string]string) ([]MetricSeries, error) {
-	queryName := ptr.Deref(result.QueryName, "")
-	agg, ok := queryToAgg[queryName]
-	if !ok {
-		return nil, fmt.Errorf("unexpected query name: %s", queryName)
-	}
-
-	if result.Aggregations == nil {
 		return nil, nil
 	}
 
+	return *queryData.Results, nil
+}
+
+// parseMetricResults extracts metric series from SigNoz query results
+func parseMetricResults(results []any, queryToAgg map[string]string) ([]MetricSeries, error) {
+	parsed, err := decodeResults[signoz.Querybuildertypesv5TimeSeriesData](results)
+	if err != nil {
+		return nil, err
+	}
+
 	series := make([]MetricSeries, 0)
-	for _, bucket := range *result.Aggregations {
-		if bucket.Series == nil {
+	for _, result := range parsed {
+		queryName := ptr.Deref(result.QueryName, "")
+		agg, ok := queryToAgg[queryName]
+		if !ok {
+			return nil, fmt.Errorf("unexpected query name: %s", queryName)
+		}
+		if result.Aggregations == nil {
 			continue
 		}
-		for _, s := range *bucket.Series {
-			series = append(series, parseSeries(s, agg))
+		for _, bucket := range *result.Aggregations {
+			if bucket.Series == nil {
+				continue
+			}
+			for _, s := range *bucket.Series {
+				series = append(series, MetricSeries{
+					Aggregation: agg,
+					InstanceID:  extractInstanceID(s.Labels),
+					Values:      parseMetricValues(s.Values),
+				})
+			}
 		}
 	}
 
 	return series, nil
-}
-
-// parseSeries converts a SigNoz series to a MetricSeries
-func parseSeries(series signoz.Querybuildertypesv5TimeSeries, aggregation string) MetricSeries {
-	return MetricSeries{
-		Aggregation: aggregation,
-		InstanceID:  extractInstanceID(series.Labels),
-		Values:      parseValues(series.Values),
-	}
 }
 
 // extractInstanceID retrieves the pod name from series labels
@@ -181,11 +170,12 @@ func extractInstanceID(labels *[]signoz.Querybuildertypesv5Label) string {
 			return name
 		}
 	}
+
 	return ""
 }
 
-// parseValues converts SigNoz points to metric values
-func parseValues(points *[]signoz.Querybuildertypesv5TimeSeriesValue) []Values {
+// parseMetricValues converts SigNoz points to metric values
+func parseMetricValues(points *[]signoz.Querybuildertypesv5TimeSeriesValue) []Values {
 	if points == nil {
 		return nil
 	}
@@ -204,75 +194,38 @@ func parseValues(points *[]signoz.Querybuildertypesv5TimeSeriesValue) []Values {
 	return values
 }
 
-// calculateStep determines the step interval based on the time difference between start and end.
-func calculateStep(start, end time.Time) int {
-	diff := end.Sub(start)
-	switch {
-	case diff < 24*time.Hour:
-		return int(time.Minute.Seconds()) // Less than a day, use 1 minute step
-	case diff < 3*24*time.Hour:
-		return int((15 * time.Minute).Seconds()) // Less than 3 days, use 15 minutes step
-	case diff < 7*24*time.Hour:
-		return int((30 * time.Minute).Seconds()) // Less than a week, use 30 minutes step
-	case diff < 30*24*time.Hour:
-		return int((time.Hour).Seconds()) // Less than a month, use 1 hour step
-	default: // For longer periods, use 6 hours step
-		return int(6 * time.Hour.Seconds())
-	}
-}
-
 func buildMetricsReq(clustersNamespace string, start, end time.Time, metricName string, instances, aggregations []string) (signoz.QueryRangeV5JSONRequestBody, map[string]string, error) {
 	step := calculateStep(start, end)
-	filterExpr := buildFilterExpression(clustersNamespace, instances, metricName)
+	filterExpr := buildMetricsFilterExpression(clustersNamespace, instances, metricName)
 
-	queries, queryToAgg, err := buildQueries(metricName, step, aggregations, filterExpr)
+	queries, queryToAgg, err := buildMetricQueries(metricName, step, aggregations, filterExpr)
 	if err != nil {
 		return signoz.QueryRangeV5JSONRequestBody{}, nil, err
 	}
 
-	return signoz.QueryRangeV5JSONRequestBody{
-		Start: new(int(start.UnixMilli())),
-		End:   new(int(end.UnixMilli())),
-		CompositeQuery: &signoz.Querybuildertypesv5CompositeQuery{
-			Queries: &queries,
-		},
-		RequestType:   new(signoz.TimeSeries),
-		SchemaVersion: new("v1"),
-	}, queryToAgg, nil
+	return buildRequestBody(start, end, queries, signoz.TimeSeries), queryToAgg, nil
 }
 
-func buildFilterExpression(namespace string, instances []string, metricName string) string {
-	parts := make([]string, 0, 3)
-	quoted := make([]string, len(instances))
-	for i, inst := range instances {
-		quoted[i] = escapeFilterString(inst)
-	}
-	parts = append(parts, "k8s.pod.name IN ["+strings.Join(quoted, ", ")+"]")
-	parts = append(parts, "k8s.namespace.name = "+escapeFilterString(namespace))
+func buildMetricsFilterExpression(namespace string, instances []string, metricName string) string {
+	parts := buildPodFilters(namespace, instances)
 	if info := sigNozMetricName[metricName]; info.additionalFilters != nil {
 		for key, val := range info.additionalFilters {
 			parts = append(parts, key+" = "+escapeFilterString(val))
 		}
 	}
+
 	return strings.Join(parts, " AND ")
 }
 
-func escapeFilterString(s string) string {
-	s = strings.ReplaceAll(s, `\`, `\\`)
-	s = strings.ReplaceAll(s, `"`, `\"`)
-	return `"` + s + `"`
-}
-
-func buildQueries(metricName string, step int, aggregations []string, filterExpr string) ([]signoz.Querybuildertypesv5QueryEnvelope, map[string]string, error) {
+func buildMetricQueries(metricName string, step int, aggregations []string, filterExpr string) ([]signoz.Querybuildertypesv5QueryEnvelope, map[string]string, error) {
 	info := sigNozMetricName[metricName]
-	queries := make([]signoz.Querybuildertypesv5QueryEnvelope, 0, len(aggregations))
-	queryToAgg := make(map[string]string, len(aggregations))
-
-	stepInterval := &signoz.Querybuildertypesv5Step{}
-	if err := stepInterval.FromQuerybuildertypesv5Step1(float32(step)); err != nil {
-		return nil, nil, fmt.Errorf("encode step interval: %w", err)
+	stepInterval, err := buildStepInterval(step)
+	if err != nil {
+		return nil, nil, err
 	}
 
+	queries := make([]signoz.Querybuildertypesv5QueryEnvelope, 0, len(aggregations))
+	queryToAgg := make(map[string]string, len(aggregations))
 	for i, agg := range aggregations {
 		var timeAgg, spaceAgg string
 		if info.metricType == "counter" {
@@ -297,9 +250,7 @@ func buildQueries(metricName string, step int, aggregations []string, filterExpr
 					SpaceAggregation: new(signoz.MetrictypesSpaceAggregation(spaceAgg)),
 				},
 			},
-			Filter: &signoz.Querybuildertypesv5Filter{
-				Expression: &filterExpr,
-			},
+			Filter: &signoz.Querybuildertypesv5Filter{Expression: &filterExpr},
 			GroupBy: &[]signoz.Querybuildertypesv5GroupByKey{
 				{Name: "k8s.pod.name", FieldContext: new(signoz.Resource)},
 			},
@@ -319,4 +270,75 @@ func buildQueries(metricName string, step int, aggregations []string, filterExpr
 	}
 
 	return queries, queryToAgg, nil
+}
+
+// buildRequestBody wraps query envelopes into a v5 request body of the given request type.
+func buildRequestBody(start, end time.Time, queries []signoz.Querybuildertypesv5QueryEnvelope, requestType signoz.Querybuildertypesv5RequestType) signoz.QueryRangeV5JSONRequestBody {
+	return signoz.QueryRangeV5JSONRequestBody{
+		Start:          new(int(start.UnixMilli())),
+		End:            new(int(end.UnixMilli())),
+		CompositeQuery: &signoz.Querybuildertypesv5CompositeQuery{Queries: &queries},
+		RequestType:    &requestType,
+		SchemaVersion:  new("v1"),
+	}
+}
+
+// buildPodFilters returns the standard k8s pod and namespace filter expressions.
+func buildPodFilters(namespace string, instances []string) []string {
+	quoted := make([]string, len(instances))
+	for i, inst := range instances {
+		quoted[i] = escapeFilterString(inst)
+	}
+
+	return []string{
+		"k8s.pod.name IN [" + strings.Join(quoted, ", ") + "]",
+		"k8s.namespace.name = " + escapeFilterString(namespace),
+	}
+}
+
+// decodeResults reinterprets the untyped v5 result slice as a typed slice via JSON round-tripping.
+func decodeResults[T any](results []any) ([]T, error) {
+	data, err := json.Marshal(results)
+	if err != nil {
+		return nil, fmt.Errorf("marshal results: %w", err)
+	}
+
+	var parsed []T
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		return nil, fmt.Errorf("unmarshal results: %w", err)
+	}
+
+	return parsed, nil
+}
+
+// calculateStep determines the step interval based on the time difference between start and end.
+func calculateStep(start, end time.Time) int {
+	diff := end.Sub(start)
+	switch {
+	case diff < 24*time.Hour:
+		return int(time.Minute.Seconds()) // Less than a day, use 1 minute step
+	case diff < 3*24*time.Hour:
+		return int((15 * time.Minute).Seconds()) // Less than 3 days, use 15 minutes step
+	case diff < 7*24*time.Hour:
+		return int((30 * time.Minute).Seconds()) // Less than a week, use 30 minutes step
+	case diff < 30*24*time.Hour:
+		return int((time.Hour).Seconds()) // Less than a month, use 1 hour step
+	default: // For longer periods, use 6 hours step
+		return int(6 * time.Hour.Seconds())
+	}
+}
+
+func buildStepInterval(step int) (*signoz.Querybuildertypesv5Step, error) {
+	stepInterval := &signoz.Querybuildertypesv5Step{}
+	if err := stepInterval.FromQuerybuildertypesv5Step1(float32(step)); err != nil {
+		return nil, fmt.Errorf("encode step interval: %w", err)
+	}
+
+	return stepInterval, nil
+}
+
+func escapeFilterString(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `"`, `\"`)
+	return `"` + s + `"`
 }
