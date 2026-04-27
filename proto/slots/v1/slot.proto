@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package xata.slot.v1;
 
-option go_package = "github.com/xataio/xatastor/services/xatastor-operator/internal/slotpb";
+option go_package = "github.com/xataio/xatastor/proto/api/xatastor-operator/xata/slot/v1";
 
 // SlotController manages NVMe-oF slot lifecycle on CSI nodes.
 // Served on a TCP port (e.g., :50061) for direct access by the orchestrator,
