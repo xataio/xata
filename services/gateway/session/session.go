@@ -82,17 +82,13 @@ func (s *session) ServeSQLSession(ctx context.Context) error {
 
 func (s *session) close(ctx context.Context) {
 	if s.inboundConn != nil {
-		err := s.inboundConn.Close()
-		if err != nil {
+		if err := s.inboundConn.Close(); err != nil {
 			log.Ctx(ctx).Error().Err(err).Msg("close inbound connection")
-			return
 		}
 	}
 	if s.outboundConn != nil {
-		err := s.outboundConn.Close()
-		if err != nil {
+		if err := s.outboundConn.Close(); err != nil {
 			log.Ctx(ctx).Error().Err(err).Msg("close outbound connection")
-			return
 		}
 	}
 }
