@@ -169,7 +169,7 @@ func (c *ClustersService) Init(ctx context.Context) error {
 	}()
 	go func() {
 		if !clusterCache.WaitForCacheSync(cacheCtx) {
-			log.Ctx(ctx).Error().Msg("cluster cache sync failed")
+			log.Ctx(cacheCtx).Error().Msg("cluster cache sync failed")
 		}
 		close(c.clusterCacheOk)
 	}()
