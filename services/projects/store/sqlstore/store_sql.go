@@ -402,12 +402,15 @@ func (s *sqlProjectStore) DeleteProject(ctx context.Context, organizationID stri
 	if err != nil {
 		return err
 	}
+	defer branches.Close()
 
 	// there is at least one branch in the project
 	if branches.Next() {
 		return store.ErrProjectNotEmpty{ID: projectID}
 	}
-	defer branches.Close()
+	if err := branches.Err(); err != nil {
+		return err
+	}
 
 	// clean up any remaining backup entries for this project
 	_, err = tx.ExecContext(ctx, "DELETE FROM backups WHERE project_id = $1", projectID)
