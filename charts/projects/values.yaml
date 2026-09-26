@@ -124,3 +124,8 @@ cleanup:
     requests:
       cpu: 50m
       memory: 128Mi
+
+# Serialize schema setup across replicas when using the standalone chart.
+setupJob:
+  enabled: false
+  waitImage: alpine/k8s:1.34.1@sha256:ec714df3813b5405292860f8a1c55c5727bf8c33c88992f1e981efad8065547f

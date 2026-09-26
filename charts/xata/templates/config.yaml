@@ -1,0 +1,41 @@
+{{- $endpoint := .Values.backups.endpoint }}
+{{- if .Values.objectStorage.enabled }}
+{{- $endpoint = printf "http://xata-objectstore.%s.svc:9000" .Release.Namespace }}
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-config
+  namespace: {{ .Release.Namespace }}
+data:
+  XATA_TRACING: "false"
+  OTEL_SDK_DISABLED: "true"
+  OTEL_LOG_LEVEL: "info"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: keycloak-realm
+  namespace: {{ .Release.Namespace }}
+data:
+  realm.json: |
+{{ .Files.Get "files/realm.json" | indent 4 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: xata-shared-settings
+  namespace: {{ .Release.Namespace }}
+data:
+  XATA_NAMESPACE: {{ .Release.Namespace | quote }}
+  XATA_CLUSTERS_NAMESPACE: {{ .Values.clusters.config.clusters.clustersNamespace | quote }}
+  {{- if .Values.backups.enabled }}
+  XATA_BACKUPS_BUCKET: {{ printf "s3://%s" .Values.backups.bucket | quote }}
+  XATA_BACKUPS_ENDPOINT: {{ $endpoint | quote }}
+  XATA_PGBACKREST_BUCKET: {{ .Values.backups.bucket | quote }}
+  XATA_PGBACKREST_ENDPOINT: {{ $endpoint | quote }}
+  XATA_BACKUPS_CREDENTIALS_SECRET_NAME: {{ .Values.backups.existingSecret | quote }}
+  XATA_PGBACKREST_CREDENTIALS_SECRET: {{ .Values.backups.existingSecret | quote }}
+  XATA_BACKUPS_CREDENTIALS_ACCESS_KEY_ID_KEY: {{ .Values.backups.accessKeyKey | quote }}
+  XATA_BACKUPS_CREDENTIALS_SECRET_ACCESS_KEY_KEY: {{ .Values.backups.secretKeyKey | quote }}
+  {{- end }}

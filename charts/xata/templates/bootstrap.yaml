@@ -1,0 +1,207 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: xata-bootstrap
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: xata-bootstrap
+  namespace: {{ .Release.Namespace }}
+rules:
+  - apiGroups: [apps]
+    resources: [deployments]
+    verbs: [get, list, watch]
+  - apiGroups: [postgresql.cnpg.io]
+    resources: [clusters, scheduledbackups]
+    verbs: [get, create, patch]
+  - apiGroups: [barmancloud.cnpg.io]
+    resources: [objectstores]
+    verbs: [get, create, patch]
+  - apiGroups: [cert-manager.io]
+    resources: [certificates, issuers]
+    verbs: [get, create, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: xata-bootstrap
+  namespace: {{ .Release.Namespace }}
+subjects:
+  - kind: ServiceAccount
+    name: xata-bootstrap
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: xata-bootstrap
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: xata-bootstrap
+  namespace: {{ .Release.Namespace }}
+data:
+  {{- if .Values.plugins.enabled }}
+  certificates.yaml: |
+{{ tpl (.Files.Get "files/plugin-certificates.yaml") . | indent 4 }}
+  {{- end }}
+  resources.yaml: |
+    {{- if .Values.metadata.enabled }}
+    apiVersion: postgresql.cnpg.io/v1
+    kind: Cluster
+    metadata:
+      name: xata-metastore
+      namespace: {{ .Release.Namespace }}
+      labels:
+        app.kubernetes.io/instance: {{ .Release.Name }}
+      annotations:
+        helm.sh/resource-policy: keep
+    spec:
+      instances: {{ .Values.metadata.instances }}
+      imageName: {{ .Values.metadata.image | quote }}
+      enableSuperuserAccess: true
+      smartShutdownTimeout: 30
+      stopDelay: 60
+      superuserSecret:
+        name: xata-metastore-superuser
+      managed:
+        roles:
+          - name: {{ .Values.credentials.username }}
+            ensure: present
+            login: true
+            superuser: true
+            passwordSecret:
+              name: xata-metastore-app
+      bootstrap:
+        initdb:
+          database: projects
+          owner: {{ .Values.credentials.username }}
+          secret:
+            name: xata-metastore-app
+      storage:
+        size: {{ .Values.metadata.size }}
+        {{- with .Values.metadata.storageClass }}
+        storageClass: {{ . | quote }}
+        {{- end }}
+      resources:
+        {{- toYaml .Values.metadata.resources | nindent 8 }}
+      {{- if .Values.backups.enabled }}
+      plugins:
+        - name: barman-cloud.cloudnative-pg.io
+          isWALArchiver: true
+          parameters:
+            barmanObjectName: xata-metastore
+      {{- end }}
+      affinity:
+        {{- with .Values.metadata.nodeSelector }}
+        nodeSelector:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        enablePodAntiAffinity: true
+        podAntiAffinityType: {{ if eq .Values.profile "multi-node" }}required{{ else }}preferred{{ end }}
+        topologyKey: kubernetes.io/hostname
+    {{- if .Values.backups.enabled }}
+    ---
+    apiVersion: barmancloud.cnpg.io/v1
+    kind: ObjectStore
+    metadata:
+      name: xata-metastore
+      namespace: {{ .Release.Namespace }}
+    spec:
+      retentionPolicy: {{ .Values.metadata.backupRetention | quote }}
+      configuration:
+        destinationPath: {{ printf "s3://%s/metadata" .Values.backups.bucket | quote }}
+        {{- if .Values.objectStorage.enabled }}
+        endpointURL: {{ printf "http://xata-objectstore.%s.svc:9000" .Release.Namespace | quote }}
+        {{- else if .Values.backups.endpoint }}
+        endpointURL: {{ .Values.backups.endpoint | quote }}
+        {{- end }}
+        s3Credentials:
+          accessKeyId:
+            name: {{ .Values.backups.existingSecret }}
+            key: {{ .Values.backups.accessKeyKey }}
+          secretAccessKey:
+            name: {{ .Values.backups.existingSecret }}
+            key: {{ .Values.backups.secretKeyKey }}
+        wal:
+          compression: gzip
+    ---
+    apiVersion: postgresql.cnpg.io/v1
+    kind: ScheduledBackup
+    metadata:
+      name: xata-metastore
+      namespace: {{ .Release.Namespace }}
+    spec:
+      schedule: {{ .Values.metadata.backupSchedule | quote }}
+      immediate: false
+      cluster: {name: xata-metastore}
+      method: plugin
+      pluginConfiguration: {name: barman-cloud.cloudnative-pg.io}
+    {{- end }}
+    {{- end }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: xata-bootstrap-{{ .Release.Revision }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  ttlSecondsAfterFinished: 86400
+  activeDeadlineSeconds: {{ .Values.bootstrap.timeoutSeconds }}
+  backoffLimit: 3
+  template:
+    spec:
+      serviceAccountName: xata-bootstrap
+      restartPolicy: Never
+      containers:
+        - name: apply
+          image: {{ .Values.bootstrap.image }}
+          command: [/bin/sh, -ec]
+          args:
+            - |
+              {{- if .Values.cnpg.enabled }}
+              kubectl -n "$NAMESPACE" rollout status deployment/cnpg-controller-manager --timeout=300s
+              {{- end }}
+              {{- if (index .Values "cert-manager").enabled }}
+              kubectl -n "$NAMESPACE" rollout status deployment/{{ .Release.Name }}-cert-manager-webhook --timeout=300s
+              {{- end }}
+              {{- if .Values.plugins.enabled }}
+              for attempt in $(seq 1 60); do
+                if kubectl apply --server-side --field-manager=xata-chart -f /bootstrap/certificates.yaml; then break; fi
+                [ "$attempt" -lt 60 ] || exit 1
+                sleep 5
+              done
+              # CNPG must be able to reach its plugins before the Cluster exists.
+              # Otherwise early connection failures accumulate reconciliation backoff.
+              kubectl -n "$NAMESPACE" rollout status deployment/barman-cloud --timeout=300s
+              kubectl -n "$NAMESPACE" rollout status deployment/scale-to-zero --timeout=300s
+              {{- end }}
+              {{- if .Values.metadata.enabled }}
+              for attempt in $(seq 1 60); do
+                if kubectl apply --server-side --field-manager=xata-chart -f /bootstrap/resources.yaml; then exit 0; fi
+                sleep 5
+              done
+              exit 1
+              {{- end }}
+          env:
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          volumeMounts:
+            - name: manifests
+              mountPath: /bootstrap
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {memory: 128Mi}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+      volumes:
+        - name: manifests
+          configMap:
+            name: xata-bootstrap

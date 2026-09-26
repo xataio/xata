@@ -1,0 +1,33 @@
+dependencies:
+- name: auth
+  repository: file://../auth
+  version: 0.0.0
+- name: projects
+  repository: file://../projects
+  version: 0.0.0
+- name: clusters
+  repository: file://../clusters
+  version: 0.0.0
+- name: branch-operator
+  repository: file://../branch-operator
+  version: 0.0.0
+- name: gateway
+  repository: file://../gateway
+  version: 0.0.0
+- name: keycloak
+  repository: file://../keycloak
+  version: 0.0.0
+- name: api-gateway
+  repository: file://../api-gateway
+  version: 0.0.0
+- name: cloudnative-pg
+  repository: oci://ghcr.io/xataio/xata-cnpg/charts
+  version: 0.0.0-g139a814
+- name: cert-manager
+  repository: https://charts.jetstack.io
+  version: v1.18.2
+- name: gateway-helm
+  repository: oci://docker.io/envoyproxy
+  version: v1.2.4
+digest: sha256:a22e0c2097565395157264e2c4ca3d36c8e3cd8c36939f2a42e26417290eb289
+generated: "2026-09-25T02:06:53.791859-04:00"

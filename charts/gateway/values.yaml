@@ -63,3 +63,6 @@ tolerations:
     key: kubernetes.io/arch
     operator: Equal
     value: arm64
+
+replicaCount: 1
+strategy: {}

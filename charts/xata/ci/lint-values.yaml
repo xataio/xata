@@ -1,0 +1,8 @@
+# Render-only fixture, never a deployment storage default.
+clusters:
+  config:
+    clusters:
+      storageClass: test-csi
+      volumeSnapshotClass: test-snapshot
+network:
+  apiServerCIDRs: [192.0.2.1/32]

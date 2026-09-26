@@ -1,0 +1,198 @@
+{
+  "realm": "xata",
+  "enabled": true,
+  "eventsEnabled": true,
+  "eventsExpiration": 2592000,
+  "enabledEventTypes": [],
+  "registrationAllowed": true,
+  "registrationEmailAsUsername": true,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "verifyEmail": false,
+  "organizationsEnabled": true,
+  "sslRequired": "external",
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 86400,
+  "ssoSessionMaxLifespan": 864000,
+  "offlineSessionIdleTimeout": 604800,
+  "offlineSessionMaxLifespan": 2592000,
+  "refreshTokenMaxReuse": 10,
+  "browserFlow": "browser",
+  "registrationFlow": "registration",
+  "resetCredentialsFlow": "reset credentials",
+  "directGrantFlow": "direct grant",
+  "clientAuthenticationFlow": "clients",
+  "dockerAuthenticationFlow": "docker auth",
+  "firstBrokerLoginFlow": "first broker login",
+  "requiredCredentials": [
+    "password"
+  ],
+  "clients": [
+    {
+      "clientId": "cli",
+      "name": "Xata CLI",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "$(env:XATA_CLI_CLIENT_SECRET)",
+      "publicClient": false,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "implicitFlowEnabled": false,
+      "serviceAccountsEnabled": false,
+      "consentRequired": false,
+      "fullScopeAllowed": true,
+      "frontchannelLogout": true,
+      "protocol": "openid-connect",
+      "redirectUris": [
+        "/*"
+      ],
+      "webOrigins": [
+        "/*"
+      ],
+      "attributes": {
+        "oauth2.device.authorization.grant.enabled": "true",
+        "backchannel.logout.session.required": "true",
+        "post.logout.redirect.uris": "+"
+      },
+      "defaultClientScopes": [
+        "acr",
+        "basic",
+        "email",
+        "organization:*",
+        "profile",
+        "roles",
+        "web-origins"
+      ],
+      "optionalClientScopes": [
+        "offline_access",
+        "organization"
+      ]
+    }
+  ],
+  "clientScopes": [
+    {
+      "name": "organization",
+      "description": "Additional claims about the organization a subject belongs to",
+      "protocol": "openid-connect",
+      "attributes": {
+        "consent.screen.text": "${organizationScopeConsentText}",
+        "display.on.consent.screen": "false",
+        "include.in.token.scope": "true"
+      },
+      "protocolMappers": [
+        {
+          "name": "organization",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-organization-membership-mapper",
+          "consentRequired": false,
+          "config": {
+            "access.token.claim": "false",
+            "addOrganizationAttributes": "true",
+            "addOrganizationId": "false",
+            "claim.name": "organization",
+            "id.token.claim": "false",
+            "introspection.token.claim": "false",
+            "jsonType.label": "JSON",
+            "multivalued": "true",
+            "userinfo.token.claim": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "organization:*",
+      "description": "Additional claims about the organization a subject belongs to",
+      "protocol": "openid-connect",
+      "attributes": {
+        "consent.screen.text": "Full access to your Xata organizations, including their projects, databases, members, and API keys",
+        "display.on.consent.screen": "false",
+        "include.in.token.scope": "true"
+      },
+      "protocolMappers": [
+        {
+          "config": {
+            "access.token.claim": "true",
+            "addOrganizationAttributes": "true",
+            "addOrganizationId": "false",
+            "claim.name": "organization",
+            "id.token.claim": "true",
+            "introspection.token.claim": "false",
+            "jsonType.label": "JSON",
+            "multivalued": "true",
+            "userinfo.token.claim": "false"
+          },
+          "consentRequired": false,
+          "name": "organization",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-organization-membership-mapper"
+        }
+      ]
+    }
+  ],
+  "defaultDefaultClientScopes": [
+    "acr",
+    "basic",
+    "email",
+    "organization:*",
+    "profile",
+    "roles",
+    "web-origins"
+  ],
+  "defaultOptionalClientScopes": [
+    "address",
+    "offline_access",
+    "organization",
+    "phone"
+  ],
+  "defaultRole": {
+    "name": "default-roles-xata",
+    "composite": true,
+    "clientRole": false,
+    "description": "${role_default-roles}"
+  },
+  "roles": {
+    "realm": [
+      {
+        "name": "default-roles-xata",
+        "composite": true,
+        "clientRole": false,
+        "composites": {
+          "client": {
+            "account": [
+              "manage-account",
+              "view-profile"
+            ]
+          },
+          "realm": [
+            "offline_access",
+            "uma_authorization"
+          ]
+        },
+        "description": "${role_default-roles}"
+      },
+      {
+        "name": "offline_access",
+        "composite": false,
+        "clientRole": false,
+        "description": "${role_offline-access}"
+      },
+      {
+        "name": "uma_authorization",
+        "composite": false,
+        "clientRole": false,
+        "description": "${role_uma_authorization}"
+      }
+    ]
+  },
+  "scopeMappings": [
+    {
+      "clientScope": "offline_access",
+      "roles": [
+        "offline_access"
+      ]
+    }
+  ],
+  "smtpServer": {}
+}

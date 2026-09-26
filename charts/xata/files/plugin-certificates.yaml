@@ -1,0 +1,94 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: barman-cloud-client
+  namespace: {{ .Release.Namespace }}
+spec:
+  commonName: barman-cloud-client
+  duration: 2160h
+  isCA: false
+  issuerRef:
+    group: cert-manager.io
+    kind: Issuer
+    name: selfsigned-issuer
+  renewBefore: 360h
+  secretName: barman-cloud-client-tls
+  usages:
+  - client auth
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: barman-cloud-server
+  namespace: {{ .Release.Namespace }}
+spec:
+  commonName: barman-cloud
+  dnsNames:
+  - barman-cloud
+  duration: 2160h
+  isCA: false
+  issuerRef:
+    group: cert-manager.io
+    kind: Issuer
+    name: selfsigned-issuer
+  renewBefore: 360h
+  secretName: barman-cloud-server-tls
+  usages:
+  - server auth
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: selfsigned-issuer
+  namespace: {{ .Release.Namespace }}
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: scaletozero-client
+  namespace: {{ .Release.Namespace }}
+spec:
+  commonName: scaletozero-client
+  duration: 2160h
+  isCA: false
+  issuerRef:
+    group: cert-manager.io
+    kind: Issuer
+    name: cnpg-scale-to-zero-selfsigned-issuer
+  renewBefore: 360h
+  secretName: scaletozero-client-tls
+  usages:
+  - client auth
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: scaletozero-server
+  namespace: {{ .Release.Namespace }}
+spec:
+  commonName: scale-to-zero
+  dnsNames:
+  - scale-to-zero
+  - scale-to-zero.{{ .Release.Namespace }}
+  - scale-to-zero.{{ .Release.Namespace }}.svc
+  - scale-to-zero.{{ .Release.Namespace }}.svc.cluster.local
+  duration: 2160h
+  isCA: false
+  issuerRef:
+    group: cert-manager.io
+    kind: Issuer
+    name: cnpg-scale-to-zero-selfsigned-issuer
+  renewBefore: 360h
+  secretName: scaletozero-server-tls
+  usages:
+  - server auth
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: cnpg-scale-to-zero-selfsigned-issuer
+  namespace: {{ .Release.Namespace }}
+spec:
+  selfSigned: {}

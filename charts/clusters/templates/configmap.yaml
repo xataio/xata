@@ -47,3 +47,6 @@ data:
   XATA_PGBACKREST_CREDENTIALS_SECRET: {{ .Values.config.clusters.pgbackrest.credentialsSecret | quote }}
   {{- end }}
   {{- end }}
+  {{- with .Values.extraConfig }}
+  {{- toYaml . | nindent 2 }}
+  {{- end }}

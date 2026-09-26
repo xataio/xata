@@ -17,3 +17,6 @@ data:
   XATA_XATASTOR_ENABLED: {{ .Values.config.branchOperator.xatastor.enabled | quote }}
   XATA_BRANCH_MAX_CONCURRENT: {{ .Values.config.branchOperator.branchMaxConcurrent | quote }}
   XATA_WAKEUP_MAX_CONCURRENT: {{ .Values.config.branchOperator.wakeupMaxConcurrent | quote }}
+  {{- with .Values.extraConfig }}
+  {{- toYaml . | nindent 2 }}
+  {{- end }}

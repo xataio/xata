@@ -1,1 +1,4 @@
+{{- if .Values.crds.create }}
 {{- .Files.Get "crds/xata.io_branches.yaml" -}}
+
+{{- end }}

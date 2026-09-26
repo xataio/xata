@@ -1,0 +1,50 @@
+{{- if .Values.setupJob.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Chart.Name }}-setup-wait
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ .Chart.Name }}-setup-wait
+  namespace: {{ .Release.Namespace }}
+rules:
+  - apiGroups: [batch]
+    resources: [jobs]
+    resourceNames: ["{{ .Chart.Name }}-setup-{{ .Release.Revision }}"]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Chart.Name }}-setup-wait
+  namespace: {{ .Release.Namespace }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Chart.Name }}-setup-wait
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ .Chart.Name }}-setup-wait
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Chart.Name }}-setup-{{ .Release.Revision }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  # Keep the completed Job so replacement pods can still observe completion.
+  completions: 1
+  parallelism: 1
+  backoffLimit: 10
+  activeDeadlineSeconds: 900
+  template:
+    spec:
+      automountServiceAccountToken: false
+      restartPolicy: OnFailure
+      containers:
+        {{- include "auth.setupContainer" . | nindent 8 }}
+{{- end }}

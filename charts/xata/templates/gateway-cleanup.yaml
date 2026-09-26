@@ -1,0 +1,86 @@
+# Envoy must process Gateway deletion before Helm removes its controller.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: xata-gateway-cleanup
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: xata-gateway-cleanup
+  namespace: {{ .Release.Namespace }}
+rules:
+  - apiGroups: [gateway.networking.k8s.io]
+    resources: [gateways]
+    verbs: [get, list, watch]
+  - apiGroups: [gateway.networking.k8s.io]
+    resources: [gateways]
+    resourceNames: [eg, keycloak-eg]
+    verbs: [delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: xata-gateway-cleanup
+  namespace: {{ .Release.Namespace }}
+subjects:
+  - {kind: ServiceAccount, name: xata-gateway-cleanup, namespace: {{ .Release.Namespace }}}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: xata-gateway-cleanup}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: xata-gateway-cleanup
+rules:
+  - apiGroups: [gateway.networking.k8s.io]
+    resources: [gatewayclasses]
+    verbs: [get, list, watch]
+  - apiGroups: [gateway.networking.k8s.io]
+    resources: [gatewayclasses]
+    resourceNames: [eg]
+    verbs: [delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: xata-gateway-cleanup
+subjects:
+  - {kind: ServiceAccount, name: xata-gateway-cleanup, namespace: {{ .Release.Namespace }}}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: xata-gateway-cleanup}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: xata-gateway-cleanup
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    helm.sh/hook: pre-delete
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  activeDeadlineSeconds: {{ .Values.bootstrap.timeoutSeconds }}
+  backoffLimit: 1
+  template:
+    spec:
+      serviceAccountName: xata-gateway-cleanup
+      restartPolicy: Never
+      containers:
+        - name: cleanup
+          image: {{ .Values.bootstrap.image }}
+          command: [/bin/sh, -ec]
+          args:
+            - |
+              kubectl -n "$NAMESPACE" delete gateways.gateway.networking.k8s.io eg keycloak-eg --ignore-not-found --wait=true --timeout=180s
+              kubectl delete gatewayclass eg --ignore-not-found --wait=true --timeout=180s
+          env:
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef: {fieldPath: metadata.namespace}
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {memory: 128Mi}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}

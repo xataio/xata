@@ -1,1 +1,3 @@
+{{- if .Values.crds.create }}
 {{- .Files.Get "crds/xata.io_wakeuprequests.yaml" -}}
+{{- end }}

@@ -1,0 +1,145 @@
+{{- if .Values.objectStorage.enabled }}
+{{- $old := lookup "v1" "Secret" .Release.Namespace "xata-backups" | default dict }}
+{{- $data := get $old "data" | default dict }}
+{{- $access := get $data "accessKeyId" | default "" | b64dec | default (randAlphaNum 20) }}
+{{- $secret := get $data "secretAccessKey" | default "" | b64dec | default (randAlphaNum 40) }}
+{{- range $ns := list .Release.Namespace .Values.clusters.config.clusters.clustersNamespace }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: xata-backups
+  namespace: {{ $ns }}
+  annotations:
+    helm.sh/resource-policy: keep
+stringData:
+  accessKeyId: {{ $access | quote }}
+  secretAccessKey: {{ $secret | quote }}
+{{- end }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: xata-objectstore
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    helm.sh/resource-policy: keep
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- with .Values.objectStorage.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.objectStorage.size }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: xata-objectstore
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector: {app: xata-objectstore}
+  ports:
+    - {name: s3, port: 9000, targetPort: 9000}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: xata-objectstore
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app: xata-objectstore}
+  template:
+    metadata:
+      labels: {app: xata-objectstore}
+    spec:
+      automountServiceAccountToken: false
+      securityContext: {fsGroup: 10001}
+      containers:
+        - name: rustfs
+          image: {{ .Values.objectStorage.image }}
+          args: [/data]
+          env:
+            - {name: RUSTFS_ADDRESS, value: ':9000'}
+            - {name: RUSTFS_CONSOLE_ENABLE, value: 'false'}
+            - {name: RUSTFS_OBS_LOG_DIRECTORY, value: /logs}
+            - name: RUSTFS_ACCESS_KEY
+              valueFrom:
+                secretKeyRef: {name: xata-backups, key: accessKeyId}
+            - name: RUSTFS_SECRET_KEY
+              valueFrom:
+                secretKeyRef: {name: xata-backups, key: secretAccessKey}
+          ports: [{containerPort: 9000, name: s3}]
+          readinessProbe:
+            tcpSocket: {port: s3}
+          startupProbe:
+            tcpSocket: {port: s3}
+            failureThreshold: 60
+            periodSeconds: 5
+          volumeMounts:
+            - {name: data, mountPath: /data}
+            - {name: logs, mountPath: /logs}
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {memory: 512Mi}
+          securityContext:
+            runAsUser: 10001
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+      volumes:
+        - name: data
+          persistentVolumeClaim: {claimName: xata-objectstore}
+        - name: logs
+          emptyDir: {}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: xata-bucket-{{ .Release.Revision }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  activeDeadlineSeconds: {{ .Values.bootstrap.timeoutSeconds }}
+  ttlSecondsAfterFinished: 86400
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      containers:
+        - name: bucket
+          image: {{ .Values.objectStorage.bucketImage }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          command: [/bin/sh, -ec]
+          args:
+            - |
+              for attempt in $(seq 1 100); do
+                if aws --endpoint-url "$ENDPOINT" s3api head-bucket --bucket "$BUCKET" 2>/dev/null; then exit 0; fi
+                if aws --endpoint-url "$ENDPOINT" s3api create-bucket --bucket "$BUCKET" >/dev/null 2>&1; then exit 0; fi
+                sleep 3
+              done
+              echo 'Unable to create backup bucket' >&2
+              exit 1
+          env:
+            - {name: ENDPOINT, value: 'http://xata-objectstore:9000'}
+            - {name: BUCKET, value: {{ .Values.backups.bucket | quote }}}
+            - {name: AWS_DEFAULT_REGION, value: us-east-1}
+            - {name: AWS_EC2_METADATA_DISABLED, value: 'true'}
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef: {name: xata-backups, key: accessKeyId}
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef: {name: xata-backups, key: secretAccessKey}
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {memory: 128Mi}
+{{- end }}

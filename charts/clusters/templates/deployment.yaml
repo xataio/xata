@@ -8,11 +8,21 @@ metadata:
   annotations:
     reloader.stakater.com/auto: "true"
 spec:
+  replicas: {{ .Values.replicaCount | default 1 }}
+  {{- with .Values.strategy }}
+  strategy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
   selector:
     matchLabels:
       app: clusters
   template:
     metadata:
+      annotations:
+        checksum/chart-values: {{ toJson .Values | sha256sum }}
+        {{- if (dig "rolloutOnUpgrade" false (.Values.global | default dict)) }}
+        xata.io/helm-revision: {{ .Release.Revision | quote }}
+        {{- end }}
       labels:
         app: clusters
     spec:
@@ -44,6 +54,9 @@ spec:
             - name: OTEL_SERVICE_NAME
               value: "clusters"
           envFrom:
+            {{- with .Values.extraEnvFrom }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
             - configMapRef:
                 name: otel-config
             - configMapRef:

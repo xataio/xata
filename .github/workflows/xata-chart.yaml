@@ -1,0 +1,64 @@
+name: Xata umbrella chart
+on:
+  pull_request:
+    paths: ['charts/**', 'tests/helm/**', 'scripts/helm/**', '.github/workflows/xata-chart.yaml']
+  workflow_dispatch:
+    inputs:
+      live_matrix:
+        description: 'Run disposable clusters on a self-hosted runner with Docker, k3d, kind, psql and at least 16 GB Docker RAM'
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4.3.0
+        with:
+          version: v4.1.1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install PyYAML==6.0.3
+      - run: helm dependency build charts/xata
+      - run: scripts/helm/package.sh dist
+      - run: python3 tests/helm/render_test.py
+      - run: python3 tests/helm/cleanup_test.py
+      - run: python3 tests/helm/runner_signal_test.py
+      - run: helm lint --strict --kube-version 1.34.1 charts/xata --set clusters.config.clusters.storageClass=test --set clusters.config.clusters.volumeSnapshotClass=test
+      - run: |
+          for archive in dist/xata-*.tgz; do
+            scripts/helm/verify-distribution.sh "$archive"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: xata-chart-preview
+          path: |
+            dist/*.tgz
+            dist/*.tgz.sha256
+  live:
+    if: github.event_name == 'workflow_dispatch' && inputs.live_matrix
+    needs: package
+    runs-on: [self-hosted, xata-chart-tests]
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4.3.0
+        with:
+          version: v4.1.1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install PyYAML==6.0.3
+      - run: scripts/helm/test-matrix.sh
+      - run: scripts/helm/test-existing-operators.sh > dist/verification/existing-operators.log 2>&1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: xata-live-verification
+          path: |
+            dist/verification/**/*.log
+            dist/verification/**/*.txt
+            dist/verification/**/*.tgz
