@@ -9,6 +9,7 @@ APP_VERSION ?= $(GIT_COMMIT_SHORT)
 GO ?= go
 CUE ?= $(GO) run cuelang.org/go/cmd/cue
 KUBE_LINTER ?= $(GO) run golang.stackrox.io/kube-linter/cmd/kube-linter
+KUBE_VERSION ?= 1.34.1
 
 env: # Print Makefile variables for debugging
 	@echo "CHARTS: $(CHARTS)"
@@ -24,7 +25,7 @@ build-deps: # Build helm charts dependencies
 	@set -e; \
 	for chart in $(CHARTS); do \
 		if [ "$$(yq eval '.dependencies // "null"' "$$chart/Chart.yaml" 2>/dev/null)" != "null" ]; then \
-			yq eval -r '.dependencies[] | "helm repo add " + .name + " " + .repository + " --force-update >/dev/null"' "$$chart/Chart.yaml" | sh; \
+			yq eval -r '.dependencies[] | select(.repository | test("^https?://")) | "helm repo add " + .name + " " + .repository + " --force-update >/dev/null"' "$$chart/Chart.yaml" | sh; \
 		fi; \
 		echo "Building dependencies for $$chart..." >&2; \
 		helm dependency build $$chart; \
@@ -104,7 +105,8 @@ lint-helm:
 	@set -e; \
 	echo "Running helm lint..." >&2; \
 	for chart in $(CHARTS); do \
-		helm lint $$chart; \
+		extra=(); if [ -f "$$chart/ci/lint-values.yaml" ]; then extra=(-f "$$chart/ci/lint-values.yaml"); fi; \
+		helm lint "$$chart" --kube-version "$(KUBE_VERSION)" "$${extra[@]}"; \
 	done
 
 lint-cue: build-deps
@@ -112,8 +114,9 @@ lint-cue: build-deps
 	echo "Running cue vet..." >&2; \
 	for chart in $(CHARTS); do \
 		echo "Validating $$chart..." >&2; \
-		helm template $$chart $$chart \
-			| yq eval '.metadata.namespace = (.metadata.namespace // "_")' - \
+		extra=(); if [ -f "$$chart/ci/lint-values.yaml" ]; then extra=(-f "$$chart/ci/lint-values.yaml"); fi; \
+		helm template "$$chart" "$$chart" --kube-version "$(KUBE_VERSION)" "$${extra[@]}" \
+			| yq eval 'select(. != null) | .metadata.namespace = (.metadata.namespace // "_")' - \
 			| $(CUE) vet -l 'kind' -l 'metadata.namespace' -l 'metadata.name' ../cue/** yaml: - ; \
 	done
 
@@ -127,5 +130,6 @@ template:
 	@set -e; \
 	for chart in $(CHARTS); do \
 		echo "Render chart template for $$chart..." >&2; \
-		helm template $$chart $$chart; \
+		extra=(); if [ -f "$$chart/ci/lint-values.yaml" ]; then extra=(-f "$$chart/ci/lint-values.yaml"); fi; \
+		helm template "$$chart" "$$chart" --kube-version "$(KUBE_VERSION)" "$${extra[@]}"; \
 	done

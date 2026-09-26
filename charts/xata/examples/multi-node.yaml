@@ -1,0 +1,30 @@
+profile: multi-node
+plugins:
+  scaleToZeroReplicas: 2
+metadata:
+  instances: 3
+auth:
+  replicaCount: 2
+projects:
+  replicaCount: 2
+clusters:
+  replicaCount: 2
+gateway:
+  replicaCount: 2
+keycloak:
+  instances: 2
+cnpg:
+  # The pinned controller runs with --leader-elect.
+  replicaCount: 2
+  affinity:
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: cloudnative-pg
+          topologyKey: kubernetes.io/hostname
+envoy:
+  deployment:
+    replicas: 2
+api-gateway:
+  proxyReplicas: 2

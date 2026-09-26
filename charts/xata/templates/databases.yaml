@@ -1,0 +1,46 @@
+{{- if .Values.metadata.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: xata-databases-{{ .Release.Revision }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  ttlSecondsAfterFinished: 86400
+  activeDeadlineSeconds: {{ .Values.bootstrap.timeoutSeconds }}
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      containers:
+        - name: create
+          image: {{ .Values.bootstrap.postgresImage }}
+          command: [/bin/sh, -ec]
+          args:
+            - |
+              until pg_isready -h "$PGHOST" -U "$PGUSER"; do sleep 2; done
+              for database in auth keycloakdb; do
+                psql -v ON_ERROR_STOP=1 --set=db="$database" --set=owner="$DB_OWNER" <<'SQL'
+              SELECT format('CREATE DATABASE %I OWNER %I', :'db', :'owner')
+              WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = :'db')\gexec
+              SQL
+              done
+          env:
+            - {name: PGHOST, value: xata-metastore-rw}
+            - {name: PGDATABASE, value: postgres}
+            - {name: DB_OWNER, value: {{ .Values.credentials.username | quote }}}
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef: {name: xata-metastore-superuser, key: username}
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef: {name: xata-metastore-superuser, key: password}
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {memory: 128Mi}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 999
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+{{- end }}

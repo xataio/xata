@@ -8,11 +8,21 @@ metadata:
   annotations:
     reloader.stakater.com/auto: "true"
 spec:
+  replicas: {{ .Values.replicaCount | default 1 }}
+  {{- with .Values.strategy }}
+  strategy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
   selector:
     matchLabels:
       app: {{ .Chart.Name }}
   template:
     metadata:
+      annotations:
+        checksum/chart-values: {{ toJson .Values | sha256sum }}
+        {{- if (dig "rolloutOnUpgrade" false (.Values.global | default dict)) }}
+        xata.io/helm-revision: {{ .Release.Revision | quote }}
+        {{- end }}
       labels:
         app: {{ .Chart.Name }}
     spec:
@@ -21,36 +31,26 @@ spec:
       affinity:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- if .Values.setupJob.enabled }}
+      serviceAccountName: {{ .Chart.Name }}-setup-wait
+      {{- end }}
       initContainers:
-        - name: {{ .Chart.Name }}-init
-          image: "{{ .Values.image.repository }}{{ if .Values.image.digest }}@{{ .Values.image.digest }}{{ else }}:{{ .Values.image.tag }}{{ end }}"
-          command: ["/server"]
-          args: ["setup"]
-          env:
-            - name: AUTH_GRPC_URL
-              value: "{{ .Values.dependencies.authGrpcUrl }}"
-            - name: PROJECTS_GRPC_URL
-              value: "{{ .Values.dependencies.projectsGrpcUrl }}"
-            - name: POSTGRES_SSLMODE
-              value: {{ .Values.postgres.sslmode }}
-            - name: API_KEY_HMAC_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: auth-api-key-hmac
-                  key: hmac-secret
-          envFrom:
-            - secretRef:
-                name: auth-api-key-hmac
+        {{- if .Values.setupJob.enabled }}
+        - name: wait-for-setup
+          image: {{ .Values.setupJob.waitImage }}
+          command: [kubectl]
+          args: ["-n", {{ .Release.Namespace | quote }}, wait, "job/{{ .Chart.Name }}-setup-{{ .Release.Revision }}", "--for=condition=complete", "--timeout=900s"]
           resources:
-            {{- toYaml .Values.resources | nindent 12 }}
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {memory: 128Mi}
           securityContext:
+            runAsNonRoot: true
             runAsUser: 1000
             allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            runAsNonRoot: true
-            capabilities:
-              drop:
-                - ALL
+            capabilities: {drop: [ALL]}
+        {{- else }}
+        {{- include "auth.setupContainer" . | nindent 8 }}
+        {{- end }}
       containers:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}{{ if .Values.image.digest }}@{{ .Values.image.digest }}{{ else }}:{{ .Values.image.tag }}{{ end }}"
@@ -105,26 +105,31 @@ spec:
                 secretKeyRef:
                   name: orb-secret
                   key: api-key
+                  optional: {{ not .Values.hostedIntegrations.required }}
             - name: STRIPE_API_KEY
               valueFrom:
                   secretKeyRef:
                     name: stripe-secret
                     key: api-key
+                    optional: {{ not .Values.hostedIntegrations.required }}
             - name: ORB_WEBHOOK_SECRET
               valueFrom:
                 secretKeyRef:
                   name: orb-secret
                   key: orb-webhook-secret
+                  optional: {{ not .Values.hostedIntegrations.required }}
             - name: STRIPE_WEBHOOK_SECRET
               valueFrom:
                 secretKeyRef:
                   name: stripe-secret
                   key: stripe-webhook-secret
+                  optional: {{ not .Values.hostedIntegrations.required }}
             - name: SLACK_BOT_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: slack-secret
                   key: bot-token
+                  optional: {{ not .Values.hostedIntegrations.required }}
             - name: CUSTOMER_IO_API_KEY
               valueFrom:
                 secretKeyRef:
@@ -142,12 +147,20 @@ spec:
                 secretKeyRef:
                   name: tackle-secret
                   key: client-id
+                  optional: {{ not .Values.hostedIntegrations.required }}
             - name: TACKLE_CLIENT_SECRET
               valueFrom:
                 secretKeyRef:
                   name: tackle-secret
                   key: client-secret
+                  optional: {{ not .Values.hostedIntegrations.required }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           envFrom:
+            {{- with .Values.extraEnvFrom }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
             - secretRef:
                 name: auth-api-key-hmac
             - configMapRef:
@@ -156,12 +169,15 @@ spec:
                 name: otel-config
             - configMapRef:
                 name: slack-config
+                optional: {{ not .Values.hostedIntegrations.required }}
             - secretRef:
                 name: auth-keycloak-initial-admin
             - secretRef:
                 name: orb-secret
+                optional: {{ not .Values.hostedIntegrations.required }}
             - secretRef:
                 name: posthog
+                optional: {{ not .Values.hostedIntegrations.required }}
           readinessProbe:
             httpGet:
               path: /_hello

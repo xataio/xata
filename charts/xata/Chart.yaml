@@ -1,0 +1,46 @@
+apiVersion: v2
+name: xata
+description: Standalone Xata PostgreSQL platform (preview)
+type: application
+version: 0.1.0-dev.2
+appVersion: 98ced3c
+kubeVersion: '>=1.34.0-0 <1.35.0-0'
+home: https://github.com/xataio/xata
+sources:
+- https://github.com/xataio/xata
+dependencies:
+- name: auth
+  version: 0.0.0
+  repository: file://../auth
+- name: projects
+  version: 0.0.0
+  repository: file://../projects
+- name: clusters
+  version: 0.0.0
+  repository: file://../clusters
+- name: branch-operator
+  version: 0.0.0
+  repository: file://../branch-operator
+- name: gateway
+  version: 0.0.0
+  repository: file://../gateway
+- name: keycloak
+  version: 0.0.0
+  repository: file://../keycloak
+- name: api-gateway
+  version: 0.0.0
+  repository: file://../api-gateway
+- name: cloudnative-pg
+  alias: cnpg
+  version: 0.0.0-g139a814
+  repository: oci://ghcr.io/xataio/xata-cnpg/charts
+  condition: cnpg.enabled
+- name: cert-manager
+  version: v1.18.2
+  repository: https://charts.jetstack.io
+  condition: cert-manager.enabled
+- name: gateway-helm
+  alias: envoy
+  version: v1.2.4
+  repository: oci://docker.io/envoyproxy
+  condition: envoy.enabled

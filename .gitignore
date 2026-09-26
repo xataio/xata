@@ -8,3 +8,6 @@ coverage
 tmp/
 .idea/
 dev/docker/keycloak/*/target/
+dist/
+tests/helm/__pycache__/
+scripts/helm/__pycache__/

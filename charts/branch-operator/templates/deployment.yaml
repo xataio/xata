@@ -13,6 +13,11 @@ spec:
       app: branch-operator
   template:
     metadata:
+      annotations:
+        checksum/chart-values: {{ toJson .Values | sha256sum }}
+        {{- if (dig "rolloutOnUpgrade" false (.Values.global | default dict)) }}
+        xata.io/helm-revision: {{ .Release.Revision | quote }}
+        {{- end }}
       labels:
         app: branch-operator
     spec:
@@ -44,6 +49,9 @@ spec:
             - name: OTEL_SERVICE_NAME
               value: "branch-operator"
           envFrom:
+            {{- with .Values.extraEnvFrom }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
             - configMapRef:
                 name: otel-config
             - configMapRef:

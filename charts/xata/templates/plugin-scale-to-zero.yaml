@@ -1,0 +1,167 @@
+{{- if .Values.plugins.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cnpg-scale-to-zero-plugin
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cnpg-scale-to-zero-sidecar-role
+rules:
+- apiGroups: [xata.io]
+  resources: [branches]
+  verbs: [get, update, patch]
+- apiGroups:
+  - postgresql.cnpg.io
+  resources:
+  - clusters
+  - scheduledbackups
+  verbs:
+  - get
+  - update
+  - patch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: cnpg-scale-to-zero-plugin-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cnpg-scale-to-zero-sidecar-role
+subjects:
+- kind: ServiceAccount
+  name: cnpg-scale-to-zero-plugin
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: v1
+data:
+  SIDECAR_IMAGE: Z2hjci5pby94YXRhaW8vY25wZy1pLXNjYWxlLXRvLXplcm8tc2lkZWNhcjp2MC4xLjg=
+kind: Secret
+metadata:
+  name: scale-to-zero-config-t6f2656b6h
+  namespace: {{ .Release.Namespace }}
+type: Opaque
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    cnpg.io/pluginClientSecret: scaletozero-client-tls
+    cnpg.io/pluginPort: '9090'
+    cnpg.io/pluginServerSecret: scaletozero-server-tls
+  labels:
+    app: scale-to-zero
+    cnpg.io/pluginName: cnpg-i-scale-to-zero.xata.io
+  name: scale-to-zero
+  namespace: {{ .Release.Namespace }}
+spec:
+  ports:
+  - name: grpc
+    port: 9090
+    protocol: TCP
+    targetPort: 9090
+  selector:
+    app: scale-to-zero
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: scale-to-zero
+  name: scale-to-zero
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: {{ .Values.plugins.scaleToZeroReplicas }}
+  selector:
+    matchLabels:
+      app: scale-to-zero
+  strategy: {}
+  template:
+    metadata:
+      labels:
+        app: scale-to-zero
+    spec:
+      {{- if eq .Values.profile "multi-node" }}
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchLabels: {app: scale-to-zero}
+            topologyKey: kubernetes.io/hostname
+      tolerations:
+      - {key: node.kubernetes.io/not-ready, operator: Exists, effect: NoExecute, tolerationSeconds: 10}
+      - {key: node.kubernetes.io/unreachable, operator: Exists, effect: NoExecute, tolerationSeconds: 10}
+      {{- end }}
+      containers:
+      - args:
+        - plugin
+        - --server-cert=/server/tls.crt
+        - --server-key=/server/tls.key
+        - --client-cert=/client/tls.crt
+        - --server-address=:9090
+        env:
+        - name: SIDECAR_IMAGE
+          value: ghcr.io/xataio/xata/scale-to-zero-sidecar@sha256:e38118ea1fc21dcb2c698cd6252e98456ad6ee7f537110e97e94e6663fd73f33
+        - name: LOG_LEVEL
+          value: info
+        - name: SIDECAR_CPU_REQUEST
+          value: 50m
+        - name: SIDECAR_CPU_LIMIT
+          value: 200m
+        - name: SIDECAR_MEMORY_REQUEST
+          value: 64Mi
+        - name: SIDECAR_MEMORY_LIMIT
+          value: 64Mi
+        envFrom:
+        - secretRef:
+            name: scale-to-zero-config-t6f2656b6h
+        image: ghcr.io/xataio/cnpg-i-scale-to-zero:v0.1.8
+        livenessProbe:
+          failureThreshold: 3
+          initialDelaySeconds: 10
+          periodSeconds: 30
+          tcpSocket:
+            port: 9090
+          timeoutSeconds: 5
+        name: cnpg-i-scale-to-zero
+        ports:
+        - containerPort: 9090
+          name: grpc
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          tcpSocket:
+            port: 9090
+          timeoutSeconds: 5
+        resources:
+          limits:
+            cpu: 500m
+            memory: 128Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+        volumeMounts:
+        - mountPath: /server
+          name: server
+        - mountPath: /client
+          name: client
+      securityContext:
+        fsGroup: 10001
+        runAsGroup: 10001
+        runAsNonRoot: true
+        runAsUser: 10001
+      serviceAccountName: cnpg-scale-to-zero-plugin
+      volumes:
+      - name: server
+        secret:
+          secretName: scaletozero-server-tls
+      - name: client
+        secret:
+          secretName: scaletozero-client-tls
+
+{{- end }}

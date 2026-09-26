@@ -115,3 +115,6 @@ tolerations:
     effect: "NoSchedule"
 
 unsupported: {}
+
+operator:
+  enabled: true

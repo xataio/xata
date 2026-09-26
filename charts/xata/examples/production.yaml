@@ -1,0 +1,48 @@
+# Overlay this on multi-node.yaml after qualifying your CSI backend.
+# Create referenced TLS and backup Secrets before installing.
+metadata:
+  storageClass: YOUR_STORAGE_CLASS
+clusters:
+  config:
+    clusters:
+      storageClass: YOUR_STORAGE_CLASS
+      volumeSnapshotClass: YOUR_SNAPSHOT_CLASS
+objectStorage:
+  enabled: false
+backups:
+  bucket: YOUR_BACKUP_BUCKET
+  endpoint: https://s3.example.com
+  existingSecret: xata-backups
+network:
+  # Replace documentation addresses with actual endpoint CIDRs.
+  backupCIDRs: [192.0.2.1/32]
+api-gateway:
+  gateway:
+    hostname: api.example.com
+    tlsSecret: api-tls
+  envoyService:
+    type: LoadBalancer
+auth:
+  httpRoute:
+    hostname: api.example.com
+keycloak:
+  gateway:
+    hostname: auth.example.com
+    tlsSecret: auth-tls
+  hostname:
+    hostname: https://auth.example.com
+    admin: https://auth.example.com
+projects:
+  httpRoute:
+    hostname: api.example.com
+  gateway:
+    hostport: db.example.com:5432
+gateway:
+  service:
+    type: LoadBalancer
+  secret:
+    name: sql-tls
+tls:
+  gateway:
+    generate: false
+    existingSecret: sql-tls

@@ -1,0 +1,9 @@
+Xata preview installed in {{ .Release.Namespace }}.
+
+Check bootstrap and realm jobs:
+  kubectl -n {{ .Release.Namespace }} get jobs,pods
+Run the metadata smoke test:
+  helm test {{ .Release.Name }} -n {{ .Release.Namespace }}
+
+Single-node installations and bundled RustFS have no node/disk-loss redundancy.
+Read README.md for network, TLS, backup, retention and upgrade configuration.

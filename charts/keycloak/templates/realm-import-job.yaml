@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: import-keycloak-realm
+  name: import-keycloak-realm{{ if .Values.realmImport.revisionSuffix }}-{{ .Release.Revision }}{{ end }}
   namespace: {{ .Release.Namespace }}
   annotations:
     kustomize.toolkit.fluxcd.io/force: enabled

@@ -1,0 +1,27 @@
+{{- if eq .Values.profile "multi-node" }}
+{{- range $service := list "auth" "projects" "clusters" "gateway" }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $service }}
+  namespace: {{ $.Release.Namespace }}
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: {{ $service }}
+{{- end }}
+{{- if .Values.plugins.enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: scale-to-zero
+  namespace: {{ .Release.Namespace }}
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels: {app: scale-to-zero}
+{{- end }}
+{{- end }}
