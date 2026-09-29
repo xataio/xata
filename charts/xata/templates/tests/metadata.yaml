@@ -1,0 +1,39 @@
+{{- if .Values.tests.enabled }}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ .Release.Name }}-test-databases
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    helm.sh/hook: test
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  restartPolicy: Never
+  automountServiceAccountToken: false
+  containers:
+    - name: test
+      image: {{ .Values.tests.image }}
+      command: [/bin/sh, -ec]
+      args:
+        - |
+          for database in projects auth keycloakdb; do
+            test "$(psql -d "$database" -Atc 'SELECT 1')" = 1
+          done
+          psql -d projects -v ON_ERROR_STOP=1 -c 'BEGIN; CREATE TEMP TABLE helm_probe (n int); INSERT INTO helm_probe VALUES (42); SELECT * FROM helm_probe; ROLLBACK;'
+      env:
+        - {name: PGHOST, value: {{ .Values.projects.postgres.host | quote }}}
+        - name: PGUSER
+          valueFrom:
+            secretKeyRef: {name: xata-metastore-app, key: username}
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef: {name: xata-metastore-app, key: password}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        allowPrivilegeEscalation: false
+        capabilities: {drop: [ALL]}
+      resources:
+        requests: {cpu: 50m, memory: 64Mi}
+        limits: {memory: 128Mi}
+{{- end }}

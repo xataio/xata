@@ -1,0 +1,13 @@
+# Local single-node evaluation. Requires the installed HostPath CSI driver and
+# snapshot controller; this file does not install either prerequisite.
+profile: single-node
+metadata:
+  instances: 1
+  storageClass: csi-hostpath-sc
+objectStorage:
+  storageClass: csi-hostpath-sc
+clusters:
+  config:
+    clusters:
+      storageClass: csi-hostpath-sc
+      volumeSnapshotClass: csi-hostpath-snapclass

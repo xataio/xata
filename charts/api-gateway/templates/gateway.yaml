@@ -21,7 +21,13 @@ spec:
       kind: EnvoyProxy
       name: eg-custom-proxy-config
   listeners:
-    - name: http
-      protocol: HTTP
-      port: 80
+    - name: {{ if .Values.gateway.tlsSecret }}https{{ else }}http{{ end }}
+      protocol: {{ if .Values.gateway.tlsSecret }}HTTPS{{ else }}HTTP{{ end }}
+      port: {{ if .Values.gateway.tlsSecret }}443{{ else }}80{{ end }}
       hostname: {{ .Values.gateway.hostname }}
+      {{- with .Values.gateway.tlsSecret }}
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: {{ . | quote }}
+      {{- end }}

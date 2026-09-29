@@ -9,7 +9,7 @@ spec:
   parentRefs:
     - name: keycloak-eg
   hostnames:
-    - localhost
+    - {{ .Values.gateway.hostname | default "localhost" | quote }}
   rules:
     - backendRefs:
         - group: ""

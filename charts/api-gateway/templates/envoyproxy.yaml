@@ -9,12 +9,9 @@ spec:
     type: Kubernetes
     kubernetes:
       envoyService:
-        annotations:
-          service.beta.kubernetes.io/aws-load-balancer-type: external
-          service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
-          service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
-          service.beta.kubernetes.io/aws-load-balancer-target-group-attributes: preserve_client_ip.enabled=true
+        {{- toYaml .Values.envoyService | nindent 8 }}
       envoyDeployment:
+        replicas: {{ .Values.proxyReplicas | default 1 }}
         patch:
           type: StrategicMerge
           value:

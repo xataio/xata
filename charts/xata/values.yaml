@@ -1,0 +1,246 @@
+profile: single-node
+credentials:
+  existingSecret: ''
+  username: xata
+  password: ''
+  hmacSecret: ''
+  cliClientSecret: ''
+metadata:
+  enabled: true
+  nodeSelector: {}
+  instances: 1
+  image: ghcr.io/cloudnative-pg/postgresql:17.6
+  storageClass: ''
+  size: 5Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+  backupSchedule: 0 0 * * * *
+  backupRetention: 7d
+bootstrap:
+  image: alpine/k8s:1.34.1@sha256:ec714df3813b5405292860f8a1c55c5727bf8c33c88992f1e981efad8065547f
+  postgresImage: postgres:17.6-alpine
+  timeoutSeconds: 600
+plugins:
+  enabled: true
+  scaleToZeroReplicas: 1
+backups:
+  enabled: true
+  bucket: xata-backups
+  endpoint: ''
+  existingSecret: xata-backups
+  accessKeyKey: accessKeyId
+  secretKeyKey: secretAccessKey
+tls:
+  gateway:
+    generate: true
+    existingSecret: gateway-secret
+    dnsNames:
+    - localhost
+cnpg:
+  enabled: true
+  fullnameOverride: cnpg-controller-manager
+  crds:
+    create: false
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+  nameOverride: cloudnative-pg
+cert-manager:
+  enabled: true
+  crds:
+    enabled: false
+  startupapicheck:
+    enabled: false
+  global:
+    leaderElection:
+      namespace: kube-system
+envoy:
+  enabled: true
+  config:
+    envoyGateway:
+      provider:
+        type: Kubernetes
+tests:
+  enabled: true
+  image: postgres:17.6-alpine
+auth:
+  setupJob:
+    enabled: true
+  image:
+    repository: ghcr.io/xataio/xata/auth
+    tag: 98ced3c
+    digest: sha256:e0fceb1927590a4a389378da37d66a98587ac43b8c3b0070f35f68a1dae75e66
+  tolerations: []
+  extraEnvFrom: []
+  extraEnv:
+  - name: POSTGRES_DB
+    value: auth
+  - name: POSTGRES_HOST
+    value: xata-metastore-rw
+  - name: POSTGRES_USER
+    valueFrom:
+      secretKeyRef:
+        name: xata-metastore-app
+        key: username
+  - name: POSTGRES_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: xata-metastore-app
+        key: password
+  hostedIntegrations:
+    required: false
+  resourceCleanup:
+    suspend: true
+  trialExpiryEmails:
+    suspend: true
+projects:
+  setupJob:
+    enabled: true
+  image:
+    repository: ghcr.io/xataio/xata/projects
+    tag: 98ced3c
+    digest: sha256:688e3d26c0d5339a955ac0cfb2a7aeb7c3d8cd2942447682404060dabb58db6d
+  tolerations: []
+  postgres:
+    host: xata-metastore-rw
+    port: '5432'
+    existingSecret: xata-metastore-app
+    bootstrap:
+      enabled: false
+  defaultRegion: local
+  gateway:
+    hostport: gateway:5432
+  externalSecrets:
+    posthogSecret: ''
+keycloak:
+  retainOnUninstall: true
+  image:
+    repository: ghcr.io/xataio/xata/keycloak
+    tag: 98ced3c
+    digest: sha256:34044099c66896d91e709b560819bb33a415a77ef9f2fab608adffe1859966e6
+  tolerations: []
+  instances: 1
+  db:
+    host: xata-metastore-rw
+    database: keycloakdb
+    usernameSecret:
+      name: xata-metastore-app
+      key: username
+    passwordSecret:
+      name: xata-metastore-app
+      key: password
+  hostname:
+    hostname: http://localhost:8080
+    admin: http://localhost:8080
+  realmImport:
+    configMapName: keycloak-realm
+    revisionSuffix: true
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        memory: 512Mi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      memory: 1Gi
+  unsupported:
+    podTemplate:
+      spec:
+        containers:
+        - name: keycloak
+          env:
+          - name: JAVA_OPTS_APPEND
+            value: -XX:+IgnoreUnrecognizedVMOptions -XX:UseSVE=0
+branch-operator:
+  image:
+    repository: ghcr.io/xataio/xata/branch-operator
+    tag: 98ced3c
+    digest: sha256:f131bfa02c29522f8b0990b1a41c7e301c35bf0980ee9e6bb0b954312527367a
+  tolerations: []
+  crds:
+    create: false
+  config:
+    branchOperator:
+      imageSecrets: ''
+      clustersTolerations: xata.io/workload=dataplane:NoSchedule
+      xatastor:
+        enabled: false
+  extraEnvFrom:
+  - configMapRef:
+      name: xata-shared-settings
+gateway:
+  image:
+    repository: ghcr.io/xataio/xata/gateway
+    tag: 98ced3c
+    digest: sha256:e29387c7771ff07a464880e6563199db813d9770fb0dc62972a9ba06990faa80
+  tolerations: []
+  service:
+    type: ClusterIP
+    annotations:
+      service.beta.kubernetes.io/aws-load-balancer-type: null
+      service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: null
+      service.beta.kubernetes.io/aws-load-balancer-scheme: null
+      service.beta.kubernetes.io/aws-load-balancer-proxy-protocol: null
+  drainingTime: 20s
+  terminationGracePeriodSeconds: 30
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+  extraEnv: []
+  gomaxprocs: '1'
+clusters:
+  image:
+    repository: ghcr.io/xataio/xata/clusters
+    tag: 98ced3c
+    digest: sha256:f8e75c69842e6362a9a58064a86906494ae82655fe0d2681163180486ca170cc
+  tolerations: []
+  config:
+    clusters:
+      storageClass: ''
+      volumeSnapshotClass: ''
+      pgbackrest:
+        encryptionEnabled: false
+    observability:
+      victoriaMetricsURL: ''
+      victoriaLogsURL: ''
+  extraConfig:
+    XATA_CLUSTERS_STORAGE_REQUEST_GB: '1'
+  extraEnvFrom:
+  - configMapRef:
+      name: xata-shared-settings
+api-gateway:
+  gateway:
+    hostname: localhost
+  envoyService:
+    type: ClusterIP
+    annotations:
+      service.beta.kubernetes.io/aws-load-balancer-type: null
+      service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: null
+      service.beta.kubernetes.io/aws-load-balancer-scheme: null
+      service.beta.kubernetes.io/aws-load-balancer-target-group-attributes: null
+objectStorage:
+  enabled: true
+  image: rustfs/rustfs@sha256:8cc9801755448b71a786705ce76692c77e14936cccd87cf2fc31842e58f4d1ff
+  size: 5Gi
+  storageClass: ''
+  bucketImage: public.ecr.aws/aws-cli/aws-cli:2.30.0@sha256:6c624aa474c90807c313807a2507a0e74713ff7c831e3d6ceaced6a20efd9fad
+global:
+  rolloutOnUpgrade: true
+network:
+  apiServerCIDRs: []
+  backupCIDRs: []
+  backupPort: 443

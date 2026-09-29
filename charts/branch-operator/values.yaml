@@ -56,3 +56,11 @@ tolerations:
     operator: "Equal"
     value: "arm64"
     effect: "NoSchedule"
+
+extraConfig: {}
+
+clustersNamespace: xata-clusters
+crds:
+  create: true
+
+extraEnvFrom: []

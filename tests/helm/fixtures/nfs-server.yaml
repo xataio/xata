@@ -1,0 +1,80 @@
+# Disposable test storage only. Data is tied to the selected server node.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: xata-test-storage
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ganesha
+  namespace: xata-test-storage
+data:
+  ganesha.conf: |
+    NFS_Core_Param { Protocols = 4; Enable_NLM = false; Enable_RQUOTA = false; }
+    # Containers share numeric PostgreSQL IDs, not an NFS identity domain.
+    # https://github.com/nfs-ganesha/nfs-ganesha/wiki/ID-Mapping
+    NFSv4 { Grace_Period = 1; Allow_Numeric_Owners = true; Only_Numeric_Owners = true; }
+    EXPORT {
+      Export_Id = 1;
+      Path = /export;
+      Pseudo = /;
+      Access_Type = RW;
+      Squash = No_Root_Squash;
+      SecType = sys;
+      Protocols = 4;
+      Transports = TCP;
+      FSAL { Name = VFS; }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nfs-server
+  namespace: xata-test-storage
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app: xata-test-nfs}
+  template:
+    metadata:
+      labels: {app: xata-test-nfs}
+    spec:
+      nodeSelector: {xata.io/test-storage: 'true'}
+      tolerations:
+        - {operator: Exists}
+      containers:
+        - name: nfs
+          image: registry.k8s.io/sig-storage/nfs-provisioner:v4.0.8@sha256:c825f3d5e28bde099bd7a3daace28772d412c9157ad47fa752a9ad0baafc118d
+          command: [/bin/sh, -ec]
+          args:
+            - |
+              mkdir -p /usr/local/var/run/ganesha /usr/local/var/lib/nfs/ganesha
+              exec /usr/local/bin/ganesha.nfsd -F -L /dev/stdout -f /etc/ganesha/ganesha.conf
+          securityContext: {privileged: true}
+          readinessProbe:
+            tcpSocket: {port: 2049}
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {memory: 256Mi}
+          volumeMounts:
+            - {name: data, mountPath: /export}
+            - {name: config, mountPath: /etc/ganesha}
+      volumes:
+        - name: data
+          # Both kind and k3d mount /var/lib/kubelet from a Docker volume.
+          # NFS file handles are unsupported on the container overlay root.
+          hostPath: {path: /var/lib/kubelet/xata-chart-test-nfs, type: DirectoryOrCreate}
+        - name: config
+          configMap: {name: ganesha}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nfs-server
+  namespace: xata-test-storage
+spec:
+  selector: {app: xata-test-nfs}
+  ports:
+    - {name: nfs, port: 2049, targetPort: 2049}

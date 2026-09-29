@@ -1,0 +1,357 @@
+{{- if .Values.plugins.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: plugin-barman-cloud
+  name: plugin-barman-cloud
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: plugin-barman-cloud
+  name: barman-plugin-leader-election-role
+  namespace: {{ .Release.Namespace }}
+rules:
+- apiGroups:
+  - ''
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ''
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: barman-plugin-metrics-auth-role
+rules:
+- apiGroups:
+  - authentication.k8s.io
+  resources:
+  - tokenreviews
+  verbs:
+  - create
+- apiGroups:
+  - authorization.k8s.io
+  resources:
+  - subjectaccessreviews
+  verbs:
+  - create
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: barman-plugin-metrics-reader
+rules:
+- nonResourceURLs:
+  - /metrics
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: plugin-barman-cloud
+  name: barman-plugin-objectstore-editor-role
+rules:
+- apiGroups:
+  - barmancloud.cnpg.io
+  resources:
+  - objectstores
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - barmancloud.cnpg.io
+  resources:
+  - objectstores/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: plugin-barman-cloud
+  name: barman-plugin-objectstore-viewer-role
+rules:
+- apiGroups:
+  - barmancloud.cnpg.io
+  resources:
+  - objectstores
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - barmancloud.cnpg.io
+  resources:
+  - objectstores/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: plugin-barman-cloud
+rules:
+- apiGroups:
+  - ''
+  resources:
+  - secrets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - watch
+- apiGroups:
+  - barmancloud.cnpg.io
+  resources:
+  - objectstores
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - barmancloud.cnpg.io
+  resources:
+  - objectstores/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - barmancloud.cnpg.io
+  resources:
+  - objectstores/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - postgresql.cnpg.io
+  resources:
+  - backups
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - postgresql.cnpg.io
+  resources:
+  - clusters/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - rolebindings
+  - roles
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: plugin-barman-cloud
+  name: barman-plugin-leader-election-rolebinding
+  namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: barman-plugin-leader-election-role
+subjects:
+- kind: ServiceAccount
+  name: plugin-barman-cloud
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: barman-plugin-metrics-auth-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: barman-plugin-metrics-auth-role
+subjects:
+- kind: ServiceAccount
+  name: plugin-barman-cloud
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: plugin-barman-cloud
+  name: plugin-barman-cloud-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: plugin-barman-cloud
+subjects:
+- kind: ServiceAccount
+  name: plugin-barman-cloud
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: v1
+data:
+  SIDECAR_IMAGE: 'Z2hjci5pby9jbG91ZG5hdGl2ZS1wZy9wbHVnaW4tYmFybWFuLWNsb3VkLXNpZGVjYXI6dj
+
+    AuMTAuMA==
+
+    '
+kind: Secret
+metadata:
+  name: plugin-barman-cloud-t5844mh4gf
+  namespace: {{ .Release.Namespace }}
+type: Opaque
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    cnpg.io/pluginClientSecret: barman-cloud-client-tls
+    cnpg.io/pluginPort: '9090'
+    cnpg.io/pluginServerSecret: barman-cloud-server-tls
+  labels:
+    app: barman-cloud
+    cnpg.io/pluginName: barman-cloud.cloudnative-pg.io
+  name: barman-cloud
+  namespace: {{ .Release.Namespace }}
+spec:
+  ports:
+  - port: 9090
+    protocol: TCP
+    targetPort: 9090
+  selector:
+    app: barman-cloud
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: barman-cloud
+  name: barman-cloud
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: barman-cloud
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: barman-cloud
+    spec:
+      {{- if eq .Values.profile "multi-node" }}
+      # The pinned plugin serves gRPC only from its elected leader. Reschedule
+      # its single instance promptly when a node becomes unreachable.
+      tolerations:
+      - {key: node.kubernetes.io/not-ready, operator: Exists, effect: NoExecute, tolerationSeconds: 10}
+      - {key: node.kubernetes.io/unreachable, operator: Exists, effect: NoExecute, tolerationSeconds: 10}
+      {{- end }}
+      containers:
+      - args:
+        - operator
+        - --server-cert=/server/tls.crt
+        - --server-key=/server/tls.key
+        - --client-cert=/client/tls.crt
+        - --server-address=:9090
+        - --leader-elect
+        - --log-level=debug
+        env:
+        - name: SIDECAR_IMAGE
+          valueFrom:
+            secretKeyRef:
+              key: SIDECAR_IMAGE
+              name: plugin-barman-cloud-t5844mh4gf
+        image: ghcr.io/cloudnative-pg/plugin-barman-cloud:v0.10.0
+        name: barman-cloud
+        ports:
+        - containerPort: 9090
+          protocol: TCP
+        readinessProbe:
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          tcpSocket:
+            port: 9090
+        resources: {}
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+          runAsGroup: 10001
+          runAsUser: 10001
+          seccompProfile:
+            type: RuntimeDefault
+        volumeMounts:
+        - mountPath: /server
+          name: server
+        - mountPath: /client
+          name: client
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: plugin-barman-cloud
+      volumes:
+      - name: server
+        secret:
+          secretName: barman-cloud-server-tls
+      - name: client
+        secret:
+          secretName: barman-cloud-client-tls
+
+{{- end }}

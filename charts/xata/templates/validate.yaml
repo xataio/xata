@@ -1,0 +1,46 @@
+{{- if and (eq .Values.profile "multi-node") (lt (int .Values.metadata.instances) 3) }}
+{{- fail "multi-node requires metadata.instances >= 3" }}
+{{- end }}
+{{- if eq .Values.profile "multi-node" }}
+{{- if and .Values.plugins.enabled (lt (int .Values.plugins.scaleToZeroReplicas) 2) }}
+{{- fail "multi-node requires plugins.scaleToZeroReplicas >= 2" }}
+{{- end }}
+{{- range $service := list "auth" "projects" "clusters" "gateway" }}
+{{- if lt (int (index $.Values $service).replicaCount) 2 }}
+{{- fail (printf "multi-node requires %s.replicaCount >= 2; use examples/multi-node.yaml" $service) }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- if ne .Values.clusters.config.clusters.clustersNamespace (index .Values "branch-operator").clustersNamespace }}
+{{- fail "clusters and branch-operator must use the same clustersNamespace" }}
+{{- end }}
+{{- if ne .Values.gateway.clustersNamespace .Values.clusters.config.clusters.clustersNamespace }}
+{{- fail "gateway and clusters must use the same clustersNamespace" }}
+{{- end }}
+{{- $_ := required "Set clusters.config.clusters.storageClass" .Values.clusters.config.clusters.storageClass }}
+{{- $_ := required "Set clusters.config.clusters.volumeSnapshotClass" .Values.clusters.config.clusters.volumeSnapshotClass }}
+{{- $apiHost := (index .Values "api-gateway").gateway.hostname }}
+{{- if or (ne .Values.auth.httpRoute.hostname $apiHost) (ne .Values.projects.httpRoute.hostname $apiHost) }}
+{{- fail "auth.httpRoute.hostname and projects.httpRoute.hostname must match api-gateway.gateway.hostname" }}
+{{- end }}
+{{- if .Values.backups.enabled }}
+{{- $_ := required "Set backups.bucket" .Values.backups.bucket }}
+{{- $_ := required "Set backups.existingSecret in the dataplane namespace" .Values.backups.existingSecret }}
+{{- end }}
+{{- if not .Values.backups.enabled }}
+{{- fail "This preview requires backups.enabled=true; its Xata region is configured for continuous backups" }}
+{{- end }}
+{{- if ne .Values.tls.gateway.existingSecret .Values.gateway.secret.name }}
+{{- fail "tls.gateway.existingSecret must match gateway.secret.name" }}
+{{- end }}
+{{- if .Values.objectStorage.enabled }}
+{{- if or (not .Values.backups.enabled) (ne .Values.backups.existingSecret "xata-backups") }}
+{{- fail "bundled objectStorage requires backups.enabled=true and backups.existingSecret=xata-backups" }}
+{{- end }}
+{{- end }}
+{{- if eq .Release.Namespace .Values.clusters.config.clusters.clustersNamespace }}
+{{- fail "control-plane and dataplane namespaces must be distinct" }}
+{{- end }}
+{{- if and .Values.backups.enabled (not .Values.objectStorage.enabled) }}
+{{- $_ := required "Set network.backupCIDRs for the external backup destination" .Values.network.backupCIDRs }}
+{{- end }}

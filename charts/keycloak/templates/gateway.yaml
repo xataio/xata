@@ -13,7 +13,13 @@ spec:
       kind: EnvoyProxy
       name: {{ .Values.gateway.envoyProxy.name }}
   listeners:
-    - name: http
-      protocol: HTTP
-      port: 80
-      hostname: localhost
+    - name: {{ if .Values.gateway.tlsSecret }}https{{ else }}http{{ end }}
+      protocol: {{ if .Values.gateway.tlsSecret }}HTTPS{{ else }}HTTP{{ end }}
+      port: {{ if .Values.gateway.tlsSecret }}443{{ else }}80{{ end }}
+      hostname: {{ .Values.gateway.hostname | default "localhost" | quote }}
+      {{- with .Values.gateway.tlsSecret }}
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: {{ . | quote }}
+      {{- end }}

@@ -1,0 +1,3 @@
+profile: single-node
+metadata:
+  instances: 1

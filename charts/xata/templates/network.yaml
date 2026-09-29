@@ -1,0 +1,73 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-xata-cnpg-operator
+  namespace: {{ .Values.clusters.config.clusters.clustersNamespace }}
+spec:
+  podSelector:
+    matchLabels:
+      cnpg.io/podRole: instance
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Release.Namespace }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: cloudnative-pg
+      ports:
+        - {port: 8000, protocol: TCP}
+        - {port: 5432, protocol: TCP}
+---
+{{- $apiCIDRs := .Values.network.apiServerCIDRs }}
+{{- if not $apiCIDRs }}
+{{- $service := lookup "v1" "Service" "default" "kubernetes" }}
+{{- if $service }}
+{{- $apiCIDRs = append $apiCIDRs (printf "%s/%s" $service.spec.clusterIP (ternary "128" "32" (contains ":" $service.spec.clusterIP))) }}
+{{- end }}
+{{- $endpoints := lookup "v1" "Endpoints" "default" "kubernetes" }}
+{{- if $endpoints }}
+{{- range $subset := $endpoints.subsets }}
+{{- range $address := $subset.addresses }}
+{{- $apiCIDRs = append $apiCIDRs (printf "%s/%s" $address.ip (ternary "128" "32" (contains ":" $address.ip))) }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: xata-database-egress
+  namespace: {{ .Values.clusters.config.clusters.clustersNamespace }}
+spec:
+  podSelector:
+    matchExpressions:
+      - {key: cnpg.io/cluster, operator: Exists}
+  policyTypes: [Egress]
+  egress:
+    {{- if $apiCIDRs }}
+    - to:
+        {{- range $cidr := $apiCIDRs | uniq }}
+        - ipBlock: {cidr: {{ $cidr | quote }}}
+        {{- end }}
+      ports:
+        - {port: 443, protocol: TCP}
+        - {port: 6443, protocol: TCP}
+    {{- end }}
+    {{- if .Values.objectStorage.enabled }}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Release.Namespace }}
+          podSelector:
+            matchLabels: {app: xata-objectstore}
+      ports:
+        - {port: 9000, protocol: TCP}
+    {{- else if .Values.backups.enabled }}
+    - to:
+        {{- range .Values.network.backupCIDRs }}
+        - ipBlock: {cidr: {{ . | quote }}}
+        {{- end }}
+      ports:
+        - {port: {{ .Values.network.backupPort }}, protocol: TCP}
+    {{- end }}

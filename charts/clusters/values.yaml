@@ -52,3 +52,10 @@ tolerations:
     operator: "Equal"
     value: "arm64"
     effect: "NoSchedule"
+
+replicaCount: 1
+strategy: {}
+
+extraConfig: {}
+
+extraEnvFrom: []
