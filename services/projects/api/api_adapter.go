@@ -340,8 +340,7 @@ func mapStatus(status *clustersv1.ClusterStatus) spec.BranchStatus {
 	var branchStatus spec.BranchStatus
 	branchStatus.Status = status.Status
 	branchStatus.StatusType = status.StatusType.String()
-	// TODO remove as deprecated
-	branchStatus.Message = &status.Status
+
 	branchStatus.InstanceCount = int(status.InstanceCount)
 	branchStatus.InstanceReadyCount = int(status.InstanceReadyCount)
 	branchStatus.Instances = mapInstances(status.Instances)
