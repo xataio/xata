@@ -55,9 +55,8 @@ func initEnv() {
 				loadErr = fmt.Errorf("load env: file '%v': %w", filename, err)
 				break
 			}
-			defer f.Close()
-
 			m, err := godotenv.Parse(f)
+			f.Close()
 			if err != nil {
 				loadErr = fmt.Errorf("read env: file '%v': %w", filename, err)
 				break
