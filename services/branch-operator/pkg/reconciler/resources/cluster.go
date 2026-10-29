@@ -109,7 +109,7 @@ func GeneratePostInitSQL(majorVersion int) []string {
 
 	grantStatement := fmt.Sprintf("GRANT %s TO xata_superuser;", strings.Join(privileges, ", "))
 
-	return []string{
+	sql := []string{
 		// These are executed as the superuser.
 		// Create a pseudo-superuser role that we then assign to the `xata` user.
 		"CREATE ROLE xata_superuser NOLOGIN;",
@@ -121,6 +121,11 @@ func GeneratePostInitSQL(majorVersion int) []string {
 		"ALTER SCHEMA public OWNER TO xata;",
 		"GRANT CREATE ON DATABASE postgres TO xata;",
 	}
+	if majorVersion >= 16 {
+		// Since PG 16, CREATEROLE alone can't grant pg_monitor; this lets xata grant it to a monitoring role.
+		sql = append(sql, "GRANT pg_monitor TO xata_superuser WITH ADMIN OPTION;")
+	}
+	return sql
 }
 
 // ClusterConfig defines all the configuration needed to build a CNPG Cluster
