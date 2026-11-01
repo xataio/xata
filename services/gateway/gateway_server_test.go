@@ -443,6 +443,42 @@ func TestServerProxyListenRequiresHeader(t *testing.T) {
 	require.ErrorIs(t, err, proxyproto.ErrNoProxyProtocol)
 }
 
+// TestServerListenRejectsMultipathTCP checks that the listeners do not accept
+// Multipath TCP: a client asking for MPTCP falls back to plain TCP. Where the
+// kernel has no MPTCP support, the client never uses it and the test passes
+// trivially.
+func TestServerListenRejectsMultipathTCP(t *testing.T) {
+	m, err := metrics.New(noop.NewMeterProvider().Meter("test"))
+	require.NoError(t, err)
+
+	srv, ok := NewServer(nil, ServerConfig{
+		Listen:      "127.0.0.1:0",
+		ProxyListen: "127.0.0.1:0",
+	}, m).(*server)
+	require.True(t, ok)
+
+	listeners, err := srv.listen(context.Background())
+	require.NoError(t, err)
+	require.Len(t, listeners, 2)
+	for _, l := range listeners {
+		t.Cleanup(func() { l.Close() })
+	}
+
+	var d net.Dialer
+	d.SetMultipathTCP(true)
+	for _, l := range listeners {
+		conn, err := d.Dial("tcp", l.Addr().String())
+		require.NoError(t, err)
+		defer conn.Close()
+
+		tcpConn, ok := conn.(*net.TCPConn)
+		require.True(t, ok)
+		got, err := tcpConn.MultipathTCP()
+		require.NoError(t, err)
+		require.False(t, got)
+	}
+}
+
 // TestServerRunCancelRace cancels the run context concurrently with server
 // startup: the shutdown hook may run before runWithListener finishes setting
 // up and must not race it (caught by the race detector).

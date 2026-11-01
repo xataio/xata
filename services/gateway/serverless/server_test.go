@@ -74,6 +74,37 @@ func TestListenProxyHeaderPolicy(t *testing.T) {
 	}
 }
 
+// TestListenRejectsMultipathTCP checks that the listeners do not accept
+// Multipath TCP: a client asking for MPTCP falls back to plain TCP. Where the
+// kernel has no MPTCP support, the client never uses it and the test passes
+// trivially.
+func TestListenRejectsMultipathTCP(t *testing.T) {
+	s := &Server{config: Config{
+		ListenAddress:      "127.0.0.1:0",
+		ProxyListenAddress: "127.0.0.1:0",
+	}}
+	listeners, err := s.listen()
+	require.NoError(t, err)
+	require.Len(t, listeners, 2)
+	for _, l := range listeners {
+		t.Cleanup(func() { l.Close() })
+	}
+
+	var d net.Dialer
+	d.SetMultipathTCP(true)
+	for _, l := range listeners {
+		conn, err := d.Dial("tcp", l.Addr().String())
+		require.NoError(t, err)
+		defer conn.Close()
+
+		tcpConn, ok := conn.(*net.TCPConn)
+		require.True(t, ok)
+		got, err := tcpConn.MultipathTCP()
+		require.NoError(t, err)
+		require.False(t, got)
+	}
+}
+
 // TestListenProxyListenRequiresHeader checks that the proxy listen address
 // rejects a connection that sends no PROXY protocol header.
 func TestListenProxyListenRequiresHeader(t *testing.T) {

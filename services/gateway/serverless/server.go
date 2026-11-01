@@ -178,9 +178,15 @@ func (s *Server) listen() ([]net.Listener, error) {
 		configs = append(configs, listenerConfig{address: s.config.ProxyListenAddress, policy: proxyproto.REQUIRE})
 	}
 
+	// Turn off Multipath TCP, which Go enables for listeners by default since
+	// Go 1.24. It brings no benefit behind a load balancer and exposes the
+	// listener to MPTCP-only kernel bugs (CVE-2026-98432).
+	var lc net.ListenConfig
+	lc.SetMultipathTCP(false)
+
 	listeners := make([]net.Listener, 0, len(configs))
 	for _, cfg := range configs {
-		baseListener, err := net.Listen("tcp", cfg.address)
+		baseListener, err := lc.Listen(context.Background(), "tcp", cfg.address)
 		if err != nil {
 			for _, l := range listeners {
 				l.Close()

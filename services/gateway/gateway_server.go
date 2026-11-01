@@ -83,7 +83,7 @@ func (s *server) Run(ctx context.Context) error {
 // listen binds every configured address and wraps it with its PROXY protocol
 // policy. The listeners are returned in configuration order.
 func (s *server) listen(ctx context.Context) ([]net.Listener, error) {
-	lc := net.ListenConfig{}
+	lc := newListenConfig()
 	listeners := make([]net.Listener, 0, len(s.listeners))
 	for _, cfg := range s.listeners {
 		baseListener, err := lc.Listen(ctx, "tcp", cfg.address)
@@ -96,6 +96,20 @@ func (s *server) listen(ctx context.Context) ([]net.Listener, error) {
 		listeners = append(listeners, newProxyListener(baseListener, cfg.policy))
 	}
 	return listeners, nil
+}
+
+// newListenConfig returns the ListenConfig for client-facing listeners.
+//
+// Multipath TCP is turned off explicitly. Since Go 1.24, listeners accept
+// MPTCP by default on Linux, which exposes the gateway to kernel bugs reachable
+// only through MPTCP listeners (CVE-2026-98432). The gateway sits behind a load
+// balancer, so a client cannot open extra subflows and MPTCP brings no benefit.
+// Setting it in code, rather than through GODEBUG, keeps it off regardless of
+// the deployment environment.
+func newListenConfig() net.ListenConfig {
+	var lc net.ListenConfig
+	lc.SetMultipathTCP(false)
+	return lc
 }
 
 // proxyHeaderPolicy maps the trust setting of a listener to its PROXY
