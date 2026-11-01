@@ -90,6 +90,59 @@ func TestSQLStore(t *testing.T) {
 		}
 	})
 
+	t.Run("shared project locks", func(t *testing.T) {
+		const projectID = "shared-project-lock-test"
+
+		firstShared, err := sqlStore.AcquireProjectLockShared(ctx, projectID)
+		require.NoError(t, err)
+		secondShared, err := sqlStore.AcquireProjectLockShared(ctx, projectID)
+		require.NoError(t, err)
+
+		// An exclusive holder cannot acquire while any shared holder remains.
+		exclusive, err := sqlStore.TryAcquireProjectLock(ctx, projectID)
+		require.Nil(t, exclusive)
+		var projectBusy store.ErrProjectBusy
+		require.ErrorAs(t, err, &projectBusy)
+
+		require.NoError(t, firstShared())
+		exclusive, err = sqlStore.TryAcquireProjectLock(ctx, projectID)
+		require.Nil(t, exclusive)
+		require.ErrorAs(t, err, &projectBusy)
+
+		require.NoError(t, secondShared())
+		exclusive, err = sqlStore.TryAcquireProjectLock(ctx, projectID)
+		require.NoError(t, err)
+		require.NoError(t, exclusive())
+	})
+
+	t.Run("branch name locks", func(t *testing.T) {
+		const projectID = "branch-name-lock-test"
+
+		release, err := sqlStore.AcquireBranchNameLock(ctx, projectID, "feature")
+		require.NoError(t, err)
+
+		// The name lock does not share a key with the project lock or with other
+		// names in the project.
+		projectLock, err := sqlStore.TryAcquireProjectLock(ctx, projectID)
+		require.NoError(t, err)
+		require.NoError(t, projectLock())
+		otherName, err := sqlStore.AcquireBranchNameLock(ctx, projectID, "other")
+		require.NoError(t, err)
+		require.NoError(t, otherName())
+
+		// The same name blocks until the holder releases it.
+		timeoutCtx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+		defer cancel()
+		sameName, err := sqlStore.AcquireBranchNameLock(timeoutCtx, projectID, "feature")
+		require.Error(t, err)
+		require.Nil(t, sameName)
+
+		require.NoError(t, release())
+		sameName, err = sqlStore.AcquireBranchNameLock(ctx, projectID, "feature")
+		require.NoError(t, err)
+		require.NoError(t, sameName())
+	})
+
 	t.Run("projects", func(t *testing.T) {
 		// create project with empty name fails
 		_, err := sqlStore.CreateProject(ctx, "organizationID", createProjectConfig("", nil))
@@ -245,7 +298,7 @@ func TestSQLStore(t *testing.T) {
 	// branch-related tests
 	createRegionAndCell(t, sqlStore, "region", "cell")
 
-	_, err = sqlStore.CreateBranch(ctx, "organizationID", fullProject.ID, "cell", createBranchConfig("filling", nil, nil), func(b *store.Branch) error {
+	_, err = sqlStore.CreateBranch(ctx, "organizationID", fullProject.ID, "cell", createBranchConfig("filling", nil, nil), func(b *store.Branch, _ *store.Project) error {
 		return nil
 	})
 	require.NoError(t, err)
@@ -323,7 +376,7 @@ func TestSQLStore(t *testing.T) {
 	altProject, err := sqlStore.CreateProject(ctx, "otherWS", createProjectConfig("projectName", nil))
 	require.NoError(t, err)
 
-	parent, err := sqlStore.CreateBranch(ctx, "organizationID", project.ID, "cell", createBranchConfig("parent", nil, nil), func(b *store.Branch) error {
+	parent, err := sqlStore.CreateBranch(ctx, "organizationID", project.ID, "cell", createBranchConfig("parent", nil, nil), func(b *store.Branch, _ *store.Project) error {
 		return nil
 	})
 	require.NoError(t, err)
@@ -345,7 +398,7 @@ func TestSQLStore(t *testing.T) {
 		projectID      string
 		parentID       *string
 		description    *string
-		callbackFunc   func(b *store.Branch) error
+		callbackFunc   func(b *store.Branch, _ *store.Project) error
 		wantError      bool
 		errorMessage   string
 	}{
@@ -355,7 +408,7 @@ func TestSQLStore(t *testing.T) {
 			organizationID: "organizationID",
 			projectID:      project.ID,
 			description:    nil,
-			callbackFunc: func(b *store.Branch) error {
+			callbackFunc: func(b *store.Branch, _ *store.Project) error {
 				gotBranch = b
 				return nil
 			},
@@ -368,7 +421,7 @@ func TestSQLStore(t *testing.T) {
 			projectID:      project.ID,
 			parentID:       &parent.ID,
 			description:    nil,
-			callbackFunc: func(b *store.Branch) error {
+			callbackFunc: func(b *store.Branch, _ *store.Project) error {
 				gotBranch = b
 				return nil
 			},
@@ -381,7 +434,7 @@ func TestSQLStore(t *testing.T) {
 			projectID:      project.ID,
 			parentID:       &fakeParentID,
 			description:    nil,
-			callbackFunc: func(b *store.Branch) error {
+			callbackFunc: func(b *store.Branch, _ *store.Project) error {
 				gotBranch = b
 				return nil
 			},
@@ -394,7 +447,7 @@ func TestSQLStore(t *testing.T) {
 			organizationID: "organizationID",
 			projectID:      altProject.ID,
 			description:    nil,
-			callbackFunc: func(b *store.Branch) error {
+			callbackFunc: func(b *store.Branch, _ *store.Project) error {
 				gotBranch = b
 				return nil
 			},
@@ -407,7 +460,7 @@ func TestSQLStore(t *testing.T) {
 			organizationID: "organizationID",
 			projectID:      project.ID,
 			description:    nil,
-			callbackFunc: func(b *store.Branch) error {
+			callbackFunc: func(b *store.Branch, _ *store.Project) error {
 				return fmt.Errorf("some error from infra")
 			},
 			wantError:    true,
@@ -419,7 +472,7 @@ func TestSQLStore(t *testing.T) {
 			organizationID: "organizationID",
 			projectID:      project.ID,
 			description:    nil,
-			callbackFunc: func(b *store.Branch) error {
+			callbackFunc: func(b *store.Branch, _ *store.Project) error {
 				return nil
 			},
 			wantError:    true,
@@ -432,7 +485,7 @@ func TestSQLStore(t *testing.T) {
 			projectID:      depthProject.ID,
 			parentID:       &depthBranch.ID,
 			description:    nil,
-			callbackFunc: func(b *store.Branch) error {
+			callbackFunc: func(b *store.Branch, _ *store.Project) error {
 				return nil
 			},
 			wantError:    true,
@@ -444,7 +497,7 @@ func TestSQLStore(t *testing.T) {
 			organizationID: "organizationID",
 			projectID:      project.ID,
 			description:    nil,
-			callbackFunc: func(b *store.Branch) error {
+			callbackFunc: func(b *store.Branch, _ *store.Project) error {
 				gotBranch = b
 				return nil
 			},
@@ -484,7 +537,7 @@ func TestSQLStore(t *testing.T) {
 	require.NoError(t, err)
 	var listBranches []store.Branch
 	for i := range 5 {
-		branch, err := sqlStore.CreateBranch(ctx, "organizationID", listProject.ID, "cell", createBranchConfig("listBranch"+strconv.Itoa(i), nil, nil), func(b *store.Branch) error {
+		branch, err := sqlStore.CreateBranch(ctx, "organizationID", listProject.ID, "cell", createBranchConfig("listBranch"+strconv.Itoa(i), nil, nil), func(b *store.Branch, _ *store.Project) error {
 			return nil
 		})
 		require.NoError(t, err)
@@ -540,7 +593,7 @@ func TestSQLStore(t *testing.T) {
 	}
 
 	// create a branch to describe
-	branch, err := sqlStore.CreateBranch(ctx, "organizationID", project.ID, "cell", createBranchConfig("describeBranch", nil, nil), func(b *store.Branch) error {
+	branch, err := sqlStore.CreateBranch(ctx, "organizationID", project.ID, "cell", createBranchConfig("describeBranch", nil, nil), func(b *store.Branch, _ *store.Project) error {
 		return nil
 	})
 	require.NoError(t, err)
@@ -642,17 +695,17 @@ func TestSQLStore(t *testing.T) {
 	}
 
 	// create a branch to update and one for name clash
-	branch, err = sqlStore.CreateBranch(ctx, "organizationID", project.ID, "cell", createBranchConfig("updateBranch", nil, nil), func(b *store.Branch) error {
+	branch, err = sqlStore.CreateBranch(ctx, "organizationID", project.ID, "cell", createBranchConfig("updateBranch", nil, nil), func(b *store.Branch, _ *store.Project) error {
 		return nil
 	})
 	require.NoError(t, err)
-	_, err = sqlStore.CreateBranch(ctx, "organizationID", project.ID, "cell", createBranchConfig("alreadyExists", nil, nil), func(b *store.Branch) error {
+	_, err = sqlStore.CreateBranch(ctx, "organizationID", project.ID, "cell", createBranchConfig("alreadyExists", nil, nil), func(b *store.Branch, _ *store.Project) error {
 		return nil
 	})
 	require.NoError(t, err)
 
 	// create a branch in a foreign project (different org) used for cross-tenant regression tests
-	foreignBranch, err := sqlStore.CreateBranch(ctx, "otherWS", altProject.ID, "cell", createBranchConfig("foreignBranch", nil, nil), func(b *store.Branch) error {
+	foreignBranch, err := sqlStore.CreateBranch(ctx, "otherWS", altProject.ID, "cell", createBranchConfig("foreignBranch", nil, nil), func(b *store.Branch, _ *store.Project) error {
 		return nil
 	})
 	require.NoError(t, err)
@@ -772,7 +825,7 @@ func TestSQLStore(t *testing.T) {
 	t.Run("branch description lifecycle", func(t *testing.T) {
 		labelPath := "company/infra/managed-by-x:3f2504e0-4f89-11d3-9a0c-0305e82c3301_v1.2"
 
-		created, err := sqlStore.CreateBranch(ctx, "organizationID", project.ID, "cell", createBranchConfig("descriptionLifecycle", nil, new(labelPath)), func(b *store.Branch) error {
+		created, err := sqlStore.CreateBranch(ctx, "organizationID", project.ID, "cell", createBranchConfig("descriptionLifecycle", nil, new(labelPath)), func(b *store.Branch, _ *store.Project) error {
 			return nil
 		})
 		require.NoError(t, err)
@@ -804,7 +857,7 @@ func TestSQLStore(t *testing.T) {
 		require.Equal(t, "back again", *updated.Description)
 
 		// creating with an empty description stores NULL, not an empty string
-		emptyCreated, err := sqlStore.CreateBranch(ctx, "organizationID", project.ID, "cell", createBranchConfig("descriptionEmptyOnCreate", nil, new("")), func(b *store.Branch) error {
+		emptyCreated, err := sqlStore.CreateBranch(ctx, "organizationID", project.ID, "cell", createBranchConfig("descriptionEmptyOnCreate", nil, new("")), func(b *store.Branch, _ *store.Project) error {
 			return nil
 		})
 		require.NoError(t, err)
@@ -812,7 +865,7 @@ func TestSQLStore(t *testing.T) {
 	})
 
 	// create a branch to delete
-	branch, err = sqlStore.CreateBranch(ctx, "organizationID", project.ID, "cell", createBranchConfig("deleteBranch", nil, nil), func(b *store.Branch) error {
+	branch, err = sqlStore.CreateBranch(ctx, "organizationID", project.ID, "cell", createBranchConfig("deleteBranch", nil, nil), func(b *store.Branch, _ *store.Project) error {
 		return nil
 	})
 	require.NoError(t, err)
@@ -982,7 +1035,7 @@ func TestSQLStore(t *testing.T) {
 	t.Run("ListBranches returns the branch description", func(t *testing.T) {
 		description := "listed description"
 
-		described, err := sqlStore.CreateBranch(ctx, "organizationID", project.ID, "cell", createBranchConfig("listedWithDescription", nil, new(description)), func(b *store.Branch) error {
+		described, err := sqlStore.CreateBranch(ctx, "organizationID", project.ID, "cell", createBranchConfig("listedWithDescription", nil, new(description)), func(b *store.Branch, _ *store.Project) error {
 			return nil
 		})
 		require.NoError(t, err)
@@ -1002,7 +1055,7 @@ func TestSQLStore(t *testing.T) {
 	})
 
 	t.Run("ListBranches returns backupsEnabled like DescribeBranch", func(t *testing.T) {
-		created, err := sqlStore.CreateBranch(ctx, "organizationID", project.ID, "cell", createBranchConfig("listedBackupsEnabled", nil, nil), func(b *store.Branch) error {
+		created, err := sqlStore.CreateBranch(ctx, "organizationID", project.ID, "cell", createBranchConfig("listedBackupsEnabled", nil, nil), func(b *store.Branch, _ *store.Project) error {
 			return nil
 		})
 		require.NoError(t, err)
@@ -1111,7 +1164,7 @@ func createProjectAndBranchesForLimitTest(t *testing.T, ctx context.Context, sql
 	require.NoError(t, err)
 
 	for i := range limitTestBranchCount {
-		_, err := sqlStore.CreateBranch(ctx, orgID, project.ID, "cell", createBranchConfig(fmt.Sprintf("br%d", i), nil, nil), func(b *store.Branch) error {
+		_, err := sqlStore.CreateBranch(ctx, orgID, project.ID, "cell", createBranchConfig(fmt.Sprintf("br%d", i), nil, nil), func(b *store.Branch, _ *store.Project) error {
 			return nil
 		})
 		require.NoError(t, err)
@@ -1251,7 +1304,7 @@ func jsonNumberToInt(v any) any {
 	return v
 }
 
-func noopProvisionFunc(b *store.Branch) error {
+func noopProvisionFunc(b *store.Branch, _ *store.Project) error {
 	return nil
 }
 
@@ -1274,6 +1327,152 @@ func createRegionAndCell(t testing.TB, sqlStore *sqlProjectStore, regionID, cell
 		sqlStore.DeleteCell(ctx, cell.ID)
 	})
 	return region, cell
+}
+
+func TestCreateBranchProjectLock(t *testing.T) {
+	ctx := context.Background()
+	sqlStore := setupSQLStore(ctx, t, maxDepth)
+	createRegionAndCell(t, sqlStore, "lock-region", "lock-cell")
+
+	const orgID = "lockOrganizationID"
+	newProject := func(t *testing.T) *store.Project {
+		project, err := sqlStore.CreateProject(ctx, orgID, createProjectConfig(t.Name(), nil))
+		require.NoError(t, err)
+		return project
+	}
+	createBranch := func(projectID, name string, provisionFn func(*store.Branch, *store.Project) error) (*store.Branch, error) {
+		return sqlStore.CreateBranch(ctx, orgID, projectID, "lock-cell", createBranchConfig(name, nil, nil), provisionFn)
+	}
+
+	t.Run("concurrent creates in a project do not contend", func(t *testing.T) {
+		project := newProject(t)
+
+		inProvision := make(chan struct{})
+		finishProvision := make(chan struct{})
+		firstResult := make(chan error, 1)
+		go func() {
+			_, err := createBranch(project.ID, "first", func(*store.Branch, *store.Project) error {
+				close(inProvision)
+				<-finishProvision
+				return nil
+			})
+			firstResult <- err
+		}()
+		<-inProvision
+
+		// A second create completes while the first is still provisioning.
+		_, err := createBranch(project.ID, "second", noopProvisionFunc)
+		require.NoError(t, err)
+
+		// The in-flight create still holds the lock against exclusive holders.
+		exclusive, err := sqlStore.TryAcquireProjectLock(ctx, project.ID)
+		require.Nil(t, exclusive)
+		var projectBusy store.ErrProjectBusy
+		require.ErrorAs(t, err, &projectBusy)
+
+		close(finishProvision)
+		require.NoError(t, <-firstResult)
+
+		// The lock is released when the create transaction commits.
+		exclusive, err = sqlStore.TryAcquireProjectLock(ctx, project.ID)
+		require.NoError(t, err)
+		require.NoError(t, exclusive())
+	})
+
+	t.Run("create fails fast while an exclusive holder has the lock", func(t *testing.T) {
+		project := newProject(t)
+
+		exclusive, err := sqlStore.TryAcquireProjectLock(ctx, project.ID)
+		require.NoError(t, err)
+		defer exclusive()
+
+		connectionsInUse := sqlStore.sql.Stats().InUse
+		_, err = createBranch(project.ID, "busy", func(*store.Branch, *store.Project) error {
+			require.Fail(t, "provisionFn must not run without the lock")
+			return nil
+		})
+		var projectBusy store.ErrProjectBusy
+		require.ErrorAs(t, err, &projectBusy)
+		require.Equal(t, project.ID, projectBusy.ProjectID)
+		require.Equal(t, connectionsInUse, sqlStore.sql.Stats().InUse)
+
+		_, err = sqlStore.GetBranchByName(ctx, orgID, project.ID, "busy")
+		var notFound store.ErrBranchNotFound
+		require.ErrorAs(t, err, &notFound)
+	})
+
+	t.Run("create fails fast while an exclusive holder is waiting", func(t *testing.T) {
+		project := newProject(t)
+
+		shared, err := sqlStore.AcquireProjectLockShared(ctx, project.ID)
+		require.NoError(t, err)
+
+		type lockResult struct {
+			release func() error
+			err     error
+		}
+		result := make(chan lockResult, 1)
+		go func() {
+			release, err := sqlStore.AcquireProjectLock(ctx, project.ID)
+			result <- lockResult{release: release, err: err}
+		}()
+
+		// Wait until the exclusive request is queued on the lock.
+		require.Eventually(t, func() bool {
+			var waiting int
+			err := sqlStore.sql.QueryRowContext(ctx,
+				`SELECT COUNT(*) FROM pg_locks WHERE locktype = 'advisory' AND NOT granted
+				 AND ((classid::bigint << 32) | objid::bigint) = hashtextextended($1, 0)`, project.ID).Scan(&waiting)
+			return err == nil && waiting == 1
+		}, 2*time.Second, 10*time.Millisecond)
+
+		// New creates queue behind the waiting exclusive holder rather than
+		// starving it, and fail fast instead of waiting.
+		_, err = createBranch(project.ID, "behind-exclusive", noopProvisionFunc)
+		var projectBusy store.ErrProjectBusy
+		require.ErrorAs(t, err, &projectBusy)
+
+		require.NoError(t, shared())
+		select {
+		case lock := <-result:
+			require.NoError(t, lock.err)
+			require.NoError(t, lock.release())
+		case <-time.After(2 * time.Second):
+			require.Fail(t, "exclusive lock did not acquire after shared release")
+		}
+	})
+
+	t.Run("ProjectLockHeld skips the lock", func(t *testing.T) {
+		project := newProject(t)
+
+		shared, err := sqlStore.AcquireProjectLockShared(ctx, project.ID)
+		require.NoError(t, err)
+		defer shared()
+
+		cfg := createBranchConfig("held", nil, nil)
+		cfg.ProjectLockHeld = true
+		_, err = sqlStore.CreateBranch(ctx, orgID, project.ID, "lock-cell", cfg, noopProvisionFunc)
+		require.NoError(t, err)
+	})
+
+	t.Run("provisionFn receives the project read under the lock", func(t *testing.T) {
+		project := newProject(t)
+		require.False(t, project.IPFiltering.Enabled)
+
+		ipFiltering := &store.IPFiltering{Enabled: true, CIDRs: []store.CIDREntry{{CIDR: "10.0.0.0/8"}}}
+		_, err := sqlStore.UpdateProject(ctx, orgID, project.ID, &store.UpdateProjectConfiguration{IPFiltering: ipFiltering}, nil)
+		require.NoError(t, err)
+
+		var got *store.Project
+		_, err = createBranch(project.ID, "filtered", func(_ *store.Branch, p *store.Project) error {
+			got = p
+			return nil
+		})
+		require.NoError(t, err)
+		require.NotNil(t, got)
+		require.Equal(t, ipFiltering.Enabled, got.IPFiltering.Enabled)
+		require.Equal(t, ipFiltering.CIDRs, got.IPFiltering.CIDRs)
+	})
 }
 
 func TestValidateHierarchy(t *testing.T) {

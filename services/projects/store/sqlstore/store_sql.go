@@ -777,7 +777,7 @@ func (s *sqlProjectStore) ListBranches(ctx context.Context, organizationID strin
 	return branches, nil
 }
 
-func (s *sqlProjectStore) CreateBranch(ctx context.Context, organizationID, projectID, cellID string, config *store.CreateBranchConfiguration, provisionFn func(b *store.Branch) error) (*store.Branch, error) {
+func (s *sqlProjectStore) CreateBranch(ctx context.Context, organizationID, projectID, cellID string, config *store.CreateBranchConfiguration, provisionFn func(b *store.Branch, p *store.Project) error) (*store.Branch, error) {
 	if config.Limits == nil {
 		return nil, fmt.Errorf("internal error: branch creation limits not resolved")
 	}
@@ -791,14 +791,27 @@ func (s *sqlProjectStore) CreateBranch(ctx context.Context, organizationID, proj
 	}
 	defer tx.Rollback()
 
+	// Take the project lock in shared mode on the transaction's own connection,
+	// so concurrent creates in the project do not contend with each other, only
+	// with exclusive holders (IP filtering updates, project deletion). It is
+	// released when the transaction ends, so a create holds a single pooled
+	// connection across provisioning.
+	if !config.ProjectLockHeld {
+		if err := s.tryProjectXactLockShared(ctx, tx, projectID); err != nil {
+			return nil, err
+		}
+	}
+
 	// check cellID exists in the organization
 	_, err = s.getCell(ctx, tx, organizationID, cellID)
 	if err != nil {
 		return nil, err
 	}
 
-	// check project exists in the organization used for authorization to block unauthorized access to branch
-	if _, err := s.getProject(ctx, tx, organizationID, projectID); err != nil {
+	// check project exists in the organization used for authorization to block unauthorized access to branch.
+	// It is read after the lock is taken, so its IP filtering includes any update that committed before.
+	project, err := s.getProject(ctx, tx, organizationID, projectID)
+	if err != nil {
 		return nil, err
 	}
 
@@ -874,7 +887,7 @@ func (s *sqlProjectStore) CreateBranch(ctx context.Context, organizationID, proj
 	}
 
 	// provision branch
-	if err := provisionFn(&branch); err != nil {
+	if err := provisionFn(&branch, project); err != nil {
 		return nil, err
 	}
 
@@ -1357,23 +1370,77 @@ func countProjectsCreatedInLastHour(ctx context.Context, q querier, organization
 // the connection to the pool. Using context.Background() for the unlock ensures
 // the lock is released even if the request context has been cancelled.
 func (s *sqlProjectStore) AcquireProjectLock(ctx context.Context, projectID string) (func() error, error) {
-	return s.acquireProjectLock(ctx, projectID, false)
+	return s.acquireProjectLock(ctx, projectID, false, false)
 }
 
 // TryAcquireProjectLock attempts to acquire a PostgreSQL advisory lock for the
 // given projectID without waiting for another holder to release it.
 func (s *sqlProjectStore) TryAcquireProjectLock(ctx context.Context, projectID string) (func() error, error) {
-	return s.acquireProjectLock(ctx, projectID, true)
+	return s.acquireProjectLock(ctx, projectID, true, false)
 }
 
-func (s *sqlProjectStore) acquireProjectLock(ctx context.Context, projectID string, try bool) (func() error, error) {
+// AcquireProjectLockShared acquires the project advisory lock in shared mode,
+// waiting for an exclusive holder to release it. Shared holders do not block
+// each other.
+func (s *sqlProjectStore) AcquireProjectLockShared(ctx context.Context, projectID string) (func() error, error) {
+	return s.acquireProjectLock(ctx, projectID, false, true)
+}
+
+// tryProjectXactLockShared takes the project advisory lock in shared mode for
+// the rest of tx, without waiting for an exclusive holder to release it. It
+// shares the lock id with the session-level project lock, so the two modes
+// conflict as usual.
+func (s *sqlProjectStore) tryProjectXactLockShared(ctx context.Context, tx *sql.Tx, projectID string) error {
+	acquireStarted := time.Now()
+	_, span := o11y.Ctx(ctx).Tracer("xata.projects.store").Start(ctx, "Project lock",
+		trace.WithAttributes(
+			attribute.String("project.id", projectID),
+			attribute.String("project.lock.mode", "try_xact_shared"),
+		),
+	)
+	defer span.End()
+
+	var acquired bool
+	err := tx.QueryRowContext(ctx, `SELECT pg_try_advisory_xact_lock_shared(hashtextextended($1, 0))`, projectID).Scan(&acquired)
+	outcome := "acquired"
+	switch {
+	case err != nil:
+		outcome = "error"
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "")
+		err = fmt.Errorf("acquire advisory lock: %w", err)
+	case !acquired:
+		outcome = "contended"
+		err = store.ErrProjectBusy{ProjectID: projectID}
+	}
+	span.SetAttributes(
+		attribute.String("project.lock.outcome", outcome),
+		attribute.Float64("project.lock.acquire_duration_ms", durationMilliseconds(time.Since(acquireStarted))),
+	)
+	return err
+}
+
+func (s *sqlProjectStore) acquireProjectLock(ctx context.Context, projectID string, try, shared bool) (func() error, error) {
 	return s.acquireAdvisoryLock(ctx, advisoryLockSpec{
 		spanName:   "Project lock",
 		attrPrefix: "project",
 		id:         projectID,
 		lockKey:    projectID,
 		try:        try,
+		shared:     shared,
 		onBusy:     func() error { return store.ErrProjectBusy{ProjectID: projectID} },
+	})
+}
+
+// AcquireBranchNameLock acquires an exclusive advisory lock on a branch name
+// within a project, waiting for another holder to release it. The key is
+// namespaced so it does not share a lock id with the project lock.
+func (s *sqlProjectStore) AcquireBranchNameLock(ctx context.Context, projectID, branchName string) (func() error, error) {
+	return s.acquireAdvisoryLock(ctx, advisoryLockSpec{
+		spanName:   "Branch name lock",
+		attrPrefix: "branch_name",
+		id:         branchName,
+		lockKey:    "branch-name:" + projectID + ":" + branchName,
 	})
 }
 
@@ -1384,6 +1451,7 @@ type advisoryLockSpec struct {
 	id         string       // logical id for the <prefix>.id attribute
 	lockKey    string       // string hashed into the advisory lock id (may differ from id)
 	try        bool         // non-blocking (pg_try_advisory_lock) vs blocking
+	shared     bool         // shared (pg_advisory_lock_shared) vs exclusive
 	onBusy     func() error // returned on contention in try mode
 }
 
@@ -1395,6 +1463,11 @@ func (s *sqlProjectStore) acquireAdvisoryLock(ctx context.Context, spec advisory
 	mode := "blocking"
 	if spec.try {
 		mode = "try"
+	}
+	lockFn, tryLockFn, unlockFn := "pg_advisory_lock", "pg_try_advisory_lock", "pg_advisory_unlock"
+	if spec.shared {
+		mode += "_shared"
+		lockFn, tryLockFn, unlockFn = "pg_advisory_lock_shared", "pg_try_advisory_lock_shared", "pg_advisory_unlock_shared"
 	}
 
 	acquireStarted := time.Now()
@@ -1423,7 +1496,7 @@ func (s *sqlProjectStore) acquireAdvisoryLock(ctx context.Context, spec advisory
 
 	if spec.try {
 		var acquired bool
-		err = conn.QueryRowContext(ctx, `SELECT pg_try_advisory_lock(hashtextextended($1, 0))`, spec.lockKey).Scan(&acquired)
+		err = conn.QueryRowContext(ctx, `SELECT `+tryLockFn+`(hashtextextended($1, 0))`, spec.lockKey).Scan(&acquired)
 		if err == nil && !acquired {
 			_ = conn.Close()
 			span.SetAttributes(
@@ -1434,7 +1507,7 @@ func (s *sqlProjectStore) acquireAdvisoryLock(ctx context.Context, spec advisory
 			return nil, spec.onBusy()
 		}
 	} else {
-		_, err = conn.ExecContext(ctx, `SELECT pg_advisory_lock(hashtextextended($1, 0))`, spec.lockKey)
+		_, err = conn.ExecContext(ctx, `SELECT `+lockFn+`(hashtextextended($1, 0))`, spec.lockKey)
 	}
 	if err != nil {
 		_ = conn.Close()
@@ -1448,7 +1521,7 @@ func (s *sqlProjectStore) acquireAdvisoryLock(ctx context.Context, spec advisory
 	)
 
 	release := func() error {
-		_, _ = conn.ExecContext(context.Background(), `SELECT pg_advisory_unlock(hashtextextended($1, 0))`, spec.lockKey)
+		_, _ = conn.ExecContext(context.Background(), `SELECT `+unlockFn+`(hashtextextended($1, 0))`, spec.lockKey)
 		err := conn.Close()
 		span.SetAttributes(attribute.Float64(spec.attrPrefix+".lock.hold_duration_ms", durationMilliseconds(time.Since(acquiredAt))))
 		if err != nil {

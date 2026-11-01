@@ -114,7 +114,7 @@ func TestCreateBranchLockContention(t *testing.T) {
 	mockStore.EXPECT().GetOrgLimits(mock.Anything, apitest.TestOrganization, "project_id").Return(map[store.LimitKey]any{}, nil).Once()
 	mockStore.EXPECT().DescribeBranch(mock.Anything, apitest.TestOrganization, "project_id", parentID).
 		Return(&store.Branch{ID: parentID, CellID: "cell_id", Region: "region-id-1", BackupsEnabled: true}, nil).Once()
-	mockStore.EXPECT().TryAcquireProjectLock(mock.Anything, "project_id").
+	mockProvisioner.EXPECT().CreateBranch(mock.Anything, "project_id", apitest.TestOrganization, "child", mock.Anything).
 		Return(nil, store.ErrProjectBusy{ProjectID: "project_id"}).Once()
 
 	c, rec := e.POST("/organizations/" + apitest.TestOrganization + "/projects/project_id/branches").
@@ -1944,7 +1944,6 @@ func TestCreateBranch(t *testing.T) {
 			if tt.setupMocks != nil {
 				tt.setupMocks(&capturedPayload)
 			}
-			mockStore.EXPECT().TryAcquireProjectLock(mock.Anything, "project_id").Return(func() error { return nil }, nil).Maybe()
 
 			c, rec := e.POST("/organizations/" + apitest.TestOrganization + "/projects/project_id/branches").WithJSONBody(tt.jsonBody).Context()
 			err := handler.CreateBranch(c, apitest.TestOrganization, "project_id")
@@ -2035,6 +2034,7 @@ func TestRestoreFromBackup(t *testing.T) {
 		clusterError          error
 		expectedError         any
 		expectSuccess         bool
+		wantRetryAfter        bool
 	}{
 		{
 			name: "restore from backup with custom mode succeeds",
@@ -2052,8 +2052,8 @@ func TestRestoreFromBackup(t *testing.T) {
 				}, nil).Once()
 				mockPostgresConfig.EXPECT().GetDefaultPreloadLibraries(mock.AnythingOfType("string")).Return([]string{"pg_stat_statements", "auto_explain"}, nil).Once()
 				mockStore.EXPECT().GetRegion(mock.Anything, apitest.TestOrganization, "region-id-1").Return(&store.Region{ID: configuration.Region, GatewayHostPort: "", BackupsEnabled: true}, nil).Twice()
-				mockStore.EXPECT().CreateBranch(mock.Anything, apitest.TestOrganization, "project_id", "cell_id", createBranchConfig(restoredBranch.Name, &sourceBranchID, nil), mock.Anything).Run(func(ctx context.Context, organizationID, projectID, cellID string, cfg *store.CreateBranchConfiguration, provisionFn func(*store.Branch) error) {
-					err := provisionFn(&restoredBranch)
+				mockStore.EXPECT().CreateBranch(mock.Anything, apitest.TestOrganization, "project_id", "cell_id", createBranchConfig(restoredBranch.Name, &sourceBranchID, nil), mock.Anything).Run(func(ctx context.Context, organizationID, projectID, cellID string, cfg *store.CreateBranchConfiguration, provisionFn func(*store.Branch, *store.Project) error) {
+					err := provisionFn(&restoredBranch, &project)
 					assert.Nil(t, err)
 				}).Return(&restoredBranch, nil).Once()
 				mockClusters.EXPECT().CreatePostgresCluster(mock.Anything, mock.MatchedBy(func(req *clustersv1.CreatePostgresClusterRequest) bool {
@@ -2074,8 +2074,8 @@ func TestRestoreFromBackup(t *testing.T) {
 			setupMocks: func(mockStore *mocks.ProjectsStore, mockClusters *protomocks.ClustersServiceClient, mockPostgresConfig *postgrescfgmocks.PostgresConfigProvider, mockImageProvider *postgresversionsmocks.ImageProvider) {
 				mockStore.EXPECT().DescribeBranch(mock.Anything, apitest.TestOrganization, "project_id", sourceBranch.ID).Return(&sourceBranch, nil).Twice()
 				mockStore.EXPECT().GetRegion(mock.Anything, apitest.TestOrganization, "region-id-1").Return(&store.Region{ID: "region-id-1", GatewayHostPort: "", BackupsEnabled: true}, nil).Once()
-				mockStore.EXPECT().CreateBranch(mock.Anything, apitest.TestOrganization, "project_id", "cell_id", createBranchConfig(restoredBranch.Name, &sourceBranchID, nil), mock.Anything).Run(func(ctx context.Context, organizationID, projectID, cellID string, cfg *store.CreateBranchConfiguration, provisionFn func(*store.Branch) error) {
-					err := provisionFn(&restoredBranch)
+				mockStore.EXPECT().CreateBranch(mock.Anything, apitest.TestOrganization, "project_id", "cell_id", createBranchConfig(restoredBranch.Name, &sourceBranchID, nil), mock.Anything).Run(func(ctx context.Context, organizationID, projectID, cellID string, cfg *store.CreateBranchConfiguration, provisionFn func(*store.Branch, *store.Project) error) {
+					err := provisionFn(&restoredBranch, &project)
 					assert.Nil(t, err)
 				}).Return(&restoredBranch, nil).Once()
 				mockClusters.EXPECT().CreatePostgresCluster(mock.Anything, mock.MatchedBy(func(req *clustersv1.CreatePostgresClusterRequest) bool {
@@ -2097,8 +2097,8 @@ func TestRestoreFromBackup(t *testing.T) {
 			setupMocks: func(mockStore *mocks.ProjectsStore, mockClusters *protomocks.ClustersServiceClient, mockPostgresConfig *postgrescfgmocks.PostgresConfigProvider, mockImageProvider *postgresversionsmocks.ImageProvider) {
 				mockStore.EXPECT().DescribeBranch(mock.Anything, apitest.TestOrganization, "project_id", sourceBranch.ID).Return(&sourceBranch, nil).Twice()
 				mockStore.EXPECT().GetRegion(mock.Anything, apitest.TestOrganization, "region-id-1").Return(&store.Region{ID: "region-id-1", GatewayHostPort: "", BackupsEnabled: true}, nil).Once()
-				mockStore.EXPECT().CreateBranch(mock.Anything, apitest.TestOrganization, "project_id", "cell_id", createBranchConfig(restoredBranch.Name, &sourceBranchID, nil), mock.Anything).Run(func(ctx context.Context, organizationID, projectID, cellID string, cfg *store.CreateBranchConfiguration, provisionFn func(*store.Branch) error) {
-					err := provisionFn(&restoredBranch)
+				mockStore.EXPECT().CreateBranch(mock.Anything, apitest.TestOrganization, "project_id", "cell_id", createBranchConfig(restoredBranch.Name, &sourceBranchID, nil), mock.Anything).Run(func(ctx context.Context, organizationID, projectID, cellID string, cfg *store.CreateBranchConfiguration, provisionFn func(*store.Branch, *store.Project) error) {
+					err := provisionFn(&restoredBranch, &project)
 					assert.Nil(t, err)
 				}).Return(&restoredBranch, nil).Once()
 				mockClusters.EXPECT().CreatePostgresCluster(mock.Anything, mock.MatchedBy(func(req *clustersv1.CreatePostgresClusterRequest) bool {
@@ -2121,8 +2121,8 @@ func TestRestoreFromBackup(t *testing.T) {
 				mockClusters.EXPECT().GetRecoveryWindow(mock.Anything, &clustersv1.GetRecoveryWindowRequest{Id: sourceBranchID}).
 					Return(&clustersv1.GetRecoveryWindowResponse{FirstRecoverabilityPoint: "2026-01-01T00:00:00Z"}, nil).Once()
 				mockStore.EXPECT().GetRegion(mock.Anything, apitest.TestOrganization, "region-id-1").Return(&store.Region{ID: "region-id-1", GatewayHostPort: "", BackupsEnabled: true}, nil).Once()
-				mockStore.EXPECT().CreateBranch(mock.Anything, apitest.TestOrganization, "project_id", "cell_id", createBranchConfig(restoredBranch.Name, &sourceBranchID, nil), mock.Anything).Run(func(ctx context.Context, organizationID, projectID, cellID string, cfg *store.CreateBranchConfiguration, provisionFn func(*store.Branch) error) {
-					err := provisionFn(&restoredBranch)
+				mockStore.EXPECT().CreateBranch(mock.Anything, apitest.TestOrganization, "project_id", "cell_id", createBranchConfig(restoredBranch.Name, &sourceBranchID, nil), mock.Anything).Run(func(ctx context.Context, organizationID, projectID, cellID string, cfg *store.CreateBranchConfiguration, provisionFn func(*store.Branch, *store.Project) error) {
+					err := provisionFn(&restoredBranch, &project)
 					assert.Nil(t, err)
 				}).Return(&restoredBranch, nil).Once()
 				mockClusters.EXPECT().CreatePostgresCluster(mock.Anything, mock.Anything).Return(&clustersv1.CreatePostgresClusterResponse{}, nil).Once()
@@ -2131,6 +2131,18 @@ func TestRestoreFromBackup(t *testing.T) {
 				mockStore.EXPECT().GetProject(mock.Anything, apitest.TestOrganization, "project_id").Return(&project, nil).Once()
 			},
 			expectSuccess: true,
+		},
+		{
+			name: "restore returns busy when the project lock is held",
+			mode: "clone",
+			setupMocks: func(mockStore *mocks.ProjectsStore, mockClusters *protomocks.ClustersServiceClient, mockPostgresConfig *postgrescfgmocks.PostgresConfigProvider, mockImageProvider *postgresversionsmocks.ImageProvider) {
+				mockStore.EXPECT().DescribeBranch(mock.Anything, apitest.TestOrganization, "project_id", sourceBranch.ID).Return(&sourceBranch, nil).Twice()
+				mockStore.EXPECT().CreateBranch(mock.Anything, apitest.TestOrganization, "project_id", "cell_id", createBranchConfig(restoredBranch.Name, &sourceBranchID, nil), mock.Anything).
+					Return(nil, store.ErrProjectBusy{ProjectID: "project_id"}).Once()
+				mockStore.EXPECT().GetProject(mock.Anything, apitest.TestOrganization, "project_id").Return(&project, nil).Once()
+			},
+			expectedError:  store.ErrProjectBusy{ProjectID: "project_id"},
+			wantRetryAfter: true,
 		},
 		{
 			name: "restore to a target time before the recovery window returns error",
@@ -2212,8 +2224,8 @@ func TestRestoreFromBackup(t *testing.T) {
 				mockStore.EXPECT().GetRegion(mock.Anything, apitest.TestOrganization, "region-id-1").Return(&store.Region{ID: configuration.Region, GatewayHostPort: "", BackupsEnabled: true}, nil).Once()
 				mockStore.EXPECT().GetProject(mock.Anything, apitest.TestOrganization, "project_id").Return(&project, nil).Once()
 				notFoundErr := status.Error(codes.NotFound, "cluster not found")
-				mockStore.EXPECT().CreateBranch(mock.Anything, apitest.TestOrganization, "project_id", "cell_id", createBranchConfig(restoredBranch.Name, &sourceBranchID, nil), mock.Anything).Run(func(ctx context.Context, organizationID, projectID, cellID string, cfg *store.CreateBranchConfiguration, provisionFn func(*store.Branch) error) {
-					err := provisionFn(&restoredBranch)
+				mockStore.EXPECT().CreateBranch(mock.Anything, apitest.TestOrganization, "project_id", "cell_id", createBranchConfig(restoredBranch.Name, &sourceBranchID, nil), mock.Anything).Run(func(ctx context.Context, organizationID, projectID, cellID string, cfg *store.CreateBranchConfiguration, provisionFn func(*store.Branch, *store.Project) error) {
+					err := provisionFn(&restoredBranch, &project)
 					assert.Error(t, err)
 				}).Return(nil, notFoundErr).Once()
 				mockClusters.EXPECT().CreatePostgresCluster(mock.Anything, mock.Anything).Return(nil, notFoundErr).Once()
@@ -2239,8 +2251,8 @@ func TestRestoreFromBackup(t *testing.T) {
 				mockStore.EXPECT().GetRegion(mock.Anything, apitest.TestOrganization, "region-id-1").Return(&store.Region{ID: configuration.Region, GatewayHostPort: "", BackupsEnabled: true}, nil).Once()
 				mockStore.EXPECT().GetProject(mock.Anything, apitest.TestOrganization, "project_id").Return(&project, nil).Once()
 				invalidArgErr := status.Error(codes.InvalidArgument, "invalid configuration parameter")
-				mockStore.EXPECT().CreateBranch(mock.Anything, apitest.TestOrganization, "project_id", "cell_id", createBranchConfig(restoredBranch.Name, &sourceBranchID, nil), mock.Anything).Run(func(ctx context.Context, organizationID, projectID, cellID string, cfg *store.CreateBranchConfiguration, provisionFn func(*store.Branch) error) {
-					err := provisionFn(&restoredBranch)
+				mockStore.EXPECT().CreateBranch(mock.Anything, apitest.TestOrganization, "project_id", "cell_id", createBranchConfig(restoredBranch.Name, &sourceBranchID, nil), mock.Anything).Run(func(ctx context.Context, organizationID, projectID, cellID string, cfg *store.CreateBranchConfiguration, provisionFn func(*store.Branch, *store.Project) error) {
+					err := provisionFn(&restoredBranch, &project)
 					assert.Error(t, err)
 				}).Return(nil, invalidArgErr).Once()
 				mockClusters.EXPECT().CreatePostgresCluster(mock.Anything, mock.Anything).Return(nil, invalidArgErr).Once()
@@ -2266,8 +2278,8 @@ func TestRestoreFromBackup(t *testing.T) {
 				mockStore.EXPECT().GetRegion(mock.Anything, apitest.TestOrganization, "region-id-1").Return(&store.Region{ID: configuration.Region, GatewayHostPort: "", BackupsEnabled: true}, nil).Once()
 				mockStore.EXPECT().GetProject(mock.Anything, apitest.TestOrganization, "project_id").Return(&project, nil).Once()
 				internalErr := status.Error(codes.Internal, "internal server error")
-				mockStore.EXPECT().CreateBranch(mock.Anything, apitest.TestOrganization, "project_id", "cell_id", createBranchConfig(restoredBranch.Name, &sourceBranchID, nil), mock.Anything).Run(func(ctx context.Context, organizationID, projectID, cellID string, cfg *store.CreateBranchConfiguration, provisionFn func(*store.Branch) error) {
-					err := provisionFn(&restoredBranch)
+				mockStore.EXPECT().CreateBranch(mock.Anything, apitest.TestOrganization, "project_id", "cell_id", createBranchConfig(restoredBranch.Name, &sourceBranchID, nil), mock.Anything).Run(func(ctx context.Context, organizationID, projectID, cellID string, cfg *store.CreateBranchConfiguration, provisionFn func(*store.Branch, *store.Project) error) {
+					err := provisionFn(&restoredBranch, &project)
 					assert.Error(t, err)
 				}).Return(nil, internalErr).Once()
 				mockClusters.EXPECT().CreatePostgresCluster(mock.Anything, mock.Anything).Return(nil, internalErr).Once()
@@ -2346,8 +2358,8 @@ func TestRestoreFromBackup(t *testing.T) {
 				}, nil).Once()
 				mockPostgresConfig.EXPECT().GetDefaultPreloadLibraries(mock.AnythingOfType("string")).Return([]string{"pg_stat_statements", "auto_explain"}, nil).Once()
 				mockStore.EXPECT().GetRegion(mock.Anything, apitest.TestOrganization, "region-id-1").Return(&store.Region{ID: "region-id-1", GatewayHostPort: "", BackupsEnabled: true}, nil).Twice()
-				mockStore.EXPECT().CreateBranch(mock.Anything, apitest.TestOrganization, "project_id", "cell_id", createBranchConfig(restoredBranch.Name, &sourceBranchID, nil), mock.Anything).Run(func(ctx context.Context, organizationID, projectID, cellID string, cfg *store.CreateBranchConfiguration, provisionFn func(*store.Branch) error) {
-					err := provisionFn(&restoredBranch)
+				mockStore.EXPECT().CreateBranch(mock.Anything, apitest.TestOrganization, "project_id", "cell_id", createBranchConfig(restoredBranch.Name, &sourceBranchID, nil), mock.Anything).Run(func(ctx context.Context, organizationID, projectID, cellID string, cfg *store.CreateBranchConfiguration, provisionFn func(*store.Branch, *store.Project) error) {
+					err := provisionFn(&restoredBranch, &project)
 					assert.Nil(t, err)
 				}).Return(&restoredBranch, nil).Once()
 				mockClusters.EXPECT().CreatePostgresCluster(mock.Anything, mock.MatchedBy(func(req *clustersv1.CreatePostgresClusterRequest) bool {
@@ -2391,7 +2403,6 @@ func TestRestoreFromBackup(t *testing.T) {
 			e := apitest.New(t).WithOpenAPISpec(projectsSpec).WithClaims(apitest.TestClaims)
 
 			tt.setupMocks(mockStore, mockClusters, mockPostgresConfig, mockImageProvider)
-			mockStore.EXPECT().TryAcquireProjectLock(mock.Anything, "project_id").Return(func() error { return nil }, nil).Maybe()
 			mockStore.EXPECT().GetOrgLimits(mock.Anything, apitest.TestOrganization, "project_id").Return(map[store.LimitKey]any{}, nil).Once()
 			// A case can set its own window in setupMocks. Expectations match
 			// in the order they are set, so this default applies otherwise.
@@ -2423,6 +2434,9 @@ func TestRestoreFromBackup(t *testing.T) {
 			} else {
 				assert.Error(t, err)
 				assert.Equal(t, tt.expectedError, err)
+			}
+			if tt.wantRetryAfter {
+				assert.Equal(t, projectLockRetryAfter, rec.Header().Get("Retry-After"))
 			}
 		})
 	}

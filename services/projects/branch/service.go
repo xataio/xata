@@ -96,11 +96,11 @@ type CreateInput struct {
 	Description    *string
 	Backup         *BackupConfiguration
 	ScaleToZero    *ScaleToZero
-	// ProjectLockHeld tells Provision the caller already holds the project lock,
-	// so it must not acquire it again (the lock is a session-scoped advisory
-	// lock, so a second acquire would self-deadlock). The GitHub webhook holds
-	// the lock across its whole PR-opened handler so a racing PR-closed handler
-	// cannot miss the branch and skip the delete.
+	// ProjectLockHeld tells Provision the caller already holds the project lock
+	// (shared or exclusive), so it must not acquire it again: a second acquire on
+	// another session can deadlock behind a waiting exclusive holder. The GitHub
+	// webhook holds the shared lock across its whole PR-opened handler, so it
+	// waits out an IP filtering update instead of failing on contention.
 	ProjectLockHeld bool
 }
 

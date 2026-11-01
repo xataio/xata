@@ -302,6 +302,11 @@ type CreateBranchConfiguration struct {
 	UsageTier      string
 	// Limits are pre-resolved org limits. When non-nil the store skips GetOrgLimits.
 	Limits *OrgLimits
+	// ProjectLockHeld tells CreateBranch the caller already holds the project
+	// lock on another session, so the transaction must not take it again: the
+	// second acquire would queue behind a waiting exclusive holder, which itself
+	// waits on the caller's lock.
+	ProjectLockHeld bool
 }
 
 type InstanceType struct {
@@ -575,8 +580,14 @@ type ProjectsStore interface {
 	UpdateProject(ctx context.Context, organizationID, projectID string, config *UpdateProjectConfiguration, updateFn func(project *Project) error) (*Project, error)
 
 	// CreateBranch creates a new branch in the project. provisionFn is called during the create transaction
-	// and should be used to provision the branch in the underlying system
-	CreateBranch(ctx context.Context, organizationID, projectID, cellID string, config *CreateBranchConfiguration, provisionFn func(b *Branch) error) (*Branch, error)
+	// and should be used to provision the branch in the underlying system.
+	//
+	// Unless config.ProjectLockHeld is set, the transaction takes the project lock in shared mode,
+	// returning ErrProjectBusy if an exclusive holder has it or is waiting for it. provisionFn receives
+	// the project as read after the lock is taken, so its IP filtering is current: it must use that
+	// project rather than one read before the call. provisionFn must not use the store, since the
+	// transaction already holds a pooled connection for the duration of provisioning.
+	CreateBranch(ctx context.Context, organizationID, projectID, cellID string, config *CreateBranchConfiguration, provisionFn func(b *Branch, p *Project) error) (*Branch, error)
 
 	// DeleteBranch soft-deletes a branch in the project. deprovisionFn is called during the delete transaction
 	// and should be used to deprovision the branch in the underlying system
@@ -619,6 +630,19 @@ type ProjectsStore interface {
 	// It returns ErrProjectBusy immediately if another operation holds the lock.
 	// The lock is held on a dedicated connection that is closed when the release function is called.
 	TryAcquireProjectLock(ctx context.Context, projectID string) (release func() error, err error)
+
+	// AcquireProjectLockShared acquires the project lock in shared mode, waiting
+	// for any exclusive holder to release it. Shared holders do not block each
+	// other, while still being ordered against exclusive holders (IP filtering
+	// updates, project deletion). Branch creation takes the same shared lock
+	// inside its transaction; this session-level variant is for callers that must
+	// hold it across more than the create (the GitHub webhook).
+	AcquireProjectLockShared(ctx context.Context, projectID string) (release func() error, err error)
+
+	// AcquireBranchNameLock acquires an exclusive advisory lock on a branch name
+	// within a project, waiting for another holder to release it. It orders
+	// operations on the same branch name without blocking the rest of the project.
+	AcquireBranchNameLock(ctx context.Context, projectID, branchName string) (release func() error, err error)
 	// CleanupTerminatedBranches hard-deletes terminated branches in a cell that have been terminated for at least the given duration
 	CleanupTerminatedBranches(ctx context.Context, cellID string, terminatedFor time.Duration) (int64, error)
 

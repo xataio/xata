@@ -56,24 +56,25 @@ func TestCreateBranch(t *testing.T) {
 		}
 	}
 
-	// mockCreateBranch sets up store.CreateBranch to invoke the provision callback and propagate its result.
-	mockCreateBranch := func(mockStore *storemocks.ProjectsStore, branch store.Branch) {
+	// mockCreateBranch sets up store.CreateBranch to invoke the provision callback with
+	// lockedProject (the project the store reads under the lock) and propagate its result.
+	mockCreateBranch := func(mockStore *storemocks.ProjectsStore, branch store.Branch, lockedProject *store.Project) {
 		b := branch
 		var provisionErr error
 		mockStore.On("CreateBranch", mock.Anything, orgID, projectID, mock.Anything, mock.Anything, mock.Anything).
 			Run(func(args mock.Arguments) {
-				provisionFn, ok := args.Get(5).(func(*store.Branch) error)
-				require.True(t, ok, "provisionFn should be func(*store.Branch) error")
-				provisionErr = provisionFn(&b)
+				provisionFn, ok := args.Get(5).(func(*store.Branch, *store.Project) error)
+				require.True(t, ok, "provisionFn should be func(*store.Branch, *store.Project) error")
+				provisionErr = provisionFn(&b, lockedProject)
 			}).
 			Return(
-				func(_ context.Context, _, _, _ string, _ *store.CreateBranchConfiguration, _ func(*store.Branch) error) *store.Branch {
+				func(_ context.Context, _, _, _ string, _ *store.CreateBranchConfiguration, _ func(*store.Branch, *store.Project) error) *store.Branch {
 					if provisionErr != nil {
 						return nil
 					}
 					return &b
 				},
-				func(_ context.Context, _, _, _ string, _ *store.CreateBranchConfiguration, _ func(*store.Branch) error) error {
+				func(_ context.Context, _, _, _ string, _ *store.CreateBranchConfiguration, _ func(*store.Branch, *store.Project) error) error {
 					return provisionErr
 				},
 			).Once()
@@ -90,7 +91,7 @@ func TestCreateBranch(t *testing.T) {
 			branch:  mainBranch,
 			setupMocks: func(mockStore *storemocks.ProjectsStore, mockClusters *protomocks.ClustersServiceClient) {
 				mockStore.EXPECT().GetProject(mock.Anything, orgID, projectID).Return(project, nil).Once()
-				mockCreateBranch(mockStore, mainBranch)
+				mockCreateBranch(mockStore, mainBranch, project)
 				mockClusters.EXPECT().CreatePostgresCluster(mock.Anything, mock.MatchedBy(func(req *clustersv1.CreatePostgresClusterRequest) bool {
 					return req.GetIdempotencyKey() != ""
 				})).
@@ -106,7 +107,7 @@ func TestCreateBranch(t *testing.T) {
 			branch: childBranch,
 			setupMocks: func(mockStore *storemocks.ProjectsStore, mockClusters *protomocks.ClustersServiceClient) {
 				mockStore.EXPECT().GetProject(mock.Anything, orgID, projectID).Return(project, nil).Once()
-				mockCreateBranch(mockStore, childBranch)
+				mockCreateBranch(mockStore, childBranch, project)
 				mockClusters.EXPECT().CreatePostgresCluster(mock.Anything, mock.MatchedBy(func(req *clustersv1.CreatePostgresClusterRequest) bool {
 					snap, ok := req.DataSource.(*clustersv1.CreatePostgresClusterRequest_ClusterSnapshot)
 					return ok && snap.ClusterSnapshot.ClusterId == parentID
@@ -122,7 +123,7 @@ func TestCreateBranch(t *testing.T) {
 			branch: mainBranch,
 			setupMocks: func(mockStore *storemocks.ProjectsStore, mockClusters *protomocks.ClustersServiceClient) {
 				mockStore.EXPECT().GetProject(mock.Anything, orgID, projectID).Return(project, nil).Once()
-				mockCreateBranch(mockStore, mainBranch)
+				mockCreateBranch(mockStore, mainBranch, project)
 				mockClusters.EXPECT().CreatePostgresCluster(mock.Anything, mock.MatchedBy(func(req *clustersv1.CreatePostgresClusterRequest) bool {
 					return req.UsePool != nil && *req.UsePool
 				})).Return(&clustersv1.CreatePostgresClusterResponse{}, nil).Once()
@@ -137,7 +138,7 @@ func TestCreateBranch(t *testing.T) {
 			branch: mainBranch,
 			setupMocks: func(mockStore *storemocks.ProjectsStore, mockClusters *protomocks.ClustersServiceClient) {
 				mockStore.EXPECT().GetProject(mock.Anything, orgID, projectID).Return(project, nil).Once()
-				mockCreateBranch(mockStore, mainBranch)
+				mockCreateBranch(mockStore, mainBranch, project)
 				mockClusters.EXPECT().CreatePostgresCluster(mock.Anything, mock.MatchedBy(func(req *clustersv1.CreatePostgresClusterRequest) bool {
 					return req.UseXatastor != nil && *req.UseXatastor
 				})).Return(&clustersv1.CreatePostgresClusterResponse{}, nil).Once()
@@ -153,18 +154,19 @@ func TestCreateBranch(t *testing.T) {
 			branch: childBranch,
 			setupMocks: func(mockStore *storemocks.ProjectsStore, mockClusters *protomocks.ClustersServiceClient) {
 				mockStore.EXPECT().GetProject(mock.Anything, orgID, projectID).Return(project, nil).Once()
-				mockCreateBranch(mockStore, childBranch)
+				mockCreateBranch(mockStore, childBranch, project)
 				mockClusters.EXPECT().CreatePostgresCluster(mock.Anything, mock.MatchedBy(func(req *clustersv1.CreatePostgresClusterRequest) bool {
 					return req.UseXatastor == nil
 				})).Return(&clustersv1.CreatePostgresClusterResponse{}, nil).Once()
 			},
 		},
-		"IP filtering is applied when project has it": {
+		"IP filtering is applied from the project read under the lock": {
 			payload: basePayload,
 			branch:  mainBranch,
 			setupMocks: func(mockStore *storemocks.ProjectsStore, mockClusters *protomocks.ClustersServiceClient) {
-				mockStore.EXPECT().GetProject(mock.Anything, orgID, projectID).Return(projectWithIPFiltering, nil).Once()
-				mockCreateBranch(mockStore, mainBranch)
+				// IP filtering was enabled between the unlocked read and the locked one.
+				mockStore.EXPECT().GetProject(mock.Anything, orgID, projectID).Return(project, nil).Once()
+				mockCreateBranch(mockStore, mainBranch, projectWithIPFiltering)
 				mockClusters.EXPECT().CreatePostgresCluster(mock.Anything, mock.Anything).
 					Return(&clustersv1.CreatePostgresClusterResponse{}, nil).Once()
 				mockClusters.EXPECT().SetBranchIPFiltering(mock.Anything, &clustersv1.SetBranchIPFilteringRequest{
@@ -176,12 +178,38 @@ func TestCreateBranch(t *testing.T) {
 				}).Return(nil, nil).Once()
 			},
 		},
+		"IP filtering from the unlocked read is not applied": {
+			payload: basePayload,
+			branch:  mainBranch,
+			setupMocks: func(mockStore *storemocks.ProjectsStore, mockClusters *protomocks.ClustersServiceClient) {
+				// IP filtering was disabled between the unlocked read and the locked
+				// one, so SetBranchIPFiltering must not be called.
+				mockStore.EXPECT().GetProject(mock.Anything, orgID, projectID).Return(projectWithIPFiltering, nil).Once()
+				mockCreateBranch(mockStore, mainBranch, project)
+				mockClusters.EXPECT().CreatePostgresCluster(mock.Anything, mock.Anything).
+					Return(&clustersv1.CreatePostgresClusterResponse{}, nil).Once()
+			},
+		},
+		"ProjectLockHeld is forwarded to the store": {
+			payload: func() *ClusterServicePayload {
+				p := basePayload()
+				p.ProjectLockHeld = true
+				return p
+			},
+			setupMocks: func(mockStore *storemocks.ProjectsStore, mockClusters *protomocks.ClustersServiceClient) {
+				mockStore.EXPECT().GetProject(mock.Anything, orgID, projectID).Return(project, nil).Once()
+				mockStore.On("CreateBranch", mock.Anything, orgID, projectID, mock.Anything, mock.MatchedBy(func(cfg *store.CreateBranchConfiguration) bool {
+					return cfg.ProjectLockHeld
+				}), mock.Anything).Return(nil, fmt.Errorf("stop after the store call")).Once()
+			},
+			wantErr: fmt.Errorf("stop after the store call"),
+		},
 		"scale-to-zero defaults from project base branch settings": {
 			payload: basePayload,
 			branch:  mainBranch,
 			setupMocks: func(mockStore *storemocks.ProjectsStore, mockClusters *protomocks.ClustersServiceClient) {
 				mockStore.EXPECT().GetProject(mock.Anything, orgID, projectID).Return(project, nil).Once()
-				mockCreateBranch(mockStore, mainBranch)
+				mockCreateBranch(mockStore, mainBranch, project)
 				mockClusters.EXPECT().CreatePostgresCluster(mock.Anything, mock.MatchedBy(func(req *clustersv1.CreatePostgresClusterRequest) bool {
 					return req.Configuration.ScaleToZero != nil &&
 						req.Configuration.ScaleToZero.Enabled == false &&
@@ -198,7 +226,7 @@ func TestCreateBranch(t *testing.T) {
 			branch: childBranch,
 			setupMocks: func(mockStore *storemocks.ProjectsStore, mockClusters *protomocks.ClustersServiceClient) {
 				mockStore.EXPECT().GetProject(mock.Anything, orgID, projectID).Return(project, nil).Once()
-				mockCreateBranch(mockStore, childBranch)
+				mockCreateBranch(mockStore, childBranch, project)
 				mockClusters.EXPECT().CreatePostgresCluster(mock.Anything, mock.MatchedBy(func(req *clustersv1.CreatePostgresClusterRequest) bool {
 					return req.Configuration.ScaleToZero != nil &&
 						req.Configuration.ScaleToZero.Enabled == true &&
@@ -218,7 +246,7 @@ func TestCreateBranch(t *testing.T) {
 			branch: mainBranch,
 			setupMocks: func(mockStore *storemocks.ProjectsStore, mockClusters *protomocks.ClustersServiceClient) {
 				mockStore.EXPECT().GetProject(mock.Anything, orgID, projectID).Return(project, nil).Once()
-				mockCreateBranch(mockStore, mainBranch)
+				mockCreateBranch(mockStore, mainBranch, project)
 				mockClusters.EXPECT().CreatePostgresCluster(mock.Anything, mock.MatchedBy(func(req *clustersv1.CreatePostgresClusterRequest) bool {
 					return req.Configuration.ScaleToZero != nil &&
 						req.Configuration.ScaleToZero.Enabled == true &&
@@ -251,7 +279,7 @@ func TestCreateBranch(t *testing.T) {
 			branch: childBranch,
 			setupMocks: func(mockStore *storemocks.ProjectsStore, mockClusters *protomocks.ClustersServiceClient) {
 				mockStore.EXPECT().GetProject(mock.Anything, orgID, projectID).Return(project, nil).Once()
-				mockCreateBranch(mockStore, childBranch)
+				mockCreateBranch(mockStore, childBranch, project)
 				mockClusters.EXPECT().CreatePostgresCluster(mock.Anything, mock.Anything).
 					Return(nil, status.Error(codes.NotFound, "not found")).Once()
 			},
@@ -262,7 +290,7 @@ func TestCreateBranch(t *testing.T) {
 			branch:  mainBranch,
 			setupMocks: func(mockStore *storemocks.ProjectsStore, mockClusters *protomocks.ClustersServiceClient) {
 				mockStore.EXPECT().GetProject(mock.Anything, orgID, projectID).Return(project, nil).Once()
-				mockCreateBranch(mockStore, mainBranch)
+				mockCreateBranch(mockStore, mainBranch, project)
 				mockClusters.EXPECT().CreatePostgresCluster(mock.Anything, mock.Anything).
 					Return(nil, status.Error(codes.InvalidArgument, "bad config")).Once()
 			},
@@ -277,7 +305,7 @@ func TestCreateBranch(t *testing.T) {
 			branch: childBranch,
 			setupMocks: func(mockStore *storemocks.ProjectsStore, mockClusters *protomocks.ClustersServiceClient) {
 				mockStore.EXPECT().GetProject(mock.Anything, orgID, projectID).Return(project, nil).Once()
-				mockCreateBranch(mockStore, childBranch)
+				mockCreateBranch(mockStore, childBranch, project)
 				mockClusters.EXPECT().CreatePostgresCluster(mock.Anything, mock.Anything).
 					Return(nil, status.Error(codes.FailedPrecondition, "unhealthy")).Once()
 			},

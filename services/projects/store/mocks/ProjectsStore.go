@@ -24,6 +24,66 @@ func (_m *ProjectsStore) EXPECT() *ProjectsStore_Expecter {
 	return &ProjectsStore_Expecter{mock: &_m.Mock}
 }
 
+// AcquireBranchNameLock provides a mock function with given fields: ctx, projectID, branchName
+func (_m *ProjectsStore) AcquireBranchNameLock(ctx context.Context, projectID string, branchName string) (func() error, error) {
+	ret := _m.Called(ctx, projectID, branchName)
+
+	if len(ret) == 0 {
+		panic("no return value specified for AcquireBranchNameLock")
+	}
+
+	var r0 func() error
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, string) (func() error, error)); ok {
+		return rf(ctx, projectID, branchName)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string, string) func() error); ok {
+		r0 = rf(ctx, projectID, branchName)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(func() error)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
+		r1 = rf(ctx, projectID, branchName)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// ProjectsStore_AcquireBranchNameLock_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'AcquireBranchNameLock'
+type ProjectsStore_AcquireBranchNameLock_Call struct {
+	*mock.Call
+}
+
+// AcquireBranchNameLock is a helper method to define mock.On call
+//   - ctx context.Context
+//   - projectID string
+//   - branchName string
+func (_e *ProjectsStore_Expecter) AcquireBranchNameLock(ctx interface{}, projectID interface{}, branchName interface{}) *ProjectsStore_AcquireBranchNameLock_Call {
+	return &ProjectsStore_AcquireBranchNameLock_Call{Call: _e.mock.On("AcquireBranchNameLock", ctx, projectID, branchName)}
+}
+
+func (_c *ProjectsStore_AcquireBranchNameLock_Call) Run(run func(ctx context.Context, projectID string, branchName string)) *ProjectsStore_AcquireBranchNameLock_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(string))
+	})
+	return _c
+}
+
+func (_c *ProjectsStore_AcquireBranchNameLock_Call) Return(release func() error, err error) *ProjectsStore_AcquireBranchNameLock_Call {
+	_c.Call.Return(release, err)
+	return _c
+}
+
+func (_c *ProjectsStore_AcquireBranchNameLock_Call) RunAndReturn(run func(context.Context, string, string) (func() error, error)) *ProjectsStore_AcquireBranchNameLock_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // AcquireProjectLock provides a mock function with given fields: ctx, projectID
 func (_m *ProjectsStore) AcquireProjectLock(ctx context.Context, projectID string) (func() error, error) {
 	ret := _m.Called(ctx, projectID)
@@ -79,6 +139,65 @@ func (_c *ProjectsStore_AcquireProjectLock_Call) Return(release func() error, er
 }
 
 func (_c *ProjectsStore_AcquireProjectLock_Call) RunAndReturn(run func(context.Context, string) (func() error, error)) *ProjectsStore_AcquireProjectLock_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// AcquireProjectLockShared provides a mock function with given fields: ctx, projectID
+func (_m *ProjectsStore) AcquireProjectLockShared(ctx context.Context, projectID string) (func() error, error) {
+	ret := _m.Called(ctx, projectID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for AcquireProjectLockShared")
+	}
+
+	var r0 func() error
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string) (func() error, error)); ok {
+		return rf(ctx, projectID)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string) func() error); ok {
+		r0 = rf(ctx, projectID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(func() error)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, projectID)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// ProjectsStore_AcquireProjectLockShared_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'AcquireProjectLockShared'
+type ProjectsStore_AcquireProjectLockShared_Call struct {
+	*mock.Call
+}
+
+// AcquireProjectLockShared is a helper method to define mock.On call
+//   - ctx context.Context
+//   - projectID string
+func (_e *ProjectsStore_Expecter) AcquireProjectLockShared(ctx interface{}, projectID interface{}) *ProjectsStore_AcquireProjectLockShared_Call {
+	return &ProjectsStore_AcquireProjectLockShared_Call{Call: _e.mock.On("AcquireProjectLockShared", ctx, projectID)}
+}
+
+func (_c *ProjectsStore_AcquireProjectLockShared_Call) Run(run func(ctx context.Context, projectID string)) *ProjectsStore_AcquireProjectLockShared_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *ProjectsStore_AcquireProjectLockShared_Call) Return(release func() error, err error) *ProjectsStore_AcquireProjectLockShared_Call {
+	_c.Call.Return(release, err)
+	return _c
+}
+
+func (_c *ProjectsStore_AcquireProjectLockShared_Call) RunAndReturn(run func(context.Context, string) (func() error, error)) *ProjectsStore_AcquireProjectLockShared_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -482,7 +601,7 @@ func (_c *ProjectsStore_CountUnsyncedOrganizationStatuses_Call) RunAndReturn(run
 }
 
 // CreateBranch provides a mock function with given fields: ctx, organizationID, projectID, cellID, config, provisionFn
-func (_m *ProjectsStore) CreateBranch(ctx context.Context, organizationID string, projectID string, cellID string, config *store.CreateBranchConfiguration, provisionFn func(*store.Branch) error) (*store.Branch, error) {
+func (_m *ProjectsStore) CreateBranch(ctx context.Context, organizationID string, projectID string, cellID string, config *store.CreateBranchConfiguration, provisionFn func(*store.Branch, *store.Project) error) (*store.Branch, error) {
 	ret := _m.Called(ctx, organizationID, projectID, cellID, config, provisionFn)
 
 	if len(ret) == 0 {
@@ -491,10 +610,10 @@ func (_m *ProjectsStore) CreateBranch(ctx context.Context, organizationID string
 
 	var r0 *store.Branch
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, string, string, *store.CreateBranchConfiguration, func(*store.Branch) error) (*store.Branch, error)); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, string, *store.CreateBranchConfiguration, func(*store.Branch, *store.Project) error) (*store.Branch, error)); ok {
 		return rf(ctx, organizationID, projectID, cellID, config, provisionFn)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, string, string, string, *store.CreateBranchConfiguration, func(*store.Branch) error) *store.Branch); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, string, *store.CreateBranchConfiguration, func(*store.Branch, *store.Project) error) *store.Branch); ok {
 		r0 = rf(ctx, organizationID, projectID, cellID, config, provisionFn)
 	} else {
 		if ret.Get(0) != nil {
@@ -502,7 +621,7 @@ func (_m *ProjectsStore) CreateBranch(ctx context.Context, organizationID string
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, string, string, string, *store.CreateBranchConfiguration, func(*store.Branch) error) error); ok {
+	if rf, ok := ret.Get(1).(func(context.Context, string, string, string, *store.CreateBranchConfiguration, func(*store.Branch, *store.Project) error) error); ok {
 		r1 = rf(ctx, organizationID, projectID, cellID, config, provisionFn)
 	} else {
 		r1 = ret.Error(1)
@@ -522,14 +641,14 @@ type ProjectsStore_CreateBranch_Call struct {
 //   - projectID string
 //   - cellID string
 //   - config *store.CreateBranchConfiguration
-//   - provisionFn func(*store.Branch) error
+//   - provisionFn func(*store.Branch , *store.Project) error
 func (_e *ProjectsStore_Expecter) CreateBranch(ctx interface{}, organizationID interface{}, projectID interface{}, cellID interface{}, config interface{}, provisionFn interface{}) *ProjectsStore_CreateBranch_Call {
 	return &ProjectsStore_CreateBranch_Call{Call: _e.mock.On("CreateBranch", ctx, organizationID, projectID, cellID, config, provisionFn)}
 }
 
-func (_c *ProjectsStore_CreateBranch_Call) Run(run func(ctx context.Context, organizationID string, projectID string, cellID string, config *store.CreateBranchConfiguration, provisionFn func(*store.Branch) error)) *ProjectsStore_CreateBranch_Call {
+func (_c *ProjectsStore_CreateBranch_Call) Run(run func(ctx context.Context, organizationID string, projectID string, cellID string, config *store.CreateBranchConfiguration, provisionFn func(*store.Branch, *store.Project) error)) *ProjectsStore_CreateBranch_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(string), args[2].(string), args[3].(string), args[4].(*store.CreateBranchConfiguration), args[5].(func(*store.Branch) error))
+		run(args[0].(context.Context), args[1].(string), args[2].(string), args[3].(string), args[4].(*store.CreateBranchConfiguration), args[5].(func(*store.Branch, *store.Project) error))
 	})
 	return _c
 }
@@ -539,7 +658,7 @@ func (_c *ProjectsStore_CreateBranch_Call) Return(_a0 *store.Branch, _a1 error) 
 	return _c
 }
 
-func (_c *ProjectsStore_CreateBranch_Call) RunAndReturn(run func(context.Context, string, string, string, *store.CreateBranchConfiguration, func(*store.Branch) error) (*store.Branch, error)) *ProjectsStore_CreateBranch_Call {
+func (_c *ProjectsStore_CreateBranch_Call) RunAndReturn(run func(context.Context, string, string, string, *store.CreateBranchConfiguration, func(*store.Branch, *store.Project) error) (*store.Branch, error)) *ProjectsStore_CreateBranch_Call {
 	_c.Call.Return(run)
 	return _c
 }

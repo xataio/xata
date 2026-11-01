@@ -162,9 +162,10 @@ func TestProvision(t *testing.T) {
 		"lock contention wraps ErrProjectBusy": {
 			payload: &provisioner.ClusterServicePayload{BackupsEnabled: true},
 			in:      CreateInput{OrganizationID: testOrg, ProjectID: testProject, Name: testBranch},
-			setup: func(st *storemocks.ProjectsStore, _ *provisionermocks.Provisioner, _ *cellsmock.Cells) {
-				st.EXPECT().TryAcquireProjectLock(mock.Anything, testProject).
-					Return(nil, store.ErrProjectBusy{ProjectID: testProject}).Once()
+			setup: func(_ *storemocks.ProjectsStore, prov *provisionermocks.Provisioner, _ *cellsmock.Cells) {
+				prov.EXPECT().CreateBranch(mock.Anything, testProject, testOrg, testBranch, mock.MatchedBy(func(p *provisioner.ClusterServicePayload) bool {
+					return !p.ProjectLockHeld
+				})).Return(nil, store.ErrProjectBusy{ProjectID: testProject}).Once()
 			},
 			wantBusy: true,
 		},
@@ -172,7 +173,6 @@ func TestProvision(t *testing.T) {
 			payload: &provisioner.ClusterServicePayload{BackupsEnabled: true},
 			in:      CreateInput{OrganizationID: testOrg, ProjectID: testProject, Name: testBranch},
 			setup: func(st *storemocks.ProjectsStore, prov *provisionermocks.Provisioner, _ *cellsmock.Cells) {
-				st.EXPECT().TryAcquireProjectLock(mock.Anything, testProject).Return(func() error { return nil }, nil).Once()
 				prov.EXPECT().CreateBranch(mock.Anything, testProject, testOrg, testBranch, mock.Anything).
 					Return(nil, provisioner.ErrBranchNotFound{BranchID: testParent}).Once()
 			},
@@ -182,7 +182,6 @@ func TestProvision(t *testing.T) {
 			payload: &provisioner.ClusterServicePayload{BackupsEnabled: true},
 			in:      CreateInput{OrganizationID: testOrg, ProjectID: testProject, Name: testBranch},
 			setup: func(st *storemocks.ProjectsStore, prov *provisionermocks.Provisioner, _ *cellsmock.Cells) {
-				st.EXPECT().TryAcquireProjectLock(mock.Anything, testProject).Return(func() error { return nil }, nil).Once()
 				prov.EXPECT().CreateBranch(mock.Anything, testProject, testOrg, testBranch, mock.Anything).
 					Return(nil, provisioner.ErrInvalidConfiguration{Name: testBranch, Message: "bad config"}).Once()
 			},
@@ -192,7 +191,6 @@ func TestProvision(t *testing.T) {
 			payload: &provisioner.ClusterServicePayload{BackupsEnabled: true},
 			in:      CreateInput{OrganizationID: testOrg, ProjectID: testProject, Name: testBranch},
 			setup: func(st *storemocks.ProjectsStore, prov *provisionermocks.Provisioner, _ *cellsmock.Cells) {
-				st.EXPECT().TryAcquireProjectLock(mock.Anything, testProject).Return(func() error { return nil }, nil).Once()
 				prov.EXPECT().CreateBranch(mock.Anything, testProject, testOrg, testBranch, mock.Anything).
 					Return(nil, provisioner.ErrParentBranchUnhealthy{ParentID: testParent}).Once()
 			},
@@ -202,7 +200,6 @@ func TestProvision(t *testing.T) {
 			payload: &provisioner.ClusterServicePayload{BackupsEnabled: true},
 			in:      CreateInput{OrganizationID: testOrg, ProjectID: testProject, Name: testBranch},
 			setup: func(st *storemocks.ProjectsStore, prov *provisionermocks.Provisioner, cl *cellsmock.Cells) {
-				st.EXPECT().TryAcquireProjectLock(mock.Anything, testProject).Return(func() error { return nil }, nil).Once()
 				prov.EXPECT().CreateBranch(mock.Anything, testProject, testOrg, testBranch, mock.Anything).
 					Return(&store.Branch{ID: testBranch, CellID: "cell-1"}, nil).Once()
 				// The connection string is fetched best-effort; a failure here is
@@ -212,14 +209,14 @@ func TestProvision(t *testing.T) {
 			},
 			wantOK: true,
 		},
-		"ProjectLockHeld skips acquiring the lock": {
+		"ProjectLockHeld is passed to the provisioner": {
 			payload: &provisioner.ClusterServicePayload{BackupsEnabled: true},
 			in:      CreateInput{OrganizationID: testOrg, ProjectID: testProject, Name: testBranch, ProjectLockHeld: true},
 			setup: func(st *storemocks.ProjectsStore, prov *provisionermocks.Provisioner, cl *cellsmock.Cells) {
-				// No lock expectations: the caller holds the lock, so neither
-				// TryAcquireProjectLock nor AcquireProjectLock may be called.
-				prov.EXPECT().CreateBranch(mock.Anything, testProject, testOrg, testBranch, mock.Anything).
-					Return(&store.Branch{ID: testBranch, CellID: "cell-1"}, nil).Once()
+				// The caller holds the lock, so the store must be told not to take it again.
+				prov.EXPECT().CreateBranch(mock.Anything, testProject, testOrg, testBranch, mock.MatchedBy(func(p *provisioner.ClusterServicePayload) bool {
+					return p.ProjectLockHeld
+				})).Return(&store.Branch{ID: testBranch, CellID: "cell-1"}, nil).Once()
 				cl.EXPECT().GetCellConnection(mock.Anything, testOrg, "cell-1").
 					Return(nil, errors.New("no connection")).Once()
 			},

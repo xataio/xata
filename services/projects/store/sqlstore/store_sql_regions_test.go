@@ -135,7 +135,7 @@ func TestSQLStoreRegions(t *testing.T) {
 	require.NoError(t, err)
 
 	// create a branch in the public region
-	branch, err := sqlStore.CreateBranch(ctx, testOrganizationID, project.ID, testCellID, createBranchConfig("test-branch", nil, nil), func(b *store.Branch) error {
+	branch, err := sqlStore.CreateBranch(ctx, testOrganizationID, project.ID, testCellID, createBranchConfig("test-branch", nil, nil), func(b *store.Branch, _ *store.Project) error {
 		return nil
 	})
 	require.NoError(t, err)
@@ -143,7 +143,7 @@ func TestSQLStoreRegions(t *testing.T) {
 	require.Equal(t, testRegionID, branch.Region)
 	require.Equal(t, true, branch.PublicAccess)
 
-	orgRegionBranch, err := sqlStore.CreateBranch(ctx, testOrganizationID, project.ID, testOrganizationCellID, createBranchConfig("test-branch-org", nil, nil), func(b *store.Branch) error {
+	orgRegionBranch, err := sqlStore.CreateBranch(ctx, testOrganizationID, project.ID, testOrganizationCellID, createBranchConfig("test-branch-org", nil, nil), func(b *store.Branch, _ *store.Project) error {
 		return nil
 	})
 	require.NoError(t, err)

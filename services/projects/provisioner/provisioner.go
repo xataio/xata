@@ -105,6 +105,9 @@ type ClusterServicePayload struct {
 	Flags                 FlagsConfig
 	UsageTier             string
 	Limits                *store.OrgLimits
+	// ProjectLockHeld tells the store the caller already holds the project lock,
+	// so the create transaction must not take it again.
+	ProjectLockHeld bool
 }
 
 //go:generate go run github.com/vektra/mockery/v2 --output mocks --outpkg mocks --with-expecter --name Provisioner
@@ -144,6 +147,15 @@ func (p *BranchProvisioner) CreateBranch(ctx context.Context, projectID, organiz
 		}
 	}
 
+	// Connect to the cell before the create transaction: the lookup uses the
+	// store, and provisionFn must not take a second pooled connection while the
+	// transaction holds one.
+	client, err := p.cells.GetCellConnection(ctx, organizationID, payload.CellID)
+	if err != nil {
+		return nil, err
+	}
+	defer client.Close()
+
 	branch, err := p.store.CreateBranch(ctx, organizationID, projectID, payload.CellID, &store.CreateBranchConfiguration{
 		Name:                  name,
 		ParentID:              payload.ParentID,
@@ -152,7 +164,8 @@ func (p *BranchProvisioner) CreateBranch(ctx context.Context, projectID, organiz
 		BackupsEnabled:        payload.BackupsEnabled,
 		UsageTier:             payload.UsageTier,
 		Limits:                payload.Limits,
-	}, func(branch *store.Branch) error {
+		ProjectLockHeld:       payload.ProjectLockHeld,
+	}, func(branch *store.Branch, lockedProject *store.Project) error {
 		request := clustersv1.CreatePostgresClusterRequest{
 			Id:                  branch.ID,
 			IdempotencyKey:      idgen.Generate(),
@@ -180,18 +193,13 @@ func (p *BranchProvisioner) CreateBranch(ctx context.Context, projectID, organiz
 			}
 		}
 
-		client, err := p.cells.GetCellConnection(ctx, organizationID, payload.CellID)
-		if err != nil {
-			return err
-		}
-		defer client.Close()
-
-		_, err = client.CreatePostgresCluster(ctx, &request)
-		if err != nil {
+		if _, err := client.CreatePostgresCluster(ctx, &request); err != nil {
 			return err
 		}
 
-		return cells.ApplyProjectIPFiltering(ctx, client, branch.ID, project)
+		// Use the project read under the lock, not the one read above: an IP
+		// filtering update may have committed in between.
+		return cells.ApplyProjectIPFiltering(ctx, client, branch.ID, lockedProject)
 	})
 	if err != nil {
 		st, _ := status.FromError(err)

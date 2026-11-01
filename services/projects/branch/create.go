@@ -67,10 +67,9 @@ func (s *Service) BuildPayload(ctx context.Context, in CreateInput) (*provisione
 	}
 }
 
-// Provision finalizes the payload from BuildPayload, holds the project lock
-// across provisioning, provisions the branch, and returns it with its
-// connection string. Callers resolve the input and shape the response/analytics
-// around it.
+// Provision finalizes the payload from BuildPayload, provisions the branch
+// under the project lock, and returns it with its connection string. Callers
+// resolve the input and shape the response/analytics around it.
 //
 // It is transport agnostic: it does not touch the HTTP request/response (no
 // region o11y attribute, no Retry-After header). On lock contention it returns
@@ -104,23 +103,13 @@ func (s *Service) Provision(ctx context.Context, in CreateInput, payload *provis
 		}
 	}
 
-	// Hold the project lock only around provisioning: it guards against races
-	// with IP filtering updates while the branch is created, and must not be held
-	// across the read-only connection-string fetch below (a cell round-trip). The
-	// closure keeps release deferred so a panic still frees the lock. When the
-	// caller already holds the lock (in.ProjectLockHeld), skip the acquire: the
-	// lock is a session-scoped advisory lock, so a second acquire would
-	// self-deadlock.
-	created, err := func() (*store.Branch, error) {
-		if !in.ProjectLockHeld {
-			releaseLock, err := s.store.TryAcquireProjectLock(ctx, in.ProjectID)
-			if err != nil {
-				return nil, fmt.Errorf("acquire project lock: %w", err)
-			}
-			defer releaseLock()
-		}
-		return s.provisioner.CreateBranch(ctx, in.ProjectID, in.OrganizationID, in.Name, payload)
-	}()
+	// The store takes the project lock in shared mode inside the create
+	// transaction, so it guards against races with IP filtering updates only
+	// while the branch is created, and is released before the read-only
+	// connection-string fetch below (a cell round-trip). When the caller already
+	// holds the lock (in.ProjectLockHeld), the store must not take it again.
+	payload.ProjectLockHeld = in.ProjectLockHeld
+	created, err := s.provisioner.CreateBranch(ctx, in.ProjectID, in.OrganizationID, in.Name, payload)
 	if err != nil {
 		if notFound, ok := errors.AsType[provisioner.ErrBranchNotFound](err); ok {
 			return nil, "", ErrBranchNotFound{BranchID: notFound.BranchID}

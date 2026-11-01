@@ -137,6 +137,9 @@ func NewAPIHandler(feat openfeature.Client, store store.ProjectsStore, cells cel
 	return h
 }
 
+// tryAcquireProjectLock takes the project lock exclusively, for operations that
+// must not overlap with any branch creation (IP filtering updates). Branch
+// creation takes the lock in shared mode inside the store's create transaction.
 func (s *handler) tryAcquireProjectLock(c echo.Context, projectID string) (func() error, error) {
 	release, err := s.store.TryAcquireProjectLock(c.Request().Context(), projectID)
 	if err == nil {
@@ -1695,13 +1698,16 @@ func (s *handler) RestoreFromBackup(c echo.Context, organizationID spec.Organiza
 			return err
 		}
 
-		releaseLock, err := s.tryAcquireProjectLock(c, projectID)
-		if err != nil {
-			return err
-		}
-		defer releaseLock()
-
 		return s.withProject(c, organizationID, projectID, func(project *store.Project) error {
+			// Connect to the cell before the create transaction: the lookup uses
+			// the store, and provisionFn must not take a second pooled connection
+			// while the transaction holds one.
+			client, err := s.cells.GetCellConnection(ctx, organizationID, createClusterPayload.CellID)
+			if err != nil {
+				return err
+			}
+			defer client.Close()
+
 			branch, err := s.store.CreateBranch(ctx, organizationID, projectID, createClusterPayload.CellID, &store.CreateBranchConfiguration{
 				Name:                  body.Name,
 				ParentID:              createClusterPayload.ParentID,
@@ -1710,7 +1716,7 @@ func (s *handler) RestoreFromBackup(c echo.Context, organizationID spec.Organiza
 				BackupsEnabled:        createClusterPayload.BackupsEnabled,
 				UsageTier:             claims.Organizations[organizationID].UsageTier,
 				Limits:                orgLimits.StoreLimits(),
-			}, func(branch *store.Branch) error {
+			}, func(branch *store.Branch, lockedProject *store.Project) error {
 				scaleToZero := apiToClustersScaleToZero(body.ScaleToZero, createClusterPayload.ParentID, project)
 				createClusterPayload.Configuration.ScaleToZero = scaleToZero
 				request := clustersv1.CreatePostgresClusterRequest{
@@ -1726,20 +1732,19 @@ func (s *handler) RestoreFromBackup(c echo.Context, organizationID spec.Organiza
 					BackupConfiguration: apiToClustersBackupConfig(body.BackupConfiguration, createClusterPayload.BackupsEnabled, usePgBackRest),
 				}
 
-				client, err := s.cells.GetCellConnection(ctx, organizationID, createClusterPayload.CellID)
-				if err != nil {
-					return err
-				}
-				defer client.Close()
-
-				_, err = client.CreatePostgresCluster(ctx, &request)
-				if err != nil {
+				if _, err := client.CreatePostgresCluster(ctx, &request); err != nil {
 					return err
 				}
 
-				return cells.ApplyProjectIPFiltering(ctx, client, branch.ID, project)
+				// Use the project read under the lock: an IP filtering update may
+				// have committed since withProject read it.
+				return cells.ApplyProjectIPFiltering(ctx, client, branch.ID, lockedProject)
 			})
 			if err != nil {
+				if _, ok := errors.AsType[store.ErrProjectBusy](err); ok {
+					c.Response().Header().Set("Retry-After", projectLockRetryAfter)
+					return err
+				}
 				st, _ := status.FromError(err)
 				if st.Code() == codes.NotFound {
 					return ErrorBranchNotFound{BranchID: branchID}
