@@ -34,7 +34,7 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/jxskiss/base62 v1.1.0
 	github.com/kubernetes-csi/external-snapshotter/client/v6 v6.3.0
-	github.com/labstack/echo/v4 v4.15.4
+	github.com/labstack/echo/v4 v4.16.1
 	github.com/lestrrat-go/httprc/v3 v3.0.6
 	github.com/lestrrat-go/jwx/v3 v3.3.0
 	github.com/lib/pq v1.12.3
