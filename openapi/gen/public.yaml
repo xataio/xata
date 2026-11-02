@@ -5613,6 +5613,7 @@ components:
               - avg
               - max
               - min
+          minItems: 1
       required:
         - start
         - end

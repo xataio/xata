@@ -814,6 +814,9 @@ func (c *ClustersService) GetBranchMetrics(ctx context.Context, request *cluster
 		request.GetEnd().AsTime(),
 	)
 	if err != nil {
+		if errors.Is(err, observability.ErrInvalidMetricsRequest) {
+			return nil, status.Errorf(codes.InvalidArgument, "query metrics: %v", err)
+		}
 		return nil, status.Errorf(codes.Internal, "query metrics: %v", err)
 	}
 

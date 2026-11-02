@@ -1516,6 +1516,20 @@ func (s *handler) BranchMetrics(c echo.Context, organizationID spec.Organization
 		if len(metricNames) > maxMetricsPerRequest {
 			return ErrorInvalidParam{BranchName: branchID, Param: "metrics", Message: fmt.Sprintf("at most %d metrics may be requested", maxMetricsPerRequest)}
 		}
+		for _, m := range req.Metrics {
+			if !m.Valid() {
+				return ErrorInvalidParam{BranchName: branchID, Param: "metrics", Message: fmt.Sprintf("unknown metric [%s]", m)}
+			}
+		}
+
+		if len(req.Aggregations) == 0 {
+			return ErrorInvalidParam{BranchName: branchID, Param: "aggregations", Message: "`aggregations` must not be empty"}
+		}
+		for _, a := range req.Aggregations {
+			if !a.Valid() {
+				return ErrorInvalidParam{BranchName: branchID, Param: "aggregations", Message: fmt.Sprintf("unsupported aggregation [%s]", a)}
+			}
+		}
 
 		if err := validateTimeRange(branchID, req.Start, req.End); err != nil {
 			return err

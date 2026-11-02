@@ -115,13 +115,19 @@ func TestBuildPromQL_RateWindowAppliesOnlyToCounters(t *testing.T) {
 func TestMetricsQuerier_RejectsUnknownMetric(t *testing.T) {
 	q := NewMetricsQuerier(&fakeMetricsBackend{}, "xata-clusters")
 	_, err := q.Query(context.Background(), "br-1", []string{"unknown-metric"}, nil, []string{"avg"}, time.Now().Add(-time.Hour), time.Now())
-	require.Error(t, err)
+	require.ErrorIs(t, err, ErrInvalidMetricsRequest)
 }
 
 func TestMetricsQuerier_RejectsUnsupportedAggregation(t *testing.T) {
 	q := NewMetricsQuerier(&fakeMetricsBackend{}, "xata-clusters")
 	_, err := q.Query(context.Background(), "br-1", []string{"cpu"}, nil, []string{"p99"}, time.Now().Add(-time.Hour), time.Now())
-	require.Error(t, err)
+	require.ErrorIs(t, err, ErrInvalidMetricsRequest)
+}
+
+func TestMetricsQuerier_RejectsMissingAggregations(t *testing.T) {
+	q := NewMetricsQuerier(&fakeMetricsBackend{}, "xata-clusters")
+	_, err := q.Query(context.Background(), "br-1", []string{"cpu"}, nil, nil, time.Now().Add(-time.Hour), time.Now())
+	require.ErrorIs(t, err, ErrInvalidMetricsRequest)
 }
 
 func TestCalculateStep(t *testing.T) {

@@ -14,6 +14,8 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+var ErrInvalidMetricsRequest = errors.New("invalid metrics request")
+
 // MetricKind is the underlying Prometheus metric semantic.
 type MetricKind string
 
@@ -161,14 +163,14 @@ type Result struct {
 // upstream.
 func (q *MetricsQuerier) Query(ctx context.Context, branchID string, metrics, instances, aggregations []string, start, end time.Time) ([]Result, error) {
 	if len(metrics) == 0 {
-		return nil, errors.New("at least one metric is required")
+		return nil, fmt.Errorf("%w: at least one metric is required", ErrInvalidMetricsRequest)
 	}
 	if len(aggregations) == 0 {
-		return nil, errors.New("at least one aggregation is required")
+		return nil, fmt.Errorf("%w: at least one aggregation is required", ErrInvalidMetricsRequest)
 	}
 	for _, agg := range aggregations {
 		if _, ok := validAggregations[agg]; !ok {
-			return nil, fmt.Errorf("unsupported aggregation: %s", agg)
+			return nil, fmt.Errorf("%w: unsupported aggregation: %s", ErrInvalidMetricsRequest, agg)
 		}
 	}
 
@@ -176,7 +178,7 @@ func (q *MetricsQuerier) Query(ctx context.Context, branchID string, metrics, in
 	for i, m := range metrics {
 		info, ok := LookupMetric(m)
 		if !ok {
-			return nil, fmt.Errorf("unknown metric: %s", m)
+			return nil, fmt.Errorf("%w: unknown metric: %s", ErrInvalidMetricsRequest, m)
 		}
 		infos[i] = info
 	}

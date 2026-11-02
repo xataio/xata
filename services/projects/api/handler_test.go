@@ -3420,6 +3420,18 @@ func TestBranchMetrics(t *testing.T) {
 	noInstancesRequest := cpuMetricRequest
 	noInstancesRequest.Instances = nil
 
+	noAggregationsRequest := cpuMetricRequest
+	noAggregationsRequest.Aggregations = nil
+
+	emptyAggregationsRequest := cpuMetricRequest
+	emptyAggregationsRequest.Aggregations = []spec.BranchMetricsRequestAggregations{}
+
+	unknownMetricRequest := cpuMetricRequest
+	unknownMetricRequest.Metrics = []spec.BranchMetricName{"temperature"}
+
+	unsupportedAggregationRequest := cpuMetricRequest
+	unsupportedAggregationRequest.Aggregations = []spec.BranchMetricsRequestAggregations{"p99"}
+
 	overLimitMetrics := make([]spec.BranchMetricName, maxMetricsPerRequest+1)
 	for i := range overLimitMetrics {
 		overLimitMetrics[i] = "cpu"
@@ -3621,6 +3633,38 @@ func TestBranchMetrics(t *testing.T) {
 			req:            overLimitMetricsRequest,
 			setupMocks:     func() {},
 			expectedError:  ErrorInvalidParam{BranchName: branchID, Param: "metrics", Message: fmt.Sprintf("at most %d metrics may be requested", maxMetricsPerRequest)},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name:           "missing `aggregations` fails",
+			branchID:       branchID,
+			req:            noAggregationsRequest,
+			setupMocks:     func() {},
+			expectedError:  ErrorInvalidParam{BranchName: branchID, Param: "aggregations", Message: "`aggregations` must not be empty"},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name:           "empty `aggregations` array fails",
+			branchID:       branchID,
+			req:            emptyAggregationsRequest,
+			setupMocks:     func() {},
+			expectedError:  ErrorInvalidParam{BranchName: branchID, Param: "aggregations", Message: "`aggregations` must not be empty"},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name:           "unknown metric name fails",
+			branchID:       branchID,
+			req:            unknownMetricRequest,
+			setupMocks:     func() {},
+			expectedError:  ErrorInvalidParam{BranchName: branchID, Param: "metrics", Message: "unknown metric [temperature]"},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name:           "unsupported aggregation fails",
+			branchID:       branchID,
+			req:            unsupportedAggregationRequest,
+			setupMocks:     func() {},
+			expectedError:  ErrorInvalidParam{BranchName: branchID, Param: "aggregations", Message: "unsupported aggregation [p99]"},
 			expectedStatus: http.StatusBadRequest,
 		},
 		{

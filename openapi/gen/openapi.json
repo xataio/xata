@@ -8231,7 +8231,8 @@
                 "max",
                 "min"
               ]
-            }
+            },
+            "minItems": 1
           }
         },
         "required": [
