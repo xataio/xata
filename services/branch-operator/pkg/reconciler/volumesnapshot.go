@@ -89,6 +89,7 @@ func (r *BranchReconciler) ensureVolumeSnapshotExists(
 	snapshotableClusterPhases := []string{
 		apiv1.PhaseHealthy,
 		apiv1.PhaseUpgradeDelayed,
+		apiv1.PhaseFailurePlugin,
 	}
 
 	// Check that the parent cluster is in a snapshotable phase

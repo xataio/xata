@@ -25,6 +25,7 @@ func TestVolumeSnapshotReconciliation(t *testing.T) {
 		for _, phase := range []string{
 			apiv1.PhaseHealthy,
 			apiv1.PhaseUpgradeDelayed,
+			apiv1.PhaseFailurePlugin,
 		} {
 			t.Run(phase, func(t *testing.T) {
 				t.Parallel()
