@@ -31,6 +31,7 @@ var (
 const (
 	errTypeHibernated       = "hibernated"
 	errTypeBranchNotFound   = "branch_not_found"
+	errTypeNoReadReplica    = "no_read_replica"
 	errTypeQueryTimeout     = "query_timeout"
 	errTypeTimeout          = "timeout"
 	errTypeCanceled         = "canceled"
@@ -204,6 +205,8 @@ func handlePgError(c echo.Context, err error) error {
 		return c.JSON(http.StatusConflict, errorResponse("BRANCH_HIBERNATED", "branch is hibernated, reactivate it to continue"))
 	case errTypeBranchNotFound:
 		return c.JSON(http.StatusNotFound, errorResponse("BRANCH_NOT_FOUND", "branch not found"))
+	case errTypeNoReadReplica:
+		return c.JSON(http.StatusBadRequest, errorResponse("NO_READ_REPLICA", "branch has no read replica, use the primary endpoint or add a replica"))
 	case errTypePgErrorRequest, errTypePgErrorAccess, errTypePgErrorConflict,
 		errTypePgErrorAvailable, errTypePgErrorUpstream, errTypePgErrorInternal:
 		var pgErr *pgconn.PgError
@@ -245,6 +248,9 @@ func classifyError(err error) string {
 	}
 	if errors.Is(err, session.ErrBranchNotFound) {
 		return errTypeBranchNotFound
+	}
+	if errors.Is(err, session.ErrNoReadReplica) {
+		return errTypeNoReadReplica
 	}
 	if errors.Is(err, ErrQueryExecTimeout) {
 		return errTypeQueryTimeout

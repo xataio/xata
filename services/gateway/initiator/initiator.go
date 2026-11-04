@@ -50,7 +50,7 @@ func (si *TLSInitiator) InitSession(ctx context.Context, sessionID string, conn 
 	inbound := pgproto3.NewBackend(conn, conn)
 	sess, err = si.processStartupPacket(ctx, inbound, conn)
 	if err != nil {
-		if !errors.Is(err, session.ErrIPNotAllowed) && !errors.Is(err, session.ErrBranchHibernated) {
+		if !isClientFacingError(err) {
 			inbound.Send(&pgproto3.ErrorResponse{Message: "unable to authenticate"})
 			inbound.Flush()
 		}
@@ -58,6 +58,12 @@ func (si *TLSInitiator) InitSession(ctx context.Context, sessionID string, conn 
 	}
 
 	return sess, nil
+}
+
+func isClientFacingError(err error) bool {
+	return errors.Is(err, session.ErrIPNotAllowed) ||
+		errors.Is(err, session.ErrBranchHibernated) ||
+		errors.Is(err, session.ErrNoReadReplica)
 }
 
 // processStartupPacket handles the connection setup.
@@ -134,6 +140,12 @@ func (si *TLSInitiator) processStartupPacket(
 				Severity: "FATAL",
 				Code:     "57P01",
 				Message:  "branch is hibernated, reactivate it to continue",
+			})
+		case errors.Is(err, session.ErrNoReadReplica):
+			inbound.Send(&pgproto3.ErrorResponse{
+				Severity: "FATAL",
+				Code:     "57P03",
+				Message:  "branch has no read replica, use the primary endpoint or add a replica",
 			})
 		}
 		inbound.Flush()

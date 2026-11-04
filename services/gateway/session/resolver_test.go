@@ -13,58 +13,67 @@ func TestResolve(t *testing.T) {
 	resolver := session.NewCNPGBranchResolver("test-namespace", 5432, false)
 
 	tests := map[string]struct {
-		serverName string
-		fallback   string
-		wantAddr   string
-		wantBranch string
+		serverName   string
+		fallback     string
+		wantAddr     string
+		wantBranch   string
+		wantEndpoint string
 	}{
 		"simple branch": {
-			serverName: "branch1.example.com",
-			fallback:   session.EndpointRW,
-			wantAddr:   "branch-branch1-rw.test-namespace.svc.cluster.local.:5432",
-			wantBranch: "branch1",
+			serverName:   "branch1.example.com",
+			fallback:     session.EndpointRW,
+			wantAddr:     "branch-branch1-rw.test-namespace.svc.cluster.local.:5432",
+			wantEndpoint: session.EndpointRW,
+			wantBranch:   "branch1",
 		},
 		"read-only endpoint": {
-			serverName: "branch1-ro.example.com",
-			fallback:   session.EndpointRW,
-			wantAddr:   "branch-branch1-ro.test-namespace.svc.cluster.local.:5432",
-			wantBranch: "branch1",
+			serverName:   "branch1-ro.example.com",
+			fallback:     session.EndpointRW,
+			wantAddr:     "branch-branch1-ro.test-namespace.svc.cluster.local.:5432",
+			wantEndpoint: session.EndpointRO,
+			wantBranch:   "branch1",
 		},
 		"read-write endpoint explicitly requested": {
-			serverName: "branch1-rw.example.com",
-			fallback:   session.EndpointRW,
-			wantAddr:   "branch-branch1-rw.test-namespace.svc.cluster.local.:5432",
-			wantBranch: "branch1",
+			serverName:   "branch1-rw.example.com",
+			fallback:     session.EndpointRW,
+			wantAddr:     "branch-branch1-rw.test-namespace.svc.cluster.local.:5432",
+			wantEndpoint: session.EndpointRW,
+			wantBranch:   "branch1",
 		},
 		"read endpoint": {
-			serverName: "branch1-r.example.com",
-			fallback:   session.EndpointRW,
-			wantAddr:   "branch-branch1-r.test-namespace.svc.cluster.local.:5432",
-			wantBranch: "branch1",
+			serverName:   "branch1-r.example.com",
+			fallback:     session.EndpointRW,
+			wantAddr:     "branch-branch1-r.test-namespace.svc.cluster.local.:5432",
+			wantEndpoint: session.EndpointR,
+			wantBranch:   "branch1",
 		},
 		"deprecated marker": {
-			serverName: "branch1-deprecated.example.com",
-			fallback:   session.EndpointRW,
-			wantAddr:   "branch-branch1-rw.test-namespace.svc.cluster.local.:5432",
-			wantBranch: "branch1",
+			serverName:   "branch1-deprecated.example.com",
+			fallback:     session.EndpointRW,
+			wantAddr:     "branch-branch1-rw.test-namespace.svc.cluster.local.:5432",
+			wantEndpoint: session.EndpointRW,
+			wantBranch:   "branch1",
 		},
 		"deprecated marker before endpoint": {
-			serverName: "branch1-deprecated-ro.example.com",
-			fallback:   session.EndpointRW,
-			wantAddr:   "branch-branch1-ro.test-namespace.svc.cluster.local.:5432",
-			wantBranch: "branch1",
+			serverName:   "branch1-deprecated-ro.example.com",
+			fallback:     session.EndpointRW,
+			wantAddr:     "branch-branch1-ro.test-namespace.svc.cluster.local.:5432",
+			wantEndpoint: session.EndpointRO,
+			wantBranch:   "branch1",
 		},
 		"deprecated marker after endpoint": {
-			serverName: "branch1-ro-deprecated.example.com",
-			fallback:   session.EndpointRW,
-			wantAddr:   "branch-branch1-ro.test-namespace.svc.cluster.local.:5432",
-			wantBranch: "branch1",
+			serverName:   "branch1-ro-deprecated.example.com",
+			fallback:     session.EndpointRW,
+			wantAddr:     "branch-branch1-ro.test-namespace.svc.cluster.local.:5432",
+			wantEndpoint: session.EndpointRO,
+			wantBranch:   "branch1",
 		},
 		"branch named deprecated": {
-			serverName: "deprecated.example.com",
-			fallback:   session.EndpointRW,
-			wantAddr:   "branch-deprecated-rw.test-namespace.svc.cluster.local.:5432",
-			wantBranch: "deprecated",
+			serverName:   "deprecated.example.com",
+			fallback:     session.EndpointRW,
+			wantAddr:     "branch-deprecated-rw.test-namespace.svc.cluster.local.:5432",
+			wantEndpoint: session.EndpointRW,
+			wantBranch:   "deprecated",
 		},
 	}
 
@@ -74,6 +83,7 @@ func TestResolve(t *testing.T) {
 			require.NoError(t, err, "unexpected error")
 			require.Equal(t, test.wantAddr, branch.Address, "expected address")
 			require.Equal(t, test.wantBranch, branch.ID, "expected branch")
+			require.Equal(t, test.wantEndpoint, branch.Endpoint, "expected endpoint")
 		})
 	}
 }
@@ -84,58 +94,67 @@ func TestResolve_PoolerEnabled(t *testing.T) {
 	resolver := session.NewCNPGBranchResolver("test-namespace", 5432, true)
 
 	tests := map[string]struct {
-		serverName string
-		fallback   string
-		wantAddr   string
-		wantBranch string
+		serverName   string
+		fallback     string
+		wantAddr     string
+		wantBranch   string
+		wantEndpoint string
 	}{
 		"pooler endpoint": {
-			serverName: "branch1-pooler.example.com",
-			fallback:   session.EndpointRW,
-			wantAddr:   "branch-branch1-pooler.test-namespace.svc.cluster.local.:5432",
-			wantBranch: "branch1",
+			serverName:   "branch1-pooler.example.com",
+			fallback:     session.EndpointRW,
+			wantAddr:     "branch-branch1-pooler.test-namespace.svc.cluster.local.:5432",
+			wantEndpoint: session.EndpointPooler,
+			wantBranch:   "branch1",
 		},
 		"pooler with underscore branch": {
-			serverName: "my_branch-pooler.example.com",
-			fallback:   session.EndpointRW,
-			wantAddr:   "branch-my_branch-pooler.test-namespace.svc.cluster.local.:5432",
-			wantBranch: "my_branch",
+			serverName:   "my_branch-pooler.example.com",
+			fallback:     session.EndpointRW,
+			wantAddr:     "branch-my_branch-pooler.test-namespace.svc.cluster.local.:5432",
+			wantEndpoint: session.EndpointPooler,
+			wantBranch:   "my_branch",
 		},
 		"rw still works with pooler enabled": {
-			serverName: "branch1-rw.example.com",
-			fallback:   session.EndpointRW,
-			wantAddr:   "branch-branch1-rw.test-namespace.svc.cluster.local.:5432",
-			wantBranch: "branch1",
+			serverName:   "branch1-rw.example.com",
+			fallback:     session.EndpointRW,
+			wantAddr:     "branch-branch1-rw.test-namespace.svc.cluster.local.:5432",
+			wantEndpoint: session.EndpointRW,
+			wantBranch:   "branch1",
 		},
 		"rw fallback with pooler enabled": {
-			serverName: "branch1.example.com",
-			fallback:   session.EndpointRW,
-			wantAddr:   "branch-branch1-rw.test-namespace.svc.cluster.local.:5432",
-			wantBranch: "branch1",
+			serverName:   "branch1.example.com",
+			fallback:     session.EndpointRW,
+			wantAddr:     "branch-branch1-rw.test-namespace.svc.cluster.local.:5432",
+			wantEndpoint: session.EndpointRW,
+			wantBranch:   "branch1",
 		},
 		"pooler fallback with no suffix": {
-			serverName: "branch1.example.com",
-			fallback:   session.EndpointPooler,
-			wantAddr:   "branch-branch1-pooler.test-namespace.svc.cluster.local.:5432",
-			wantBranch: "branch1",
+			serverName:   "branch1.example.com",
+			fallback:     session.EndpointPooler,
+			wantAddr:     "branch-branch1-pooler.test-namespace.svc.cluster.local.:5432",
+			wantEndpoint: session.EndpointPooler,
+			wantBranch:   "branch1",
 		},
 		"explicit -rw wins over pooler fallback": {
-			serverName: "branch1-rw.example.com",
-			fallback:   session.EndpointPooler,
-			wantAddr:   "branch-branch1-rw.test-namespace.svc.cluster.local.:5432",
-			wantBranch: "branch1",
+			serverName:   "branch1-rw.example.com",
+			fallback:     session.EndpointPooler,
+			wantAddr:     "branch-branch1-rw.test-namespace.svc.cluster.local.:5432",
+			wantEndpoint: session.EndpointRW,
+			wantBranch:   "branch1",
 		},
 		"explicit -ro wins over pooler fallback": {
-			serverName: "branch1-ro.example.com",
-			fallback:   session.EndpointPooler,
-			wantAddr:   "branch-branch1-ro.test-namespace.svc.cluster.local.:5432",
-			wantBranch: "branch1",
+			serverName:   "branch1-ro.example.com",
+			fallback:     session.EndpointPooler,
+			wantAddr:     "branch-branch1-ro.test-namespace.svc.cluster.local.:5432",
+			wantEndpoint: session.EndpointRO,
+			wantBranch:   "branch1",
 		},
 		"deprecated marker after pooler endpoint": {
-			serverName: "branch1-pooler-deprecated.example.com",
-			fallback:   session.EndpointRW,
-			wantAddr:   "branch-branch1-pooler.test-namespace.svc.cluster.local.:5432",
-			wantBranch: "branch1",
+			serverName:   "branch1-pooler-deprecated.example.com",
+			fallback:     session.EndpointRW,
+			wantAddr:     "branch-branch1-pooler.test-namespace.svc.cluster.local.:5432",
+			wantEndpoint: session.EndpointPooler,
+			wantBranch:   "branch1",
 		},
 	}
 
@@ -145,6 +164,7 @@ func TestResolve_PoolerEnabled(t *testing.T) {
 			require.NoError(t, err, "unexpected error")
 			require.Equal(t, test.wantAddr, branch.Address, "expected address")
 			require.Equal(t, test.wantBranch, branch.ID, "expected branch")
+			require.Equal(t, test.wantEndpoint, branch.Endpoint, "expected endpoint")
 		})
 	}
 }

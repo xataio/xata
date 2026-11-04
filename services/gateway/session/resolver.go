@@ -32,8 +32,9 @@ type BranchResolver interface {
 }
 
 type Branch struct {
-	ID      string
-	Address string
+	ID       string
+	Address  string
+	Endpoint string
 }
 
 type CNPGBranchResolver struct {
@@ -71,8 +72,9 @@ func (r *CNPGBranchResolver) Resolve(ctx context.Context, serverName, fallbackEn
 	}
 
 	return &Branch{
-		ID:      branchName,
-		Address: fmt.Sprintf("branch-%s-%s.%s.svc.cluster.local.:%d", branchName, endpointType, r.cnpgNamespace, r.port),
+		ID:       branchName,
+		Address:  fmt.Sprintf("branch-%s-%s.%s.svc.cluster.local.:%d", branchName, endpointType, r.cnpgNamespace, r.port),
+		Endpoint: endpointType,
 	}, nil
 }
 

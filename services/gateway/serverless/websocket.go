@@ -135,11 +135,13 @@ func (h *handler) Websocket(c echo.Context) error {
 			switch {
 			case errors.As(err, &pgErr):
 			case errors.Is(err, session.ErrBranchHibernated):
-				sendPgWireError(wsConn, "branch is hibernated, reactivate it to continue")
+				sendPgWireError(wsConn, "57P01", "branch is hibernated, reactivate it to continue")
+			case errors.Is(err, session.ErrNoReadReplica):
+				sendPgWireError(wsConn, "57P03", "branch has no read replica, use the primary endpoint or add a replica")
 			case errors.Is(err, context.DeadlineExceeded):
-				sendPgWireError(wsConn, "branch is reactivating, please retry")
+				sendPgWireError(wsConn, "57P03", "branch is reactivating, please retry")
 			default:
-				sendPgWireError(wsConn, "authentication failed")
+				sendPgWireError(wsConn, "28000", "authentication failed")
 			}
 			return nil
 		}
@@ -148,8 +150,11 @@ func (h *handler) Websocket(c echo.Context) error {
 		if err != nil {
 			logger.Error().Err(err).Msg("dial postgres")
 			span.RecordError(err)
-			if errors.Is(err, session.ErrBranchHibernated) {
-				sendPgWireError(wsConn, "branch is hibernated, reactivate it to continue")
+			switch {
+			case errors.Is(err, session.ErrBranchHibernated):
+				sendPgWireError(wsConn, "57P01", "branch is hibernated, reactivate it to continue")
+			case errors.Is(err, session.ErrNoReadReplica):
+				sendPgWireError(wsConn, "57P03", "branch has no read replica, use the primary endpoint or add a replica")
 			}
 			return nil
 		}
@@ -185,10 +190,11 @@ func (h *handler) Websocket(c echo.Context) error {
 	return nil
 }
 
-func sendPgWireError(conn net.Conn, msg string) {
+// sendPgWireError writes a FATAL ErrorResponse with the given SQLSTATE code.
+func sendPgWireError(conn net.Conn, code, msg string) {
 	resp := &pgproto3.ErrorResponse{
 		Severity: "FATAL",
-		Code:     "57P01",
+		Code:     code,
 		Message:  msg,
 	}
 	var buf [256]byte

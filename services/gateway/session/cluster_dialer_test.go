@@ -33,6 +33,7 @@ func TestClusterDialer_Dial(t *testing.T) {
 
 	tests := map[string]struct {
 		dialer     *mockDialer
+		endpoint   string
 		setupMocks func(*protomocks.ClustersServiceClient)
 
 		wantDialCalls    uint // exact expected dial count; ignored if wantMinDialCalls is set
@@ -706,6 +707,65 @@ func TestClusterDialer_Dial(t *testing.T) {
 			wantMinDialCalls: 2,
 			wantErr:          syscall.ECONNREFUSED,
 		},
+		"error - read-only endpoint on single-instance branch fails fast": {
+			dialer: &mockDialer{
+				dialFn: func(ctx context.Context, _ uint, network, address string) (net.Conn, error) {
+					return nil, syscall.ECONNREFUSED
+				},
+			},
+			endpoint: EndpointRO,
+			setupMocks: func(mockClusters *protomocks.ClustersServiceClient) {
+				mockClusters.EXPECT().DescribePostgresCluster(mock.Anything, &clustersv1.DescribePostgresClusterRequest{
+					Id: "test-branch",
+				}).Return(&clustersv1.DescribePostgresClusterResponse{
+					Status: &clustersv1.ClusterStatus{
+						Status:             apiv1.PhaseHealthy,
+						StatusType:         clustersv1.ClusterStatus_STATUS_TYPE_HEALTHY,
+						InstanceCount:      1,
+						InstanceReadyCount: 1,
+					},
+					Configuration: &clustersv1.ClusterConfiguration{NumInstances: 1},
+				}, nil).Once()
+			},
+
+			wantDialCalls: 1,
+			wantErr:       ErrNoReadReplica,
+		},
+		"ok - read-only endpoint on branch scaling up to a replica waits": {
+			dialer: &mockDialer{
+				dialFn: func(ctx context.Context, i uint, network, address string) (net.Conn, error) {
+					switch i {
+					case 1:
+						return nil, syscall.ECONNREFUSED
+					case 2:
+						return &net.TCPConn{}, nil
+					default:
+						return nil, errors.New("unexpected dial call")
+					}
+				},
+			},
+			endpoint: EndpointRO,
+			setupMocks: func(mockClusters *protomocks.ClustersServiceClient) {
+				mockClusters.EXPECT().DescribePostgresCluster(mock.Anything, &clustersv1.DescribePostgresClusterRequest{
+					Id: "test-branch",
+				}).Return(&clustersv1.DescribePostgresClusterResponse{
+					Status: &clustersv1.ClusterStatus{
+						Status:             apiv1.PhaseHealthy,
+						StatusType:         clustersv1.ClusterStatus_STATUS_TYPE_TRANSIENT,
+						InstanceCount:      2,
+						InstanceReadyCount: 1,
+						Instances: map[string]*clustersv1.InstanceStatus{
+							"test-branch-1": {Primary: true, Status: apiv1.PodHealthy},
+							"test-branch-2": {Primary: false, Status: apiv1.PodReplicating},
+						},
+					},
+					Configuration: &clustersv1.ClusterConfiguration{NumInstances: 2},
+				}, nil).Twice()
+			},
+
+			wantDialCalls: 2,
+			wantErr:       nil,
+		},
 		"error - connection refused, error describing cluster, returns dial error": {
 			dialer: &mockDialer{
 				dialFn: func(ctx context.Context, i uint, network, address string) (net.Conn, error) {
@@ -900,8 +960,9 @@ func TestClusterDialer_Dial(t *testing.T) {
 			}, mockClusters, WithDialer(tc.dialer.Dial))
 
 			_, err := d.Dial(ctx, "tcp", &Branch{
-				ID:      "test-branch",
-				Address: "test-branch-address",
+				ID:       "test-branch",
+				Address:  "test-branch-address",
+				Endpoint: tc.endpoint,
 			})
 			require.ErrorIs(t, err, tc.wantErr)
 			if tc.wantMinDialCalls > 0 {

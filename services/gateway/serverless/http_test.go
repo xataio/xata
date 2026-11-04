@@ -745,6 +745,11 @@ func TestHandlePgError(t *testing.T) {
 			wantStatusCode: http.StatusNotFound,
 			wantCode:       "BRANCH_NOT_FOUND",
 		},
+		"no read replica": {
+			err:            fmt.Errorf("connect: %w", session.ErrNoReadReplica),
+			wantStatusCode: http.StatusBadRequest,
+			wantCode:       "NO_READ_REPLICA",
+		},
 	}
 
 	for name, tc := range tests {
@@ -904,6 +909,10 @@ func TestClassifyError(t *testing.T) {
 		"wrapped branch not found": {
 			err:  fmt.Errorf("connect: %w", session.ErrBranchNotFound),
 			want: "branch_not_found",
+		},
+		"no read replica": {
+			err:  fmt.Errorf("connect: %w", session.ErrNoReadReplica),
+			want: "no_read_replica",
 		},
 		"other error": {
 			err:  errors.New("something unexpected"),
