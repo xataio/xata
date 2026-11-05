@@ -10,11 +10,44 @@ import (
 	apiv1ac "github.com/xataio/xata-cnpg/pkg/client/applyconfiguration/api/v1"
 	v1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
 )
+
+// ScaleToZeroRoleRules defines the namespace-scoped RBAC rules that the
+// scale-to-zero sidecar needs to hibernate a branch
+func ScaleToZeroRoleRules(clusterName, branchName string) []rbacv1.PolicyRule {
+	return []rbacv1.PolicyRule{
+		{
+			APIGroups:     []string{apiv1.SchemeGroupVersion.Group},
+			Resources:     []string{"clusters"},
+			ResourceNames: []string{clusterName},
+			Verbs:         []string{"get", "update", "patch"},
+		},
+		{
+			APIGroups:     []string{apiv1.SchemeGroupVersion.Group},
+			Resources:     []string{"scheduledbackups"},
+			ResourceNames: []string{branchName},
+			Verbs:         []string{"get", "update", "patch"},
+		},
+	}
+}
+
+// ScaleToZeroClusterRoleRules defines the cluster-scoped rules the
+// scale-to-zero sidecar needs to hibernate a branch
+func ScaleToZeroClusterRoleRules(branchName string) []rbacv1.PolicyRule {
+	return []rbacv1.PolicyRule{
+		{
+			APIGroups:     []string{v1alpha1.GroupVersion.Group},
+			Resources:     []string{"branches"},
+			ResourceNames: []string{branchName},
+			Verbs:         []string{"get", "patch"},
+		},
+	}
+}
 
 // NetworkPolicySpec defines the NetworkPolicySpec for the given cluster name.
 // It allows ingress and egress traffic only between pods within the same

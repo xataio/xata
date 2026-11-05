@@ -11,6 +11,7 @@ import (
 	storage "google.golang.org/api/storage/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -123,6 +124,12 @@ func (s *BranchOperatorService) Init(ctx context.Context) error {
 			Namespaces: cacheNamespaces(s.config.ClustersNamespace),
 		},
 		&networkingv1.NetworkPolicy{}: {
+			Namespaces: cacheNamespaces(s.config.ClustersNamespace),
+		},
+		&rbacv1.Role{}: {
+			Namespaces: cacheNamespaces(s.config.ClustersNamespace),
+		},
+		&rbacv1.RoleBinding{}: {
 			Namespaces: cacheNamespaces(s.config.ClustersNamespace),
 		},
 		&barmanPluginApi.ObjectStore{}: {

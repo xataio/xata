@@ -14,6 +14,7 @@ import (
 	apiv1ac "github.com/xataio/xata-cnpg/pkg/client/applyconfiguration/api/v1"
 	v1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -794,6 +795,87 @@ func TestSecret(t *testing.T) {
 			got := resources.Secret(tc.name, tc.namespace, tc.username, tc.password)
 
 			require.Equal(t, tc.want, got)
+		})
+	}
+}
+
+func TestScaleToZeroRoleRules(t *testing.T) {
+	t.Parallel()
+
+	testcases := map[string]struct {
+		clusterName string
+		branchName  string
+		want        []rbacv1.PolicyRule
+	}{
+		"cluster and branch names differ": {
+			clusterName: "cluster-1",
+			branchName:  "branch-1",
+			want: []rbacv1.PolicyRule{
+				{
+					APIGroups:     []string{"postgresql.cnpg.io"},
+					Resources:     []string{"clusters"},
+					ResourceNames: []string{"cluster-1"},
+					Verbs:         []string{"get", "update", "patch"},
+				},
+				{
+					APIGroups:     []string{"postgresql.cnpg.io"},
+					Resources:     []string{"scheduledbackups"},
+					ResourceNames: []string{"branch-1"},
+					Verbs:         []string{"get", "update", "patch"},
+				},
+			},
+		},
+		"cluster and branch names match": {
+			clusterName: "branch-2",
+			branchName:  "branch-2",
+			want: []rbacv1.PolicyRule{
+				{
+					APIGroups:     []string{"postgresql.cnpg.io"},
+					Resources:     []string{"clusters"},
+					ResourceNames: []string{"branch-2"},
+					Verbs:         []string{"get", "update", "patch"},
+				},
+				{
+					APIGroups:     []string{"postgresql.cnpg.io"},
+					Resources:     []string{"scheduledbackups"},
+					ResourceNames: []string{"branch-2"},
+					Verbs:         []string{"get", "update", "patch"},
+				},
+			},
+		},
+	}
+
+	for name, tc := range testcases {
+		t.Run(name, func(t *testing.T) {
+			got := resources.ScaleToZeroRoleRules(tc.clusterName, tc.branchName)
+
+			require.Equal(t, tc.want, got)
+		})
+	}
+}
+
+func TestScaleToZeroClusterRoleRules(t *testing.T) {
+	t.Parallel()
+
+	testcases := []string{
+		"branch-1",
+		"branch-2",
+	}
+
+	for _, branchName := range testcases {
+		t.Run(branchName, func(t *testing.T) {
+			got := resources.ScaleToZeroClusterRoleRules(branchName)
+
+			want := []rbacv1.PolicyRule{
+				{
+					APIGroups:     []string{"xata.io"},
+					Resources:     []string{"branches"},
+					ResourceNames: []string{branchName},
+					Verbs:         []string{"get", "patch"},
+				},
+			}
+
+			require.Equal(t, want, got)
 		})
 	}
 }

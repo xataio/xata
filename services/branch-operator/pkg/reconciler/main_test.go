@@ -17,6 +17,7 @@ import (
 	apiv1 "github.com/xataio/xata-cnpg/api/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -51,6 +52,7 @@ func TestMain(m *testing.M) {
 				corev1.AddToScheme,
 				v1alpha1.AddToScheme,
 				networkingv1.AddToScheme,
+				rbacv1.AddToScheme,
 				apiv1.AddToScheme,
 				barmanPluginApi.AddToScheme,
 				snapshotv1.AddToScheme,

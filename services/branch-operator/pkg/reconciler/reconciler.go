@@ -11,6 +11,7 @@ import (
 	apiv1 "github.com/xataio/xata-cnpg/api/v1"
 	v1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -23,8 +24,10 @@ import (
 	"xata/services/branch-operator/pkg/reconciler/metrics"
 )
 
-// +kubebuilder:rbac:groups=xata.io,resources=branches,verbs=get;list;watch
+// +kubebuilder:rbac:groups=xata.io,resources=branches,verbs=get;list;watch;patch
 // +kubebuilder:rbac:groups=xata.io,resources=branches/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles;rolebindings,verbs=get;list;watch;create;update;patch;delete,namespace=xata-clusters
+// +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles;clusterrolebindings,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update;patch;delete,namespace=xata-clusters
 // +kubebuilder:rbac:groups=xata.io,resources=xvols,verbs=get;list;watch;create;patch
 // +kubebuilder:rbac:groups="",resources=persistentvolumeclaims,verbs=get;list;watch,namespace=xata-clusters
@@ -230,6 +233,13 @@ func (r *BranchReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return ctrl.Result{}, err
 	}
 
+	// Reconcile RBAC resources for the scale to zero sidecar for the branch
+	err = r.reconcileScaleToZeroRBAC(ctx, branch)
+	if err != nil {
+		log.Error(err, "reconciling scale to zero RBAC")
+		return ctrl.Result{}, err
+	}
+
 	// Reconcile the pgBackRest ServiceAccount and token for the branch
 	start := time.Now()
 	tokenRefreshIn, err := r.reconcilePgBackRestIdentity(ctx, branch)
@@ -265,6 +275,10 @@ func (r *BranchReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manage
 		Owns(&apiv1.ScheduledBackup{}, onGenerationChanged).
 		Owns(&snapshotv1.VolumeSnapshot{}, onGenerationChanged).
 		Owns(&apiv1.Cluster{}, onRelevantClusterChanges).
+		Owns(&rbacv1.Role{}, onGenerationChanged).
+		Owns(&rbacv1.RoleBinding{}, onGenerationChanged).
+		Owns(&rbacv1.ClusterRole{}, onGenerationChanged).
+		Owns(&rbacv1.ClusterRoleBinding{}, onGenerationChanged).
 		WithOptions(controller.Options{MaxConcurrentReconciles: r.MaxConcurrentReconciles}).
 		Complete(r)
 }
