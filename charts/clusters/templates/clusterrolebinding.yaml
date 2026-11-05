@@ -38,16 +38,3 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: access-ipfiltering
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: cnpg-clusters-scale-to-zero
-subjects:
-  - kind: Group
-    name: system:serviceaccounts:{{ .Values.config.clusters.clustersNamespace }}
-    apiGroup: rbac.authorization.k8s.io
-roleRef:
-  kind: ClusterRole
-  name: cnpg-scale-to-zero-sidecar-role
-  apiGroup: rbac.authorization.k8s.io
