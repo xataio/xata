@@ -26,7 +26,6 @@ import (
 
 // +kubebuilder:rbac:groups=xata.io,resources=branches,verbs=get;list;watch;patch
 // +kubebuilder:rbac:groups=xata.io,resources=branches/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles;rolebindings,verbs=delete,namespace=xata-clusters
 // +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles;clusterrolebindings,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update;patch;delete,namespace=xata-clusters
 // +kubebuilder:rbac:groups=xata.io,resources=xvols,verbs=get;list;watch;create;patch

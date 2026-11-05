@@ -21,11 +21,6 @@ const ScaleToZeroRBACSuffix = "-scale-to-zero"
 // sidecar runs under the ServiceAccount CNPG creates for the Cluster, which is
 // named after the Cluster.
 func (r *BranchReconciler) reconcileScaleToZeroRBAC(ctx context.Context, branch *v1alpha1.Branch) error {
-	// Remove the Role and RoleBinding an earlier version created
-	if err := r.deleteScaleToZeroRole(ctx, branch); err != nil {
-		return err
-	}
-
 	// If the branch has no cluster defined, ensure its RBAC resources don't
 	// exist
 	if !branch.HasClusterName() {
@@ -97,27 +92,10 @@ func (r *BranchReconciler) reconcileScaleToZeroClusterRoleBinding(ctx context.Co
 	return err
 }
 
-// deleteScaleToZeroRole deletes the branch's Role and RoleBinding, binding
-// first so that no binding is left referring to a missing role.
-func (r *BranchReconciler) deleteScaleToZeroRole(ctx context.Context, branch *v1alpha1.Branch) error {
-	objs := []client.Object{
-		r.scaleToZeroRoleBinding(branch),
-		r.scaleToZeroRole(branch),
-	}
-	for _, obj := range objs {
-		if err := client.IgnoreNotFound(r.Delete(ctx, obj)); err != nil {
-			return fmt.Errorf("delete %T %s: %w", obj, obj.GetName(), err)
-		}
-	}
-	return nil
-}
-
 // deleteScaleToZeroRBAC deletes the branch's scale-to-zero RBAC resources,
-// bindings first so that no binding is left referring to a missing role.
+// binding first so that no binding is left referring to a missing role.
 func (r *BranchReconciler) deleteScaleToZeroRBAC(ctx context.Context, branch *v1alpha1.Branch) error {
 	objs := []client.Object{
-		r.scaleToZeroRoleBinding(branch),
-		r.scaleToZeroRole(branch),
 		scaleToZeroClusterRoleBinding(branch),
 		scaleToZeroClusterRole(branch),
 	}
@@ -130,7 +108,7 @@ func (r *BranchReconciler) deleteScaleToZeroRBAC(ctx context.Context, branch *v1
 }
 
 // scaleToZeroSubjects returns the single subject of the branch's scale-to-zero
-// bindings: the ServiceAccount CNPG creates for the branch's current Cluster.
+// binding: the ServiceAccount CNPG creates for the branch's current Cluster.
 func (r *BranchReconciler) scaleToZeroSubjects(branch *v1alpha1.Branch) []rbacv1.Subject {
 	return []rbacv1.Subject{{
 		Kind:      rbacv1.ServiceAccountKind,
@@ -149,20 +127,6 @@ func scaleToZeroRBACName(branch *v1alpha1.Branch) string {
 // The constructors below return the RBAC objects with only their identity set,
 // for use as the target of CreateOrUpdate or Delete.
 //
-
-func (r *BranchReconciler) scaleToZeroRole(branch *v1alpha1.Branch) *rbacv1.Role {
-	return &rbacv1.Role{
-		Name:      scaleToZeroRBACName(branch),
-		Namespace: r.ClustersNamespace,
-	}
-}
-
-func (r *BranchReconciler) scaleToZeroRoleBinding(branch *v1alpha1.Branch) *rbacv1.RoleBinding {
-	return &rbacv1.RoleBinding{
-		Name:      scaleToZeroRBACName(branch),
-		Namespace: r.ClustersNamespace,
-	}
-}
 
 func scaleToZeroClusterRole(branch *v1alpha1.Branch) *rbacv1.ClusterRole {
 	return &rbacv1.ClusterRole{

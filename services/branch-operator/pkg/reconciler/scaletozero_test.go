@@ -30,10 +30,6 @@ func TestScaleToZeroRBACReconciliation(t *testing.T) {
 			requireEventuallyNoErr(t, func() error {
 				return getScaleToZeroRBAC(ctx, br, &rbacv1.ClusterRoleBinding{})
 			})
-
-			// No namespace-scoped Role or RoleBinding is created
-			require.True(t, apierrors.IsNotFound(getScaleToZeroRBAC(ctx, br, &rbacv1.Role{})))
-			require.True(t, apierrors.IsNotFound(getScaleToZeroRBAC(ctx, br, &rbacv1.RoleBinding{})))
 		})
 	})
 
@@ -153,36 +149,6 @@ func TestScaleToZeroRBACReconciliation(t *testing.T) {
 					return apierrors.IsNotFound(getScaleToZeroRBAC(ctx, br, obj))
 				})
 			}
-		})
-	})
-
-	t.Run("a pre-existing Role and RoleBinding are removed", func(t *testing.T) {
-		t.Parallel()
-		ctx := context.Background()
-
-		branch := NewBranchBuilder().Build()
-
-		withBranch(ctx, t, branch, func(t *testing.T, br *v1alpha1.Branch) {
-			name := scaleToZeroRBACName(br)
-			role := &rbacv1.Role{}
-			role.Name, role.Namespace = name, XataClustersNamespace
-			require.NoError(t, k8sClient.Create(ctx, role))
-			rb := &rbacv1.RoleBinding{RoleRef: rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "Role", Name: name}}
-			rb.Name, rb.Namespace = name, XataClustersNamespace
-			require.NoError(t, k8sClient.Create(ctx, rb))
-
-			// Trigger a reconcile
-			err := retryOnConflict(ctx, br, func(b *v1alpha1.Branch) {
-				b.Spec.ClusterSpec.Instances = 2
-			})
-			require.NoError(t, err)
-
-			requireEventuallyTrue(t, func() bool {
-				return apierrors.IsNotFound(getScaleToZeroRBAC(ctx, br, &rbacv1.Role{}))
-			})
-			requireEventuallyTrue(t, func() bool {
-				return apierrors.IsNotFound(getScaleToZeroRBAC(ctx, br, &rbacv1.RoleBinding{}))
-			})
 		})
 	})
 }
