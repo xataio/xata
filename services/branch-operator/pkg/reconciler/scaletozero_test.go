@@ -17,31 +17,27 @@ import (
 func TestScaleToZeroRBACReconciliation(t *testing.T) {
 	t.Parallel()
 
-	t.Run("RBAC resources are created on branch creation", func(t *testing.T) {
+	t.Run("cluster-scoped RBAC is created on branch creation", func(t *testing.T) {
 		t.Parallel()
 		ctx := context.Background()
 
 		branch := NewBranchBuilder().Build()
 
 		withBranch(ctx, t, branch, func(t *testing.T, br *v1alpha1.Branch) {
-			// Expect the Role, RoleBinding, ClusterRole and ClusterRoleBinding
-			// to be created
-			requireEventuallyNoErr(t, func() error {
-				return getScaleToZeroRBAC(ctx, br, &rbacv1.Role{})
-			})
-			requireEventuallyNoErr(t, func() error {
-				return getScaleToZeroRBAC(ctx, br, &rbacv1.RoleBinding{})
-			})
 			requireEventuallyNoErr(t, func() error {
 				return getScaleToZeroRBAC(ctx, br, &rbacv1.ClusterRole{})
 			})
 			requireEventuallyNoErr(t, func() error {
 				return getScaleToZeroRBAC(ctx, br, &rbacv1.ClusterRoleBinding{})
 			})
+
+			// No namespace-scoped Role or RoleBinding is created
+			require.True(t, apierrors.IsNotFound(getScaleToZeroRBAC(ctx, br, &rbacv1.Role{})))
+			require.True(t, apierrors.IsNotFound(getScaleToZeroRBAC(ctx, br, &rbacv1.RoleBinding{})))
 		})
 	})
 
-	t.Run("RBAC resources are owned by the Branch", func(t *testing.T) {
+	t.Run("cluster-scoped RBAC is owned by the Branch", func(t *testing.T) {
 		t.Parallel()
 		ctx := context.Background()
 
@@ -49,13 +45,10 @@ func TestScaleToZeroRBACReconciliation(t *testing.T) {
 
 		withBranch(ctx, t, branch, func(t *testing.T, br *v1alpha1.Branch) {
 			objs := []client.Object{
-				&rbacv1.Role{},
-				&rbacv1.RoleBinding{},
 				&rbacv1.ClusterRole{},
 				&rbacv1.ClusterRoleBinding{},
 			}
 
-			// Expect each resource to be created with the Branch as its owner
 			for _, obj := range objs {
 				requireEventuallyNoErr(t, func() error {
 					return getScaleToZeroRBAC(ctx, br, obj)
@@ -66,24 +59,17 @@ func TestScaleToZeroRBACReconciliation(t *testing.T) {
 		})
 	})
 
-	t.Run("roles grant access to the branch's resources and bind to its cluster ServiceAccount", func(t *testing.T) {
+	t.Run("the ClusterRole grants branch access and binds to the cluster ServiceAccount", func(t *testing.T) {
 		t.Parallel()
 		ctx := context.Background()
 
-		branch := NewBranchBuilder().Build()
+		// A cluster name that differs from the branch name, as after a pool claim
+		branch := NewBranchBuilder().WithClusterName(new(randomString(10))).Build()
 
 		withBranch(ctx, t, branch, func(t *testing.T, br *v1alpha1.Branch) {
-			role := rbacv1.Role{}
-			roleBinding := rbacv1.RoleBinding{}
 			clusterRole := rbacv1.ClusterRole{}
 			clusterRoleBinding := rbacv1.ClusterRoleBinding{}
 
-			requireEventuallyNoErr(t, func() error {
-				return getScaleToZeroRBAC(ctx, br, &role)
-			})
-			requireEventuallyNoErr(t, func() error {
-				return getScaleToZeroRBAC(ctx, br, &roleBinding)
-			})
 			requireEventuallyNoErr(t, func() error {
 				return getScaleToZeroRBAC(ctx, br, &clusterRole)
 			})
@@ -91,86 +77,55 @@ func TestScaleToZeroRBACReconciliation(t *testing.T) {
 				return getScaleToZeroRBAC(ctx, br, &clusterRoleBinding)
 			})
 
-			// Expect the roles to be built from the Branch's cluster name and
-			// the Branch name
-			require.Equal(t, resources.ScaleToZeroRoleRules(br.ClusterName(), br.Name), role.Rules)
 			require.Equal(t, resources.ScaleToZeroClusterRoleRules(br.Name), clusterRole.Rules)
-
-			// Expect both bindings to grant their role to the ServiceAccount of
-			// the Branch's cluster
-			subjects := []rbacv1.Subject{{
-				Kind:      rbacv1.ServiceAccountKind,
-				Name:      br.ClusterName(),
-				Namespace: XataClustersNamespace,
-			}}
-
-			require.Equal(t, rbacv1.RoleRef{
-				APIGroup: rbacv1.GroupName,
-				Kind:     "Role",
-				Name:     scaleToZeroRBACName(br),
-			}, roleBinding.RoleRef)
-			require.Equal(t, subjects, roleBinding.Subjects)
 
 			require.Equal(t, rbacv1.RoleRef{
 				APIGroup: rbacv1.GroupName,
 				Kind:     "ClusterRole",
 				Name:     scaleToZeroRBACName(br),
 			}, clusterRoleBinding.RoleRef)
-			require.Equal(t, subjects, clusterRoleBinding.Subjects)
+			require.Equal(t, []rbacv1.Subject{{
+				Kind:      rbacv1.ServiceAccountKind,
+				Name:      br.ClusterName(),
+				Namespace: XataClustersNamespace,
+			}}, clusterRoleBinding.Subjects)
 		})
 	})
 
-	t.Run("RBAC resources follow the cluster name when it changes", func(t *testing.T) {
+	t.Run("the binding follows the cluster name when it changes", func(t *testing.T) {
 		t.Parallel()
 		ctx := context.Background()
 
 		branch := NewBranchBuilder().Build()
 
 		withBranch(ctx, t, branch, func(t *testing.T, br *v1alpha1.Branch) {
-			role := rbacv1.Role{}
-			roleBinding := rbacv1.RoleBinding{}
+			clusterRole := rbacv1.ClusterRole{}
 			clusterRoleBinding := rbacv1.ClusterRoleBinding{}
 
-			// Expect the Role to be created
 			requireEventuallyNoErr(t, func() error {
-				return getScaleToZeroRBAC(ctx, br, &role)
+				return getScaleToZeroRBAC(ctx, br, &clusterRoleBinding)
 			})
 
-			// Change the cluster name on the Branch
 			newClusterName := randomString(10)
 			err := retryOnConflict(ctx, br, func(b *v1alpha1.Branch) {
 				b.Spec.ClusterSpec.Name = new(newClusterName)
 			})
 			require.NoError(t, err)
 
-			// Expect the Role to grant access to the new Cluster
 			requireEventuallyTrue(t, func() bool {
-				err := getScaleToZeroRBAC(ctx, br, &role)
-				if err != nil {
-					return false
-				}
-				return role.Rules[0].ResourceNames[0] == newClusterName
-			})
-
-			// Expect both bindings to bind to the new Cluster's ServiceAccount
-			requireEventuallyTrue(t, func() bool {
-				err := getScaleToZeroRBAC(ctx, br, &roleBinding)
-				if err != nil {
-					return false
-				}
-				return roleBinding.Subjects[0].Name == newClusterName
-			})
-			requireEventuallyTrue(t, func() bool {
-				err := getScaleToZeroRBAC(ctx, br, &clusterRoleBinding)
-				if err != nil {
+				if err := getScaleToZeroRBAC(ctx, br, &clusterRoleBinding); err != nil {
 					return false
 				}
 				return clusterRoleBinding.Subjects[0].Name == newClusterName
 			})
+
+			// The ClusterRole stays scoped to the Branch, which did not change
+			require.NoError(t, getScaleToZeroRBAC(ctx, br, &clusterRole))
+			require.Equal(t, resources.ScaleToZeroClusterRoleRules(br.Name), clusterRole.Rules)
 		})
 	})
 
-	t.Run("RBAC resources are deleted when cluster name is unset", func(t *testing.T) {
+	t.Run("cluster-scoped RBAC is deleted when cluster name is unset", func(t *testing.T) {
 		t.Parallel()
 		ctx := context.Background()
 
@@ -178,32 +133,56 @@ func TestScaleToZeroRBACReconciliation(t *testing.T) {
 
 		withBranch(ctx, t, branch, func(t *testing.T, br *v1alpha1.Branch) {
 			objs := []client.Object{
-				&rbacv1.Role{},
-				&rbacv1.RoleBinding{},
 				&rbacv1.ClusterRole{},
 				&rbacv1.ClusterRoleBinding{},
 			}
 
-			// Expect each resource to be created
 			for _, obj := range objs {
 				requireEventuallyNoErr(t, func() error {
 					return getScaleToZeroRBAC(ctx, br, obj)
 				})
 			}
 
-			// Remove the cluster name from the Branch
 			err := retryOnConflict(ctx, br, func(b *v1alpha1.Branch) {
 				b.Spec.ClusterSpec.Name = nil
 			})
 			require.NoError(t, err)
 
-			// Expect each resource to be deleted
 			for _, obj := range objs {
 				requireEventuallyTrue(t, func() bool {
-					err := getScaleToZeroRBAC(ctx, br, obj)
-					return apierrors.IsNotFound(err)
+					return apierrors.IsNotFound(getScaleToZeroRBAC(ctx, br, obj))
 				})
 			}
+		})
+	})
+
+	t.Run("a pre-existing Role and RoleBinding are removed", func(t *testing.T) {
+		t.Parallel()
+		ctx := context.Background()
+
+		branch := NewBranchBuilder().Build()
+
+		withBranch(ctx, t, branch, func(t *testing.T, br *v1alpha1.Branch) {
+			name := scaleToZeroRBACName(br)
+			role := &rbacv1.Role{}
+			role.Name, role.Namespace = name, XataClustersNamespace
+			require.NoError(t, k8sClient.Create(ctx, role))
+			rb := &rbacv1.RoleBinding{RoleRef: rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "Role", Name: name}}
+			rb.Name, rb.Namespace = name, XataClustersNamespace
+			require.NoError(t, k8sClient.Create(ctx, rb))
+
+			// Trigger a reconcile
+			err := retryOnConflict(ctx, br, func(b *v1alpha1.Branch) {
+				b.Spec.ClusterSpec.Instances = 2
+			})
+			require.NoError(t, err)
+
+			requireEventuallyTrue(t, func() bool {
+				return apierrors.IsNotFound(getScaleToZeroRBAC(ctx, br, &rbacv1.Role{}))
+			})
+			requireEventuallyTrue(t, func() bool {
+				return apierrors.IsNotFound(getScaleToZeroRBAC(ctx, br, &rbacv1.RoleBinding{}))
+			})
 		})
 	})
 }

@@ -799,61 +799,6 @@ func TestSecret(t *testing.T) {
 	}
 }
 
-func TestScaleToZeroRoleRules(t *testing.T) {
-	t.Parallel()
-
-	testcases := map[string]struct {
-		clusterName string
-		branchName  string
-		want        []rbacv1.PolicyRule
-	}{
-		"cluster and branch names differ": {
-			clusterName: "cluster-1",
-			branchName:  "branch-1",
-			want: []rbacv1.PolicyRule{
-				{
-					APIGroups:     []string{"postgresql.cnpg.io"},
-					Resources:     []string{"clusters"},
-					ResourceNames: []string{"cluster-1"},
-					Verbs:         []string{"get", "update", "patch"},
-				},
-				{
-					APIGroups:     []string{"postgresql.cnpg.io"},
-					Resources:     []string{"scheduledbackups"},
-					ResourceNames: []string{"branch-1"},
-					Verbs:         []string{"get", "update", "patch"},
-				},
-			},
-		},
-		"cluster and branch names match": {
-			clusterName: "branch-2",
-			branchName:  "branch-2",
-			want: []rbacv1.PolicyRule{
-				{
-					APIGroups:     []string{"postgresql.cnpg.io"},
-					Resources:     []string{"clusters"},
-					ResourceNames: []string{"branch-2"},
-					Verbs:         []string{"get", "update", "patch"},
-				},
-				{
-					APIGroups:     []string{"postgresql.cnpg.io"},
-					Resources:     []string{"scheduledbackups"},
-					ResourceNames: []string{"branch-2"},
-					Verbs:         []string{"get", "update", "patch"},
-				},
-			},
-		},
-	}
-
-	for name, tc := range testcases {
-		t.Run(name, func(t *testing.T) {
-			got := resources.ScaleToZeroRoleRules(tc.clusterName, tc.branchName)
-
-			require.Equal(t, tc.want, got)
-		})
-	}
-}
-
 func TestScaleToZeroClusterRoleRules(t *testing.T) {
 	t.Parallel()
 

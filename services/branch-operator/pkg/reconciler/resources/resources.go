@@ -17,25 +17,6 @@ import (
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
 )
 
-// ScaleToZeroRoleRules defines the namespace-scoped RBAC rules that the
-// scale-to-zero sidecar needs to hibernate a branch
-func ScaleToZeroRoleRules(clusterName, branchName string) []rbacv1.PolicyRule {
-	return []rbacv1.PolicyRule{
-		{
-			APIGroups:     []string{apiv1.SchemeGroupVersion.Group},
-			Resources:     []string{"clusters"},
-			ResourceNames: []string{clusterName},
-			Verbs:         []string{"get", "update", "patch"},
-		},
-		{
-			APIGroups:     []string{apiv1.SchemeGroupVersion.Group},
-			Resources:     []string{"scheduledbackups"},
-			ResourceNames: []string{branchName},
-			Verbs:         []string{"get", "update", "patch"},
-		},
-	}
-}
-
 // ScaleToZeroClusterRoleRules defines the cluster-scoped rules the
 // scale-to-zero sidecar needs to hibernate a branch
 func ScaleToZeroClusterRoleRules(branchName string) []rbacv1.PolicyRule {

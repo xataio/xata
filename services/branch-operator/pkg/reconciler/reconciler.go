@@ -26,7 +26,7 @@ import (
 
 // +kubebuilder:rbac:groups=xata.io,resources=branches,verbs=get;list;watch;patch
 // +kubebuilder:rbac:groups=xata.io,resources=branches/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles;rolebindings,verbs=get;list;watch;create;update;patch;delete,namespace=xata-clusters
+// +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles;rolebindings,verbs=delete,namespace=xata-clusters
 // +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles;clusterrolebindings,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update;patch;delete,namespace=xata-clusters
 // +kubebuilder:rbac:groups=xata.io,resources=xvols,verbs=get;list;watch;create;patch
@@ -275,8 +275,6 @@ func (r *BranchReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manage
 		Owns(&apiv1.ScheduledBackup{}, onGenerationChanged).
 		Owns(&snapshotv1.VolumeSnapshot{}, onGenerationChanged).
 		Owns(&apiv1.Cluster{}, onRelevantClusterChanges).
-		Owns(&rbacv1.Role{}, onGenerationChanged).
-		Owns(&rbacv1.RoleBinding{}, onGenerationChanged).
 		Owns(&rbacv1.ClusterRole{}, onGenerationChanged).
 		Owns(&rbacv1.ClusterRoleBinding{}, onGenerationChanged).
 		WithOptions(controller.Options{MaxConcurrentReconciles: r.MaxConcurrentReconciles}).
