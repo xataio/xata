@@ -1,7 +1,7 @@
 # PostgreSQL extensions available in each image offering
 # This file is automatically updated by a sync workflow from the postgres-images repo
 
-last_updated: "2026-07-16T16:34:18Z"
+last_updated: "2026-11-04T16:42:37Z"
 updated_by: workflow
 offerings:
   analytics:
@@ -84,7 +84,7 @@ offerings:
           docs_url: "https://github.com/citusdata/pg_cron"
           preload_required: true
         - name: hypopg
-          version: "1.4.2"
+          version: "1.4.5"
           description: "Hypothetical indexes for query planning"
           docs_url: "https://hypopg.readthedocs.io/"
           preload_required: false
@@ -111,12 +111,12 @@ offerings:
           docs_url: "https://www.postgresql.org/docs/current/pgprewarm.html"
           preload_required: true
         - name: postgis
-          version: "3.6.4"
+          version: "3.7.0"
           description: "PostGIS geometry and geography spatial types and functions"
           docs_url: "https://postgis.net/"
           preload_required: false
         - name: postgis_tiger_geocoder
-          version: "3.6.4"
+          version: "2025.2"
           description: "PostGIS tiger geocoder and reverse geocoder"
           docs_url: "https://postgis.net/docs/Extras.html#Tiger_Geocoder"
           preload_required: false
@@ -126,7 +126,7 @@ offerings:
           docs_url: "https://www.postgresql.org/docs/current/fuzzystrmatch.html"
           preload_required: false
         - name: hll
-          version: "2.19"
+          version: "2.20"
           description: "HyperLogLog data type for cardinality estimation"
           docs_url: "https://github.com/citusdata/postgresql-hll"
           preload_required: false
@@ -146,7 +146,7 @@ offerings:
           docs_url: "https://github.com/reorg/pg_repack"
           preload_required: false
         - name: pgrouting
-          version: "4.0.1"
+          version: "4.0.2"
           description: "Routing functionality for PostGIS/PostgreSQL"
           docs_url: "https://docs.pgrouting.org/"
           preload_required: false
@@ -156,7 +156,7 @@ offerings:
           docs_url: "https://pgtap.org/"
           preload_required: false
         - name: vector
-          version: "0.8.4"
+          version: "0.8.7"
           description: "Vector similarity search for PostgreSQL"
           docs_url: "https://github.com/pgvector/pgvector"
           preload_required: false
@@ -176,12 +176,12 @@ offerings:
           docs_url: "https://www.postgresql.org/docs/current/pgstattuple.html"
           preload_required: false
         - name: address_standardizer
-          version: "3.6.4"
+          version: "3.7"
           description: "Standardizes address data using rules-based parsing"
           docs_url: "https://postgis.net/docs/Extras.html#Address_Standardizer"
           preload_required: false
         - name: address_standardizer_data_us
-          version: "3.6.4"
+          version: "3.7"
           description: "US address data for address_standardizer"
           docs_url: "https://postgis.net/docs/Extras.html#Address_Standardizer_Tables"
           preload_required: false
@@ -321,17 +321,17 @@ offerings:
           docs_url: "https://www.postgresql.org/docs/current/uuid-ossp.html"
           preload_required: false
         - name: postgis_raster
-          version: "3.6.4"
+          version: "3.7.0"
           description: "PostGIS raster extension"
           docs_url: "https://postgis.net/docs/RT_reference.html"
           preload_required: false
         - name: postgis_sfcgal
-          version: "3.6.4"
+          version: "3.7.0"
           description: "PostGIS SFCGAL support"
           docs_url: "https://postgis.net/docs/SFCGAL_User_Manual.html"
           preload_required: false
         - name: xatautils
-          version: "0.3.5"
+          version: "0.3.13"
           description: "Xata utilities (built from source)"
           docs_url: "https://github.com/xataio/xata-utils"
           preload_required: true
@@ -409,7 +409,7 @@ offerings:
           preload_required: false
           type: plugin
         - name: hypopg
-          version: "1.4.2"
+          version: "1.4.5"
           description: "Hypothetical indexes for query planning"
           docs_url: "https://hypopg.readthedocs.io/"
           preload_required: false
@@ -436,12 +436,12 @@ offerings:
           docs_url: "https://www.postgresql.org/docs/current/pgprewarm.html"
           preload_required: true
         - name: postgis
-          version: "3.6.4"
+          version: "3.7.0"
           description: "PostGIS geometry and geography spatial types and functions"
           docs_url: "https://postgis.net/"
           preload_required: false
         - name: postgis_tiger_geocoder
-          version: "3.6.4"
+          version: "2025.2"
           description: "PostGIS tiger geocoder and reverse geocoder"
           docs_url: "https://postgis.net/docs/Extras.html#Tiger_Geocoder"
           preload_required: false
@@ -466,7 +466,7 @@ offerings:
           docs_url: "https://github.com/reorg/pg_repack"
           preload_required: false
         - name: pgrouting
-          version: "4.0.1"
+          version: "4.0.2"
           description: "Routing functionality for PostGIS/PostgreSQL"
           docs_url: "https://docs.pgrouting.org/"
           preload_required: false
@@ -476,7 +476,7 @@ offerings:
           docs_url: "https://pgtap.org/"
           preload_required: false
         - name: vector
-          version: "0.8.4"
+          version: "0.8.7"
           description: "Vector similarity search for PostgreSQL"
           docs_url: "https://github.com/pgvector/pgvector"
           preload_required: false
@@ -491,12 +491,12 @@ offerings:
           docs_url: "https://www.postgresql.org/docs/current/pgstattuple.html"
           preload_required: false
         - name: address_standardizer
-          version: "3.6.4"
+          version: "3.7"
           description: "Standardizes address data using rules-based parsing"
           docs_url: "https://postgis.net/docs/Extras.html#Address_Standardizer"
           preload_required: false
         - name: address_standardizer_data_us
-          version: "3.6.4"
+          version: "3.7"
           description: "US address data for address_standardizer"
           docs_url: "https://postgis.net/docs/Extras.html#Address_Standardizer_Tables"
           preload_required: false
@@ -636,12 +636,12 @@ offerings:
           docs_url: "https://www.postgresql.org/docs/current/uuid-ossp.html"
           preload_required: false
         - name: postgis_raster
-          version: "3.6.4"
+          version: "3.7.0"
           description: "PostGIS raster extension"
           docs_url: "https://postgis.net/docs/RT_reference.html"
           preload_required: false
         - name: postgis_sfcgal
-          version: "3.6.4"
+          version: "3.7.0"
           description: "PostGIS SFCGAL support"
           docs_url: "https://postgis.net/docs/SFCGAL_User_Manual.html"
           preload_required: false
@@ -656,7 +656,7 @@ offerings:
           docs_url: "https://github.com/pgaudit/pgaudit"
           preload_required: true
         - name: hll
-          version: "2.19"
+          version: "2.20"
           description: "HyperLogLog data type for cardinality estimation"
           docs_url: "https://github.com/citusdata/postgresql-hll"
           preload_required: false
@@ -666,7 +666,7 @@ offerings:
           docs_url: "https://github.com/pgpartman/pg_partman"
           preload_required: false
         - name: xatautils
-          version: "0.3.5"
+          version: "0.3.13"
           description: "Xata utilities (built from source)"
           docs_url: "https://github.com/xataio/xata-utils"
           preload_required: true
@@ -755,7 +755,7 @@ offerings:
           docs_url: "https://github.com/citusdata/pg_cron"
           preload_required: true
         - name: hypopg
-          version: "1.4.2"
+          version: "1.4.5"
           description: "Hypothetical indexes for query planning"
           docs_url: "https://hypopg.readthedocs.io/"
           preload_required: false
@@ -782,14 +782,9 @@ offerings:
           docs_url: "https://www.postgresql.org/docs/current/pgprewarm.html"
           preload_required: true
         - name: postgis
-          version: "3.6.4"
+          version: "3.7.0"
           description: "PostGIS geometry and geography spatial types and functions"
           docs_url: "https://postgis.net/"
-          preload_required: false
-        - name: postgis_tiger_geocoder
-          version: "3.6.4"
-          description: "PostGIS tiger geocoder and reverse geocoder"
-          docs_url: "https://postgis.net/docs/Extras.html#Tiger_Geocoder"
           preload_required: false
         - name: fuzzystrmatch
           version: "1.1"
@@ -797,7 +792,7 @@ offerings:
           docs_url: "https://www.postgresql.org/docs/current/fuzzystrmatch.html"
           preload_required: false
         - name: hll
-          version: "2.19"
+          version: "2.20"
           description: "HyperLogLog data type for cardinality estimation"
           docs_url: "https://github.com/citusdata/postgresql-hll"
           preload_required: false
@@ -812,7 +807,7 @@ offerings:
           docs_url: "https://github.com/reorg/pg_repack"
           preload_required: false
         - name: pgrouting
-          version: "4.0.1"
+          version: "4.0.2"
           description: "Routing functionality for PostGIS/PostgreSQL"
           docs_url: "https://docs.pgrouting.org/"
           preload_required: false
@@ -822,7 +817,7 @@ offerings:
           docs_url: "https://pgtap.org/"
           preload_required: false
         - name: vector
-          version: "0.8.4"
+          version: "0.8.7"
           description: "Vector similarity search for PostgreSQL"
           docs_url: "https://github.com/pgvector/pgvector"
           preload_required: false
@@ -837,12 +832,12 @@ offerings:
           docs_url: "https://www.postgresql.org/docs/current/pgstattuple.html"
           preload_required: false
         - name: address_standardizer
-          version: "3.6.4"
+          version: "3.7"
           description: "Standardizes address data using rules-based parsing"
           docs_url: "https://postgis.net/docs/Extras.html#Address_Standardizer"
           preload_required: false
         - name: address_standardizer_data_us
-          version: "3.6.4"
+          version: "3.7"
           description: "US address data for address_standardizer"
           docs_url: "https://postgis.net/docs/Extras.html#Address_Standardizer_Tables"
           preload_required: false
@@ -977,12 +972,12 @@ offerings:
           docs_url: "https://www.postgresql.org/docs/current/uuid-ossp.html"
           preload_required: false
         - name: postgis_raster
-          version: "3.6.4"
+          version: "3.7.0"
           description: "PostGIS raster extension"
           docs_url: "https://postgis.net/docs/RT_reference.html"
           preload_required: false
         - name: postgis_sfcgal
-          version: "3.6.4"
+          version: "3.7.0"
           description: "PostGIS SFCGAL support"
           docs_url: "https://postgis.net/docs/SFCGAL_User_Manual.html"
           preload_required: false
@@ -992,9 +987,14 @@ offerings:
           docs_url: "https://github.com/pgaudit/pgaudit"
           preload_required: true
         - name: xatautils
-          version: "0.3.5"
+          version: "0.3.13"
           description: "Xata utilities (built from source)"
           docs_url: "https://github.com/xataio/xata-utils"
+          preload_required: true
+        - name: pg_stat_monitor
+          version: "2.4"
+          description: "Percona's advanced query performance monitoring extension for PostgreSQL"
+          docs_url: "https://docs.percona.com/pg-stat-monitor/"
           preload_required: true
     "15":
       extensions:
@@ -1075,7 +1075,7 @@ offerings:
           docs_url: "https://github.com/citusdata/pg_cron"
           preload_required: true
         - name: hypopg
-          version: "1.4.2"
+          version: "1.4.5"
           description: "Hypothetical indexes for query planning"
           docs_url: "https://hypopg.readthedocs.io/"
           preload_required: false
@@ -1102,14 +1102,9 @@ offerings:
           docs_url: "https://www.postgresql.org/docs/current/pgprewarm.html"
           preload_required: true
         - name: postgis
-          version: "3.6.4"
+          version: "3.7.0"
           description: "PostGIS geometry and geography spatial types and functions"
           docs_url: "https://postgis.net/"
-          preload_required: false
-        - name: postgis_tiger_geocoder
-          version: "3.6.4"
-          description: "PostGIS tiger geocoder and reverse geocoder"
-          docs_url: "https://postgis.net/docs/Extras.html#Tiger_Geocoder"
           preload_required: false
         - name: fuzzystrmatch
           version: "1.1"
@@ -1117,7 +1112,7 @@ offerings:
           docs_url: "https://www.postgresql.org/docs/current/fuzzystrmatch.html"
           preload_required: false
         - name: hll
-          version: "2.19"
+          version: "2.20"
           description: "HyperLogLog data type for cardinality estimation"
           docs_url: "https://github.com/citusdata/postgresql-hll"
           preload_required: false
@@ -1132,7 +1127,7 @@ offerings:
           docs_url: "https://github.com/reorg/pg_repack"
           preload_required: false
         - name: pgrouting
-          version: "4.0.1"
+          version: "4.0.2"
           description: "Routing functionality for PostGIS/PostgreSQL"
           docs_url: "https://docs.pgrouting.org/"
           preload_required: false
@@ -1142,7 +1137,7 @@ offerings:
           docs_url: "https://pgtap.org/"
           preload_required: false
         - name: vector
-          version: "0.8.4"
+          version: "0.8.7"
           description: "Vector similarity search for PostgreSQL"
           docs_url: "https://github.com/pgvector/pgvector"
           preload_required: false
@@ -1157,12 +1152,12 @@ offerings:
           docs_url: "https://www.postgresql.org/docs/current/pgstattuple.html"
           preload_required: false
         - name: address_standardizer
-          version: "3.6.4"
+          version: "3.7"
           description: "Standardizes address data using rules-based parsing"
           docs_url: "https://postgis.net/docs/Extras.html#Address_Standardizer"
           preload_required: false
         - name: address_standardizer_data_us
-          version: "3.6.4"
+          version: "3.7"
           description: "US address data for address_standardizer"
           docs_url: "https://postgis.net/docs/Extras.html#Address_Standardizer_Tables"
           preload_required: false
@@ -1297,12 +1292,12 @@ offerings:
           docs_url: "https://www.postgresql.org/docs/current/uuid-ossp.html"
           preload_required: false
         - name: postgis_raster
-          version: "3.6.4"
+          version: "3.7.0"
           description: "PostGIS raster extension"
           docs_url: "https://postgis.net/docs/RT_reference.html"
           preload_required: false
         - name: postgis_sfcgal
-          version: "3.6.4"
+          version: "3.7.0"
           description: "PostGIS SFCGAL support"
           docs_url: "https://postgis.net/docs/SFCGAL_User_Manual.html"
           preload_required: false
@@ -1312,9 +1307,14 @@ offerings:
           docs_url: "https://github.com/pgaudit/pgaudit"
           preload_required: true
         - name: xatautils
-          version: "0.3.5"
+          version: "0.3.13"
           description: "Xata utilities (built from source)"
           docs_url: "https://github.com/xataio/xata-utils"
+          preload_required: true
+        - name: pg_stat_monitor
+          version: "2.4"
+          description: "Percona's advanced query performance monitoring extension for PostgreSQL"
+          docs_url: "https://docs.percona.com/pg-stat-monitor/"
           preload_required: true
     "16":
       extensions:
@@ -1395,7 +1395,7 @@ offerings:
           docs_url: "https://github.com/citusdata/pg_cron"
           preload_required: true
         - name: hypopg
-          version: "1.4.2"
+          version: "1.4.5"
           description: "Hypothetical indexes for query planning"
           docs_url: "https://hypopg.readthedocs.io/"
           preload_required: false
@@ -1422,12 +1422,12 @@ offerings:
           docs_url: "https://www.postgresql.org/docs/current/pgprewarm.html"
           preload_required: true
         - name: postgis
-          version: "3.6.4"
+          version: "3.7.0"
           description: "PostGIS geometry and geography spatial types and functions"
           docs_url: "https://postgis.net/"
           preload_required: false
         - name: postgis_tiger_geocoder
-          version: "3.6.4"
+          version: "2025.2"
           description: "PostGIS tiger geocoder and reverse geocoder"
           docs_url: "https://postgis.net/docs/Extras.html#Tiger_Geocoder"
           preload_required: false
@@ -1437,7 +1437,7 @@ offerings:
           docs_url: "https://www.postgresql.org/docs/current/fuzzystrmatch.html"
           preload_required: false
         - name: hll
-          version: "2.19"
+          version: "2.20"
           description: "HyperLogLog data type for cardinality estimation"
           docs_url: "https://github.com/citusdata/postgresql-hll"
           preload_required: false
@@ -1457,7 +1457,7 @@ offerings:
           docs_url: "https://github.com/reorg/pg_repack"
           preload_required: false
         - name: pgrouting
-          version: "4.0.1"
+          version: "4.0.2"
           description: "Routing functionality for PostGIS/PostgreSQL"
           docs_url: "https://docs.pgrouting.org/"
           preload_required: false
@@ -1467,7 +1467,7 @@ offerings:
           docs_url: "https://pgtap.org/"
           preload_required: false
         - name: vector
-          version: "0.8.4"
+          version: "0.8.7"
           description: "Vector similarity search for PostgreSQL"
           docs_url: "https://github.com/pgvector/pgvector"
           preload_required: false
@@ -1487,12 +1487,12 @@ offerings:
           docs_url: "https://www.postgresql.org/docs/current/pgstattuple.html"
           preload_required: false
         - name: address_standardizer
-          version: "3.6.4"
+          version: "3.7"
           description: "Standardizes address data using rules-based parsing"
           docs_url: "https://postgis.net/docs/Extras.html#Address_Standardizer"
           preload_required: false
         - name: address_standardizer_data_us
-          version: "3.6.4"
+          version: "3.7"
           description: "US address data for address_standardizer"
           docs_url: "https://postgis.net/docs/Extras.html#Address_Standardizer_Tables"
           preload_required: false
@@ -1632,19 +1632,24 @@ offerings:
           docs_url: "https://www.postgresql.org/docs/current/uuid-ossp.html"
           preload_required: false
         - name: postgis_raster
-          version: "3.6.4"
+          version: "3.7.0"
           description: "PostGIS raster extension"
           docs_url: "https://postgis.net/docs/RT_reference.html"
           preload_required: false
         - name: postgis_sfcgal
-          version: "3.6.4"
+          version: "3.7.0"
           description: "PostGIS SFCGAL support"
           docs_url: "https://postgis.net/docs/SFCGAL_User_Manual.html"
           preload_required: false
         - name: xatautils
-          version: "0.3.5"
+          version: "0.3.13"
           description: "Xata utilities (built from source)"
           docs_url: "https://github.com/xataio/xata-utils"
+          preload_required: true
+        - name: pg_stat_monitor
+          version: "2.4"
+          description: "Percona's advanced query performance monitoring extension for PostgreSQL"
+          docs_url: "https://docs.percona.com/pg-stat-monitor/"
           preload_required: true
     "17":
       extensions:
@@ -1725,7 +1730,7 @@ offerings:
           docs_url: "https://github.com/citusdata/pg_cron"
           preload_required: true
         - name: hypopg
-          version: "1.4.2"
+          version: "1.4.5"
           description: "Hypothetical indexes for query planning"
           docs_url: "https://hypopg.readthedocs.io/"
           preload_required: false
@@ -1752,12 +1757,12 @@ offerings:
           docs_url: "https://www.postgresql.org/docs/current/pgprewarm.html"
           preload_required: true
         - name: postgis
-          version: "3.6.4"
+          version: "3.7.0"
           description: "PostGIS geometry and geography spatial types and functions"
           docs_url: "https://postgis.net/"
           preload_required: false
         - name: postgis_tiger_geocoder
-          version: "3.6.4"
+          version: "2025.2"
           description: "PostGIS tiger geocoder and reverse geocoder"
           docs_url: "https://postgis.net/docs/Extras.html#Tiger_Geocoder"
           preload_required: false
@@ -1767,7 +1772,7 @@ offerings:
           docs_url: "https://www.postgresql.org/docs/current/fuzzystrmatch.html"
           preload_required: false
         - name: hll
-          version: "2.19"
+          version: "2.20"
           description: "HyperLogLog data type for cardinality estimation"
           docs_url: "https://github.com/citusdata/postgresql-hll"
           preload_required: false
@@ -1787,7 +1792,7 @@ offerings:
           docs_url: "https://github.com/reorg/pg_repack"
           preload_required: false
         - name: pgrouting
-          version: "4.0.1"
+          version: "4.0.2"
           description: "Routing functionality for PostGIS/PostgreSQL"
           docs_url: "https://docs.pgrouting.org/"
           preload_required: false
@@ -1797,7 +1802,7 @@ offerings:
           docs_url: "https://pgtap.org/"
           preload_required: false
         - name: vector
-          version: "0.8.4"
+          version: "0.8.7"
           description: "Vector similarity search for PostgreSQL"
           docs_url: "https://github.com/pgvector/pgvector"
           preload_required: false
@@ -1817,12 +1822,12 @@ offerings:
           docs_url: "https://www.postgresql.org/docs/current/pgstattuple.html"
           preload_required: false
         - name: address_standardizer
-          version: "3.6.4"
+          version: "3.7"
           description: "Standardizes address data using rules-based parsing"
           docs_url: "https://postgis.net/docs/Extras.html#Address_Standardizer"
           preload_required: false
         - name: address_standardizer_data_us
-          version: "3.6.4"
+          version: "3.7"
           description: "US address data for address_standardizer"
           docs_url: "https://postgis.net/docs/Extras.html#Address_Standardizer_Tables"
           preload_required: false
@@ -1962,19 +1967,24 @@ offerings:
           docs_url: "https://www.postgresql.org/docs/current/uuid-ossp.html"
           preload_required: false
         - name: postgis_raster
-          version: "3.6.4"
+          version: "3.7.0"
           description: "PostGIS raster extension"
           docs_url: "https://postgis.net/docs/RT_reference.html"
           preload_required: false
         - name: postgis_sfcgal
-          version: "3.6.4"
+          version: "3.7.0"
           description: "PostGIS SFCGAL support"
           docs_url: "https://postgis.net/docs/SFCGAL_User_Manual.html"
           preload_required: false
         - name: xatautils
-          version: "0.3.5"
+          version: "0.3.13"
           description: "Xata utilities (built from source)"
           docs_url: "https://github.com/xataio/xata-utils"
+          preload_required: true
+        - name: pg_stat_monitor
+          version: "2.4"
+          description: "Percona's advanced query performance monitoring extension for PostgreSQL"
+          docs_url: "https://docs.percona.com/pg-stat-monitor/"
           preload_required: true
     "18":
       extensions:
@@ -2045,7 +2055,7 @@ offerings:
           preload_required: false
           type: plugin
         - name: hypopg
-          version: "1.4.2"
+          version: "1.4.5"
           description: "Hypothetical indexes for query planning"
           docs_url: "https://hypopg.readthedocs.io/"
           preload_required: false
@@ -2072,12 +2082,12 @@ offerings:
           docs_url: "https://www.postgresql.org/docs/current/pgprewarm.html"
           preload_required: true
         - name: postgis
-          version: "3.6.4"
+          version: "3.7.0"
           description: "PostGIS geometry and geography spatial types and functions"
           docs_url: "https://postgis.net/"
           preload_required: false
         - name: postgis_tiger_geocoder
-          version: "3.6.4"
+          version: "2025.2"
           description: "PostGIS tiger geocoder and reverse geocoder"
           docs_url: "https://postgis.net/docs/Extras.html#Tiger_Geocoder"
           preload_required: false
@@ -2102,7 +2112,7 @@ offerings:
           docs_url: "https://github.com/reorg/pg_repack"
           preload_required: false
         - name: pgrouting
-          version: "4.0.1"
+          version: "4.0.2"
           description: "Routing functionality for PostGIS/PostgreSQL"
           docs_url: "https://docs.pgrouting.org/"
           preload_required: false
@@ -2112,7 +2122,7 @@ offerings:
           docs_url: "https://pgtap.org/"
           preload_required: false
         - name: vector
-          version: "0.8.4"
+          version: "0.8.7"
           description: "Vector similarity search for PostgreSQL"
           docs_url: "https://github.com/pgvector/pgvector"
           preload_required: false
@@ -2127,12 +2137,12 @@ offerings:
           docs_url: "https://www.postgresql.org/docs/current/pgstattuple.html"
           preload_required: false
         - name: address_standardizer
-          version: "3.6.4"
+          version: "3.7"
           description: "Standardizes address data using rules-based parsing"
           docs_url: "https://postgis.net/docs/Extras.html#Address_Standardizer"
           preload_required: false
         - name: address_standardizer_data_us
-          version: "3.6.4"
+          version: "3.7"
           description: "US address data for address_standardizer"
           docs_url: "https://postgis.net/docs/Extras.html#Address_Standardizer_Tables"
           preload_required: false
@@ -2272,12 +2282,12 @@ offerings:
           docs_url: "https://www.postgresql.org/docs/current/uuid-ossp.html"
           preload_required: false
         - name: postgis_raster
-          version: "3.6.4"
+          version: "3.7.0"
           description: "PostGIS raster extension"
           docs_url: "https://postgis.net/docs/RT_reference.html"
           preload_required: false
         - name: postgis_sfcgal
-          version: "3.6.4"
+          version: "3.7.0"
           description: "PostGIS SFCGAL support"
           docs_url: "https://postgis.net/docs/SFCGAL_User_Manual.html"
           preload_required: false
@@ -2292,7 +2302,7 @@ offerings:
           docs_url: "https://github.com/pgaudit/pgaudit"
           preload_required: true
         - name: hll
-          version: "2.19"
+          version: "2.20"
           description: "HyperLogLog data type for cardinality estimation"
           docs_url: "https://github.com/citusdata/postgresql-hll"
           preload_required: false
@@ -2302,9 +2312,14 @@ offerings:
           docs_url: "https://github.com/pgpartman/pg_partman"
           preload_required: false
         - name: xatautils
-          version: "0.3.5"
+          version: "0.3.13"
           description: "Xata utilities (built from source)"
           docs_url: "https://github.com/xataio/xata-utils"
+          preload_required: true
+        - name: pg_stat_monitor
+          version: "2.4"
+          description: "Percona's advanced query performance monitoring extension for PostgreSQL"
+          docs_url: "https://docs.percona.com/pg-stat-monitor/"
           preload_required: true
   experimental:
     "16":
@@ -2386,7 +2401,7 @@ offerings:
           docs_url: "https://github.com/citusdata/pg_cron"
           preload_required: true
         - name: hypopg
-          version: "1.4.2"
+          version: "1.4.5"
           description: "Hypothetical indexes for query planning"
           docs_url: "https://hypopg.readthedocs.io/"
           preload_required: false
@@ -2413,12 +2428,12 @@ offerings:
           docs_url: "https://www.postgresql.org/docs/current/pgprewarm.html"
           preload_required: true
         - name: postgis
-          version: "3.6.4"
+          version: "3.7.0"
           description: "PostGIS geometry and geography spatial types and functions"
           docs_url: "https://postgis.net/"
           preload_required: false
         - name: postgis_tiger_geocoder
-          version: "3.6.4"
+          version: "2025.2"
           description: "PostGIS tiger geocoder and reverse geocoder"
           docs_url: "https://postgis.net/docs/Extras.html#Tiger_Geocoder"
           preload_required: false
@@ -2428,7 +2443,7 @@ offerings:
           docs_url: "https://www.postgresql.org/docs/current/fuzzystrmatch.html"
           preload_required: false
         - name: hll
-          version: "2.19"
+          version: "2.20"
           description: "HyperLogLog data type for cardinality estimation"
           docs_url: "https://github.com/citusdata/postgresql-hll"
           preload_required: false
@@ -2448,7 +2463,7 @@ offerings:
           docs_url: "https://github.com/reorg/pg_repack"
           preload_required: false
         - name: pgrouting
-          version: "4.0.1"
+          version: "4.0.2"
           description: "Routing functionality for PostGIS/PostgreSQL"
           docs_url: "https://docs.pgrouting.org/"
           preload_required: false
@@ -2458,7 +2473,7 @@ offerings:
           docs_url: "https://pgtap.org/"
           preload_required: false
         - name: vector
-          version: "0.8.4"
+          version: "0.8.7"
           description: "Vector similarity search for PostgreSQL"
           docs_url: "https://github.com/pgvector/pgvector"
           preload_required: false
@@ -2478,12 +2493,12 @@ offerings:
           docs_url: "https://www.postgresql.org/docs/current/pgstattuple.html"
           preload_required: false
         - name: address_standardizer
-          version: "3.6.4"
+          version: "3.7"
           description: "Standardizes address data using rules-based parsing"
           docs_url: "https://postgis.net/docs/Extras.html#Address_Standardizer"
           preload_required: false
         - name: address_standardizer_data_us
-          version: "3.6.4"
+          version: "3.7"
           description: "US address data for address_standardizer"
           docs_url: "https://postgis.net/docs/Extras.html#Address_Standardizer_Tables"
           preload_required: false
@@ -2623,17 +2638,17 @@ offerings:
           docs_url: "https://www.postgresql.org/docs/current/uuid-ossp.html"
           preload_required: false
         - name: postgis_raster
-          version: "3.6.4"
+          version: "3.7.0"
           description: "PostGIS raster extension"
           docs_url: "https://postgis.net/docs/RT_reference.html"
           preload_required: false
         - name: postgis_sfcgal
-          version: "3.6.4"
+          version: "3.7.0"
           description: "PostGIS SFCGAL support"
           docs_url: "https://postgis.net/docs/SFCGAL_User_Manual.html"
           preload_required: false
         - name: xatautils
-          version: "0.3.8"
+          version: "0.3.13"
           description: "Xata utilities (built from source)"
           docs_url: "https://github.com/xataio/xata-utils"
           preload_required: true
@@ -2716,7 +2731,7 @@ offerings:
           docs_url: "https://github.com/citusdata/pg_cron"
           preload_required: true
         - name: hypopg
-          version: "1.4.2"
+          version: "1.4.5"
           description: "Hypothetical indexes for query planning"
           docs_url: "https://hypopg.readthedocs.io/"
           preload_required: false
@@ -2743,12 +2758,12 @@ offerings:
           docs_url: "https://www.postgresql.org/docs/current/pgprewarm.html"
           preload_required: true
         - name: postgis
-          version: "3.6.4"
+          version: "3.7.0"
           description: "PostGIS geometry and geography spatial types and functions"
           docs_url: "https://postgis.net/"
           preload_required: false
         - name: postgis_tiger_geocoder
-          version: "3.6.4"
+          version: "2025.2"
           description: "PostGIS tiger geocoder and reverse geocoder"
           docs_url: "https://postgis.net/docs/Extras.html#Tiger_Geocoder"
           preload_required: false
@@ -2758,7 +2773,7 @@ offerings:
           docs_url: "https://www.postgresql.org/docs/current/fuzzystrmatch.html"
           preload_required: false
         - name: hll
-          version: "2.19"
+          version: "2.20"
           description: "HyperLogLog data type for cardinality estimation"
           docs_url: "https://github.com/citusdata/postgresql-hll"
           preload_required: false
@@ -2778,7 +2793,7 @@ offerings:
           docs_url: "https://github.com/reorg/pg_repack"
           preload_required: false
         - name: pgrouting
-          version: "4.0.1"
+          version: "4.0.2"
           description: "Routing functionality for PostGIS/PostgreSQL"
           docs_url: "https://docs.pgrouting.org/"
           preload_required: false
@@ -2788,7 +2803,7 @@ offerings:
           docs_url: "https://pgtap.org/"
           preload_required: false
         - name: vector
-          version: "0.8.4"
+          version: "0.8.7"
           description: "Vector similarity search for PostgreSQL"
           docs_url: "https://github.com/pgvector/pgvector"
           preload_required: false
@@ -2808,12 +2823,12 @@ offerings:
           docs_url: "https://www.postgresql.org/docs/current/pgstattuple.html"
           preload_required: false
         - name: address_standardizer
-          version: "3.6.4"
+          version: "3.7"
           description: "Standardizes address data using rules-based parsing"
           docs_url: "https://postgis.net/docs/Extras.html#Address_Standardizer"
           preload_required: false
         - name: address_standardizer_data_us
-          version: "3.6.4"
+          version: "3.7"
           description: "US address data for address_standardizer"
           docs_url: "https://postgis.net/docs/Extras.html#Address_Standardizer_Tables"
           preload_required: false
@@ -2953,22 +2968,22 @@ offerings:
           docs_url: "https://www.postgresql.org/docs/current/uuid-ossp.html"
           preload_required: false
         - name: postgis_raster
-          version: "3.6.4"
+          version: "3.7.0"
           description: "PostGIS raster extension"
           docs_url: "https://postgis.net/docs/RT_reference.html"
           preload_required: false
         - name: postgis_sfcgal
-          version: "3.6.4"
+          version: "3.7.0"
           description: "PostGIS SFCGAL support"
           docs_url: "https://postgis.net/docs/SFCGAL_User_Manual.html"
           preload_required: false
         - name: xatautils
-          version: "0.3.8"
+          version: "0.3.13"
           description: "Xata utilities (built from source)"
           docs_url: "https://github.com/xataio/xata-utils"
           preload_required: true
         - name: pg_stat_monitor
-          version: "2.3"
+          version: "2.4"
           description: "Percona's advanced query performance monitoring extension for PostgreSQL"
           docs_url: "https://docs.percona.com/pg-stat-monitor/"
           preload_required: true
@@ -3041,7 +3056,7 @@ offerings:
           preload_required: false
           type: plugin
         - name: hypopg
-          version: "1.4.2"
+          version: "1.4.5"
           description: "Hypothetical indexes for query planning"
           docs_url: "https://hypopg.readthedocs.io/"
           preload_required: false
@@ -3068,12 +3083,12 @@ offerings:
           docs_url: "https://www.postgresql.org/docs/current/pgprewarm.html"
           preload_required: true
         - name: postgis
-          version: "3.6.4"
+          version: "3.7.0"
           description: "PostGIS geometry and geography spatial types and functions"
           docs_url: "https://postgis.net/"
           preload_required: false
         - name: postgis_tiger_geocoder
-          version: "3.6.4"
+          version: "2025.2"
           description: "PostGIS tiger geocoder and reverse geocoder"
           docs_url: "https://postgis.net/docs/Extras.html#Tiger_Geocoder"
           preload_required: false
@@ -3098,7 +3113,7 @@ offerings:
           docs_url: "https://github.com/reorg/pg_repack"
           preload_required: false
         - name: pgrouting
-          version: "4.0.1"
+          version: "4.0.2"
           description: "Routing functionality for PostGIS/PostgreSQL"
           docs_url: "https://docs.pgrouting.org/"
           preload_required: false
@@ -3108,7 +3123,7 @@ offerings:
           docs_url: "https://pgtap.org/"
           preload_required: false
         - name: vector
-          version: "0.8.4"
+          version: "0.8.7"
           description: "Vector similarity search for PostgreSQL"
           docs_url: "https://github.com/pgvector/pgvector"
           preload_required: false
@@ -3123,12 +3138,12 @@ offerings:
           docs_url: "https://www.postgresql.org/docs/current/pgstattuple.html"
           preload_required: false
         - name: address_standardizer
-          version: "3.6.4"
+          version: "3.7"
           description: "Standardizes address data using rules-based parsing"
           docs_url: "https://postgis.net/docs/Extras.html#Address_Standardizer"
           preload_required: false
         - name: address_standardizer_data_us
-          version: "3.6.4"
+          version: "3.7"
           description: "US address data for address_standardizer"
           docs_url: "https://postgis.net/docs/Extras.html#Address_Standardizer_Tables"
           preload_required: false
@@ -3268,12 +3283,12 @@ offerings:
           docs_url: "https://www.postgresql.org/docs/current/uuid-ossp.html"
           preload_required: false
         - name: postgis_raster
-          version: "3.6.4"
+          version: "3.7.0"
           description: "PostGIS raster extension"
           docs_url: "https://postgis.net/docs/RT_reference.html"
           preload_required: false
         - name: postgis_sfcgal
-          version: "3.6.4"
+          version: "3.7.0"
           description: "PostGIS SFCGAL support"
           docs_url: "https://postgis.net/docs/SFCGAL_User_Manual.html"
           preload_required: false
@@ -3288,7 +3303,7 @@ offerings:
           docs_url: "https://github.com/pgaudit/pgaudit"
           preload_required: true
         - name: hll
-          version: "2.19"
+          version: "2.20"
           description: "HyperLogLog data type for cardinality estimation"
           docs_url: "https://github.com/citusdata/postgresql-hll"
           preload_required: false
@@ -3308,7 +3323,326 @@ offerings:
           docs_url: "https://github.com/timescale/pg_textsearch"
           preload_required: true
         - name: xatautils
-          version: "0.3.8"
+          version: "0.3.13"
+          description: "Xata utilities (built from source)"
+          docs_url: "https://github.com/xataio/xata-utils"
+          preload_required: true
+    "19":
+      extensions:
+        - name: pg_trgm
+          version: "1.6"
+          description: "Trigram matching for similarity searches"
+          docs_url: "https://www.postgresql.org/docs/current/pgtrgm.html"
+          preload_required: false
+        - name: pgcrypto
+          version: "1.4"
+          description: "Cryptographic functions"
+          docs_url: "https://www.postgresql.org/docs/current/pgcrypto.html"
+          preload_required: false
+        - name: citext
+          version: "1.8"
+          description: "Case-insensitive text data type"
+          docs_url: "https://www.postgresql.org/docs/current/citext.html"
+          preload_required: false
+        - name: hstore
+          version: "1.8"
+          description: "Key-value store data type"
+          docs_url: "https://www.postgresql.org/docs/current/hstore.html"
+          preload_required: false
+        - name: ltree
+          version: "1.3"
+          description: "Tree-like structures data type"
+          docs_url: "https://www.postgresql.org/docs/current/ltree.html"
+          preload_required: false
+        - name: pg_buffercache
+          version: "1.7"
+          description: "Buffer cache inspection"
+          docs_url: "https://www.postgresql.org/docs/current/pgbuffercache.html"
+          preload_required: false
+        - name: pg_freespacemap
+          version: "1.3"
+          description: "Free space map examination"
+          docs_url: "https://www.postgresql.org/docs/current/pgfreespacemap.html"
+          preload_required: false
+        - name: pg_visibility
+          version: "1.2"
+          description: "Visibility map examination"
+          docs_url: "https://www.postgresql.org/docs/current/pgvisibility.html"
+          preload_required: false
+        - name: pgrowlocks
+          version: "1.2"
+          description: "Row locking information"
+          docs_url: "https://www.postgresql.org/docs/current/pgrowlocks.html"
+          preload_required: false
+        - name: moddatetime
+          version: "1.0"
+          description: "Automatic timestamp updates"
+          docs_url: "https://www.postgresql.org/docs/current/contrib-spi.html#id-1.11.7.47.10"
+          preload_required: false
+        - name: insert_username
+          version: "1.0"
+          description: "Automatic username insertion"
+          docs_url: "https://www.postgresql.org/docs/current/contrib-spi.html#id-1.11.7.47.9"
+          preload_required: false
+        - name: dblink
+          version: "1.2"
+          description: "Cross-database queries"
+          docs_url: "https://www.postgresql.org/docs/current/dblink.html"
+          preload_required: false
+        - name: pg_stat_statements
+          version: "1.13"
+          description: "Query execution statistics"
+          docs_url: "https://www.postgresql.org/docs/current/pgstatstatements.html"
+          preload_required: true
+        - name: auto_explain
+          version: "1.0"
+          description: "Automatic query plan logging"
+          docs_url: "https://www.postgresql.org/docs/current/auto-explain.html"
+          preload_required: true
+          type: module
+        - name: auth_delay
+          version: "1.0"
+          description: "Pause briefly before reporting authentication failure"
+          docs_url: "https://www.postgresql.org/docs/current/auth-delay.html"
+          preload_required: true
+          type: module
+        - name: pg_prewarm
+          version: "1.2"
+          description: "Database prewarming"
+          docs_url: "https://www.postgresql.org/docs/current/pgprewarm.html"
+          preload_required: true
+        - name: postgis
+          version: "3.7.0"
+          description: "PostGIS geometry and geography spatial types and functions"
+          docs_url: "https://postgis.net/"
+          preload_required: false
+        - name: postgis_tiger_geocoder
+          version: "2025.2"
+          description: "PostGIS tiger geocoder and reverse geocoder"
+          docs_url: "https://postgis.net/docs/Extras.html#Tiger_Geocoder"
+          preload_required: false
+        - name: fuzzystrmatch
+          version: "1.2"
+          description: "Determine similarities and distance between strings"
+          docs_url: "https://www.postgresql.org/docs/current/fuzzystrmatch.html"
+          preload_required: false
+        - name: ip4r
+          version: "2.4"
+          description: "IPv4 and IPv6 types and functions"
+          docs_url: "https://github.com/RhodiumToad/ip4r"
+          preload_required: false
+        - name: pg_repack
+          version: "1.5.3"
+          description: "Remove bloat from tables and indexes without exclusive lock"
+          docs_url: "https://github.com/reorg/pg_repack"
+          preload_required: false
+        - name: pgrouting
+          version: "4.0.2"
+          description: "Routing functionality for PostGIS/PostgreSQL"
+          docs_url: "https://docs.pgrouting.org/"
+          preload_required: false
+        - name: pgtap
+          version: "1.3.4"
+          description: "Unit testing framework for PostgreSQL"
+          docs_url: "https://pgtap.org/"
+          preload_required: false
+        - name: vector
+          version: "0.8.6"
+          description: "Vector similarity search for PostgreSQL"
+          docs_url: "https://github.com/pgvector/pgvector"
+          preload_required: false
+        - name: prefix
+          version: "1.2.0"
+          description: "Prefix matching operator"
+          docs_url: "https://github.com/dimitri/prefix"
+          preload_required: false
+        - name: pgstattuple
+          version: "1.5"
+          description: "Functions to show tuple-level statistics"
+          docs_url: "https://www.postgresql.org/docs/current/pgstattuple.html"
+          preload_required: false
+        - name: address_standardizer
+          version: "3.7"
+          description: "Standardizes address data using rules-based parsing"
+          docs_url: "https://postgis.net/docs/Extras.html#Address_Standardizer"
+          preload_required: false
+        - name: address_standardizer_data_us
+          version: "3.7"
+          description: "US address data for address_standardizer"
+          docs_url: "https://postgis.net/docs/Extras.html#Address_Standardizer_Tables"
+          preload_required: false
+        - name: amcheck
+          version: "1.5"
+          description: "Functions for verifying relation integrity"
+          docs_url: "https://www.postgresql.org/docs/current/amcheck.html"
+          preload_required: false
+        - name: autoinc
+          version: "1.0"
+          description: "Functions for automatic increment of fields"
+          docs_url: "https://www.postgresql.org/docs/current/contrib-spi.html#id-1.11.7.47.8"
+          preload_required: false
+        - name: bloom
+          version: "1.0"
+          description: "Bloom index access method"
+          docs_url: "https://www.postgresql.org/docs/current/bloom.html"
+          preload_required: false
+        - name: btree_gin
+          version: "1.4"
+          description: "Support for indexing common datatypes in GIN"
+          docs_url: "https://www.postgresql.org/docs/current/btree-gin.html"
+          preload_required: false
+        - name: btree_gist
+          version: "1.9"
+          description: "Support for indexing common datatypes in GiST"
+          docs_url: "https://www.postgresql.org/docs/current/btree-gist.html"
+          preload_required: false
+        - name: cube
+          version: "1.5"
+          description: "Multi-dimensional cube data type"
+          docs_url: "https://www.postgresql.org/docs/current/cube.html"
+          preload_required: false
+        - name: dict_int
+          version: "1.0"
+          description: "Text search dictionary template for integers"
+          docs_url: "https://www.postgresql.org/docs/current/dict-int.html"
+          preload_required: false
+        - name: dict_xsyn
+          version: "1.0"
+          description: "Text search dictionary template for synonyms"
+          docs_url: "https://www.postgresql.org/docs/current/dict-xsyn.html"
+          preload_required: false
+        - name: earthdistance
+          version: "1.2"
+          description: "Earth distance calculations"
+          docs_url: "https://www.postgresql.org/docs/current/earthdistance.html"
+          preload_required: false
+        - name: intagg
+          version: "1.1"
+          description: "Integer aggregator (deprecated in favor of array_agg)"
+          docs_url: "https://www.postgresql.org/docs/current/intagg.html"
+          preload_required: false
+        - name: intarray
+          version: "1.5"
+          description: "Functions for 1-D arrays of integers"
+          docs_url: "https://www.postgresql.org/docs/current/intarray.html"
+          preload_required: false
+        - name: isn
+          version: "1.3"
+          description: "International Standard Number data types"
+          docs_url: "https://www.postgresql.org/docs/current/isn.html"
+          preload_required: false
+        - name: lo
+          version: "1.2"
+          description: "Large Object maintenance functions"
+          docs_url: "https://www.postgresql.org/docs/current/lo.html"
+          preload_required: false
+        - name: pageinspect
+          version: "1.13"
+          description: "Low-level page inspection"
+          docs_url: "https://www.postgresql.org/docs/current/pageinspect.html"
+          preload_required: false
+        - name: pg_surgery
+          version: "1.0"
+          description: "Row surgery functions for modifying rows"
+          docs_url: "https://www.postgresql.org/docs/current/pgsurgery.html"
+          preload_required: false
+        - name: pg_walinspect
+          version: "1.1"
+          description: "WAL inspection functions"
+          docs_url: "https://www.postgresql.org/docs/current/pgwalinspect.html"
+          preload_required: false
+        - name: plpgsql
+          version: "1.0"
+          description: "PL/pgSQL procedural language"
+          docs_url: "https://www.postgresql.org/docs/current/plpgsql.html"
+          preload_required: false
+        - name: postgres_fdw
+          version: "1.3"
+          description: "Foreign data wrapper for PostgreSQL"
+          docs_url: "https://www.postgresql.org/docs/current/postgres-fdw.html"
+          preload_required: false
+        - name: refint
+          version: "1.0"
+          description: "Referential integrity triggers (example)"
+          docs_url: "https://www.postgresql.org/docs/current/contrib-spi.html#id-1.11.7.47.11"
+          preload_required: false
+        - name: seg
+          version: "1.4"
+          description: "Floating-point intervals"
+          docs_url: "https://www.postgresql.org/docs/current/seg.html"
+          preload_required: false
+        - name: sslinfo
+          version: "1.2"
+          description: "Information about SSL connections"
+          docs_url: "https://www.postgresql.org/docs/current/sslinfo.html"
+          preload_required: false
+        - name: tablefunc
+          version: "1.0"
+          description: "Functions that manipulate whole tables, including crosstab"
+          docs_url: "https://www.postgresql.org/docs/current/tablefunc.html"
+          preload_required: false
+        - name: tcn
+          version: "1.0"
+          description: "Triggered change notifications"
+          docs_url: "https://www.postgresql.org/docs/current/tcn.html"
+          preload_required: false
+        - name: tsm_system_rows
+          version: "1.0"
+          description: "TABLESAMPLE method which accepts number of rows"
+          docs_url: "https://www.postgresql.org/docs/current/tsm-system-rows.html"
+          preload_required: false
+        - name: tsm_system_time
+          version: "1.0"
+          description: "TABLESAMPLE method which accepts time in milliseconds"
+          docs_url: "https://www.postgresql.org/docs/current/tsm-system-time.html"
+          preload_required: false
+        - name: unaccent
+          version: "1.1"
+          description: "Text search dictionary that removes accents"
+          docs_url: "https://www.postgresql.org/docs/current/unaccent.html"
+          preload_required: false
+        - name: uuid-ossp
+          version: "1.1"
+          description: "UUID generation functions"
+          docs_url: "https://www.postgresql.org/docs/current/uuid-ossp.html"
+          preload_required: false
+        - name: postgis_raster
+          version: "3.7.0"
+          description: "PostGIS raster extension"
+          docs_url: "https://postgis.net/docs/RT_reference.html"
+          preload_required: false
+        - name: postgis_sfcgal
+          version: "3.7.0"
+          description: "PostGIS SFCGAL support"
+          docs_url: "https://postgis.net/docs/SFCGAL_User_Manual.html"
+          preload_required: false
+        - name: pg_cron
+          version: "1.6"
+          description: "Job scheduler for PostgreSQL"
+          docs_url: "https://github.com/citusdata/pg_cron"
+          preload_required: true
+        - name: pgaudit
+          version: "19.0"
+          description: "Audit logging extension for PostgreSQL"
+          docs_url: "https://github.com/pgaudit/pgaudit"
+          preload_required: true
+        - name: hypopg
+          version: "1.4.5"
+          description: "Hypothetical indexes for query planning"
+          docs_url: "https://hypopg.readthedocs.io/"
+          preload_required: false
+        - name: hll
+          version: "2.21"
+          description: "HyperLogLog data type for cardinality estimation"
+          docs_url: "https://github.com/citusdata/postgresql-hll"
+          preload_required: false
+        - name: pg_partman
+          version: "5.4.3"
+          description: "Partition management extension for PostgreSQL"
+          docs_url: "https://github.com/pgpartman/pg_partman"
+          preload_required: false
+        - name: xatautils
+          version: "0.3.13"
           description: "Xata utilities (built from source)"
           docs_url: "https://github.com/xataio/xata-utils"
           preload_required: true
