@@ -10,7 +10,7 @@ import (
 //go:generate go run github.com/vektra/mockery/v2 --output billingmock --outpkg billingmock --with-expecter --name Client
 
 const (
-	TrialCreditExpiryDays      = 15
+	TrialCreditExpiryDays      = 60
 	CreditStatusActive         = "active"
 	CreditStatusPendingPayment = "pending_payment"
 )
