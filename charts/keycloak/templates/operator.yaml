@@ -3,13 +3,13 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   annotations:
-    app.quarkus.io/quarkus-version: 3.40.1
-    app.quarkus.io/commit-id: 24ed1dadf3f246a555adb6d3d4a99e9b3003fb3b
+    app.quarkus.io/quarkus-version: 3.40.1.1
+    app.quarkus.io/commit-id: e514445f9dcdabc5bdcf67cab56c1e49655de067
     app.quarkus.io/vcs-uri: https://github.com/keycloak/keycloak.git
-    app.quarkus.io/build-timestamp: 2026-10-01 - 06:02:53 +0000
+    app.quarkus.io/build-timestamp: 2026-11-09 - 13:35:29 +0000
   labels:
     app.kubernetes.io/name: keycloak-operator
-    app.kubernetes.io/version: 26.8.1
+    app.kubernetes.io/version: 26.8.2
     app.kubernetes.io/managed-by: quarkus
   name: keycloak-operator
   namespace: {{ .Release.Namespace }}
@@ -33,7 +33,7 @@ kind: ClusterRole
 metadata:
   labels:
     app.kubernetes.io/name: keycloak-operator
-    app.kubernetes.io/version: 26.8.1
+    app.kubernetes.io/version: 26.8.2
   name: keycloakrealmimportcontroller-cluster-role
 rules:
   - apiGroups:
@@ -79,7 +79,7 @@ kind: ClusterRole
 metadata:
   labels:
     app.kubernetes.io/name: keycloak-operator
-    app.kubernetes.io/version: 26.8.1
+    app.kubernetes.io/version: 26.8.2
   name: keycloaksamlclientcontroller-cluster-role
 rules:
   - apiGroups:
@@ -102,7 +102,7 @@ kind: ClusterRole
 metadata:
   labels:
     app.kubernetes.io/name: keycloak-operator
-    app.kubernetes.io/version: 26.8.1
+    app.kubernetes.io/version: 26.8.2
   name: keycloakcontroller-cluster-role
 rules:
   - apiGroups:
@@ -215,7 +215,7 @@ kind: ClusterRole
 metadata:
   labels:
     app.kubernetes.io/name: keycloak-operator
-    app.kubernetes.io/version: 26.8.1
+    app.kubernetes.io/version: 26.8.2
   name: keycloakoidcclientcontroller-cluster-role
 rules:
   - apiGroups:
@@ -253,7 +253,7 @@ kind: RoleBinding
 metadata:
   labels:
     app.kubernetes.io/name: keycloak-operator
-    app.kubernetes.io/version: 26.8.1
+    app.kubernetes.io/version: 26.8.2
   name: keycloakrealmimportcontroller-role-binding
   namespace: {{ .Release.Namespace }}
 roleRef:
@@ -270,7 +270,7 @@ kind: RoleBinding
 metadata:
   labels:
     app.kubernetes.io/name: keycloak-operator
-    app.kubernetes.io/version: 26.8.1
+    app.kubernetes.io/version: 26.8.2
   name: keycloaksamlclientcontroller-role-binding
   namespace: {{ .Release.Namespace }}
 roleRef:
@@ -287,7 +287,7 @@ kind: RoleBinding
 metadata:
   labels:
     app.kubernetes.io/name: keycloak-operator
-    app.kubernetes.io/version: 26.8.1
+    app.kubernetes.io/version: 26.8.2
   name: keycloakcontroller-role-binding
   namespace: {{ .Release.Namespace }}
 roleRef:
@@ -304,7 +304,7 @@ kind: RoleBinding
 metadata:
   labels:
     app.kubernetes.io/name: keycloak-operator
-    app.kubernetes.io/version: 26.8.1
+    app.kubernetes.io/version: 26.8.2
   name: keycloakoidcclientcontroller-role-binding
   namespace: {{ .Release.Namespace }}
 roleRef:
@@ -321,7 +321,7 @@ kind: RoleBinding
 metadata:
   labels:
     app.kubernetes.io/name: keycloak-operator
-    app.kubernetes.io/version: 26.8.1
+    app.kubernetes.io/version: 26.8.2
   name: keycloak-operator-view
   namespace: {{ .Release.Namespace }}
 roleRef:
@@ -337,13 +337,13 @@ apiVersion: v1
 kind: Service
 metadata:
   annotations:
-    app.quarkus.io/quarkus-version: 3.40.1
-    app.quarkus.io/commit-id: 24ed1dadf3f246a555adb6d3d4a99e9b3003fb3b
+    app.quarkus.io/quarkus-version: 3.40.1.1
+    app.quarkus.io/commit-id: e514445f9dcdabc5bdcf67cab56c1e49655de067
     app.quarkus.io/vcs-uri: https://github.com/keycloak/keycloak.git
-    app.quarkus.io/build-timestamp: 2026-10-01 - 06:02:53 +0000
+    app.quarkus.io/build-timestamp: 2026-11-09 - 13:35:29 +0000
   labels:
     app.kubernetes.io/name: keycloak-operator
-    app.kubernetes.io/version: 26.8.1
+    app.kubernetes.io/version: 26.8.2
     app.kubernetes.io/managed-by: quarkus
   name: keycloak-operator
   namespace: {{ .Release.Namespace }}
@@ -361,15 +361,15 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   annotations:
-    app.quarkus.io/quarkus-version: 3.40.1
-    app.quarkus.io/commit-id: 24ed1dadf3f246a555adb6d3d4a99e9b3003fb3b
+    app.quarkus.io/quarkus-version: 3.40.1.1
+    app.quarkus.io/commit-id: e514445f9dcdabc5bdcf67cab56c1e49655de067
     app.quarkus.io/vcs-uri: https://github.com/keycloak/keycloak.git
-    app.quarkus.io/build-timestamp: 2026-10-01 - 06:02:53 +0000
+    app.quarkus.io/build-timestamp: 2026-11-09 - 13:35:29 +0000
     ignore-check.kube-linter.io/no-read-only-root-fs: "enable kube-linter"
     ignore-check.kube-linter.io/run-as-non-root: "enable kube-linter"
   labels:
     app.kubernetes.io/name: keycloak-operator
-    app.kubernetes.io/version: 26.8.1
+    app.kubernetes.io/version: 26.8.2
     app.kubernetes.io/managed-by: quarkus
   name: keycloak-operator
   namespace: {{ .Release.Namespace }}
@@ -381,13 +381,13 @@ spec:
   template:
     metadata:
       annotations:
-        app.quarkus.io/quarkus-version: 3.40.1
-        app.quarkus.io/commit-id: 24ed1dadf3f246a555adb6d3d4a99e9b3003fb3b
+        app.quarkus.io/quarkus-version: 3.40.1.1
+        app.quarkus.io/commit-id: e514445f9dcdabc5bdcf67cab56c1e49655de067
         app.quarkus.io/vcs-uri: https://github.com/keycloak/keycloak.git
-        app.quarkus.io/build-timestamp: 2026-10-01 - 06:02:53 +0000
+        app.quarkus.io/build-timestamp: 2026-11-09 - 13:35:29 +0000
       labels:
         app.kubernetes.io/managed-by: quarkus
-        app.kubernetes.io/version: 26.8.1
+        app.kubernetes.io/version: 26.8.2
         app.kubernetes.io/name: keycloak-operator
     spec:
       enableServiceLinks: false
@@ -398,9 +398,9 @@ spec:
                 fieldRef:
                   fieldPath: metadata.namespace
             - name: kc.operator.keycloak.image
-              value: quay.io/keycloak/keycloak:26.8.1
+              value: quay.io/keycloak/keycloak:26.8.2
             - name: RELATED_IMAGE_KEYCLOAK
-              value: quay.io/keycloak/keycloak:26.8.1
+              value: quay.io/keycloak/keycloak:26.8.2
             - name: QUARKUS_OPERATOR_SDK_CONTROLLERS_KEYCLOAKREALMIMPORTCONTROLLER_NAMESPACES
               value: JOSDK_WATCH_CURRENT
             - name: QUARKUS_OPERATOR_SDK_CONTROLLERS_KEYCLOAKSAMLCLIENTCONTROLLER_NAMESPACES
@@ -409,7 +409,7 @@ spec:
               value: JOSDK_WATCH_CURRENT
             - name: QUARKUS_OPERATOR_SDK_CONTROLLERS_KEYCLOAKOIDCCLIENTCONTROLLER_NAMESPACES
               value: JOSDK_WATCH_CURRENT
-          image: quay.io/keycloak/keycloak-operator:26.8.1
+          image: quay.io/keycloak/keycloak-operator:26.8.2
           imagePullPolicy: Always
           livenessProbe:
             failureThreshold: 3

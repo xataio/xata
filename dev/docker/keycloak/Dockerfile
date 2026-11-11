@@ -31,7 +31,7 @@ RUN --mount=type=secret,id=GIT_TOKEN \
     fi
 
 # Stage 3: Build Keycloak with plugins
-FROM quay.io/keycloak/keycloak:26.8.1 AS builder
+FROM quay.io/keycloak/keycloak:26.8.2 AS builder
 
 # Enable health and metrics support
 ENV KC_HEALTH_ENABLED=true
@@ -55,7 +55,7 @@ RUN touch -m --date="@${SOURCE_DATE_EPOCH}" /opt/keycloak/providers/* && \
         --tracing-enabled=true --tracing-jdbc-enabled=false --verbose
 
 # Stage 4: Runtime image
-FROM quay.io/keycloak/keycloak:26.8.1
+FROM quay.io/keycloak/keycloak:26.8.2
 COPY --from=builder /opt/keycloak/ /opt/keycloak/
 
 # change these values to point to a running postgres instance
