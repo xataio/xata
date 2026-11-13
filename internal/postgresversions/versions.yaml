@@ -13,7 +13,7 @@
 #
 # The update workflow must preserve both fields.
 
-last_updated: "2026-08-19T03:57:13Z"
+last_updated: "2026-11-13T03:25:46Z"
 updated_by: workflow
 sources:
   - source: ghcr.io/xataio/postgres-images/cnpg-postgres-plus
@@ -21,60 +21,87 @@ sources:
     major_versions:
       "14":
         # PostgreSQL 14.x versions
-        versions: ["14.20", "14.22", "14.23", "14.24"]
-        latest: "14.24"
+        versions: ["14.20", "14.22", "14.23", "14.24", "14.25"]
+        latest: "14.25"
         supported: true
         show_only_latest: true
         hidden: true
+        pinned_tags:
+          "14.25": "14.25-20261113T032316Z"
       "15":
         # PostgreSQL 15.x versions
-        versions: ["15.15", "15.17", "15.18", "15.19"]
-        latest: "15.19"
+        versions: ["15.15", "15.17", "15.18", "15.19", "15.20"]
+        latest: "15.20"
         supported: true
         show_only_latest: true
         hidden: true
+        pinned_tags:
+          "15.20": "15.20-20261113T032316Z"
       "16":
         # PostgreSQL 16.x versions
-        versions: ["16.11", "16.13", "16.14", "16.15"]
-        latest: "16.15"
+        versions: ["16.11", "16.13", "16.14", "16.15", "16.16"]
+        latest: "16.16"
         supported: true
         show_only_latest: true
+        pinned_tags:
+          "16.16": "16.16-20261113T032316Z"
       "17":
         # PostgreSQL 17.x versions - current major version
-        versions: ["17.5", "17.6", "17.7", "17.9", "17.10", "17.11"]
-        latest: "17.11"
+        versions: ["17.5", "17.6", "17.7", "17.9", "17.10", "17.11", "17.12"]
+        latest: "17.12"
         supported: true
         show_only_latest: true
+        pinned_tags:
+          "17.12": "17.12-20261113T032316Z"
       "18":
         # PostgreSQL 18.x versions
-        versions: ["18.0", "18.1", "18.3", "18.4", "18.6"]
-        latest: "18.6"
+        versions: ["18.0", "18.1", "18.3", "18.4", "18.6", "18.7"]
+        latest: "18.7"
         supported: true
         show_only_latest: true
+        pinned_tags:
+          "18.7": "18.7-20261113T032316Z"
   - source: ghcr.io/xataio/postgres-images/experimental
     package_url: https://github.com/xataio/postgres-images/pkgs/container/postgres-images%2Fexperimental
     major_versions:
       "17":
-        versions: ["17.7", "17.9", "17.10", "17.11"]
-        latest: "17.11"
+        versions: ["17.7", "17.9", "17.10", "17.11", "17.12"]
+        latest: "17.12"
         supported: true
+        pinned_tags:
+          "17.12": "17.12-20261113T032312Z"
       "18":
-        versions: ["18.1", "18.3", "18.4", "18.6"]
-        latest: "18.6"
+        versions: ["18.1", "18.3", "18.4", "18.6", "18.7"]
+        latest: "18.7"
         supported: true
+        pinned_tags:
+          "18.7": "18.7-20261113T032312Z"
       "16":
-        versions: ["16.11", "16.13", "16.14", "16.15"]
-        latest: "16.15"
+        versions: ["16.11", "16.13", "16.14", "16.15", "16.16"]
+        latest: "16.16"
         supported: true
         show_only_latest: true
+        pinned_tags:
+          "16.16": "16.16-20261113T032312Z"
+      "19":
+        versions: [19rc2-trixie]
+        latest: "19rc2-trixie"
+        supported: true
+        hidden: true
+        pinned_tags:
+          19rc2-trixie: "19rc2-trixie-20261113T032312Z"
   - source: ghcr.io/xataio/postgres-images/xata-analytics
     package_url: https://github.com/xataio/postgres-images/pkgs/container/postgres-images%2Fxata-analytics
     major_versions:
       "17":
-        versions: ["17.6", "17.7", "17.9", "17.10", "17.11"]
-        latest: "17.11"
+        versions: ["17.6", "17.7", "17.9", "17.10", "17.11", "17.12"]
+        latest: "17.12"
         supported: true
+        pinned_tags:
+          "17.12": "17.12-20261113T032311Z"
       "18":
-        versions: ["18.0", "18.1", "18.3", "18.4", "18.6"]
-        latest: "18.6"
+        versions: ["18.0", "18.1", "18.3", "18.4", "18.6", "18.7"]
+        latest: "18.7"
         supported: true
+        pinned_tags:
+          "18.7": "18.7-20261113T032311Z"

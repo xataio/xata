@@ -65,6 +65,26 @@ import (
 
 var projectsSpec *openapi3.T
 
+// testImage is the latest PG17 minor of the postgres offering, and testImageURL
+// its registry URL. Branch creation rejects the older minors of a
+// show_only_latest major, so the tests read the latest minor from
+// versions.yaml to keep passing when a new minor is synced.
+var (
+	testImage    = "postgres:" + latestPostgresMinor("17")
+	testImageURL = "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:" + latestPostgresMinor("17")
+)
+
+func latestPostgresMinor(major string) string {
+	for _, source := range postgresversions.GetSources() {
+		if strings.HasSuffix(source.Source, "/cnpg-postgres-plus") {
+			if latest := source.MajorVersions[major].Latest; latest != "" {
+				return latest
+			}
+		}
+	}
+	panic("no latest postgres minor for major " + major + " in versions.yaml")
+}
+
 func TestMain(m *testing.M) {
 	var err error
 	projectsSpec, err = validation.LoadProjectsSpec()
@@ -952,7 +972,7 @@ func TestCreateBranch(t *testing.T) {
 
 	configuration := spec.ClusterConfiguration{
 		Replicas:     int32(0),
-		Image:        "postgres:17.11",
+		Image:        testImage,
 		Storage:      new(defaultStorage),
 		InstanceType: "xata.micro",
 		Region:       "region-id-1",
@@ -984,8 +1004,8 @@ func TestCreateBranch(t *testing.T) {
 			configuration:    configuration,
 			setupMocks: func(capturedPayload **provisioner.ClusterServicePayload) {
 				mockStore.EXPECT().GetOrgLimits(mock.Anything, apitest.TestOrganization, "project_id").Return(map[store.LimitKey]any{}, nil).Once()
-				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{"postgres:17.11"}).Once()
-				mockImageProvider.EXPECT().BuildImageURL("postgres:17.11").Return("ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.11").Once()
+				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{testImage}).Once()
+				mockImageProvider.EXPECT().BuildImageURL(testImage).Return(testImageURL).Once()
 				mockStore.EXPECT().ListCells(mock.Anything, apitest.TestOrganization, "region-id-1").Return([]store.Cell{{ID: "cell_id", RegionID: "region-id-1"}}, nil).Once()
 				mockStore.EXPECT().ListInstanceTypes(mock.Anything, apitest.TestOrganization, "region-id-1").Return([]store.InstanceType{{Name: "xata.micro", VCPUsRequest: 250, VCPUsLimit: 2000, RAM: 1}}, nil).Once()
 				mockPostgresConfig.EXPECT().GetDefaultPostgresParameters("xata.micro", mock.AnythingOfType("int"), mock.AnythingOfType("string"), mock.Anything).Return(map[string]string{
@@ -1003,7 +1023,7 @@ func TestCreateBranch(t *testing.T) {
 					}).Return(&branch, nil).Once()
 				mockAnalytics.EXPECT().Track(mock.Anything, events.NewBranchFromConfigurationEvent(
 					apitest.TestOrganization, "project_id", branch.ID, configuration.Region,
-					"postgres:17.11", configuration.InstanceType, int(configuration.Replicas), nil)).Return().Once()
+					testImage, configuration.InstanceType, int(configuration.Replicas), nil)).Return().Once()
 			},
 			wantError: false,
 		},
@@ -1016,8 +1036,8 @@ func TestCreateBranch(t *testing.T) {
 			configuration:    configuration,
 			setupMocks: func(capturedPayload **provisioner.ClusterServicePayload) {
 				mockStore.EXPECT().GetOrgLimits(mock.Anything, apitest.TestOrganization, "project_id").Return(map[store.LimitKey]any{}, nil).Once()
-				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{"postgres:17.11"}).Once()
-				mockImageProvider.EXPECT().BuildImageURL("postgres:17.11").Return("ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.11").Once()
+				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{testImage}).Once()
+				mockImageProvider.EXPECT().BuildImageURL(testImage).Return(testImageURL).Once()
 				mockStore.EXPECT().ListCells(mock.Anything, apitest.TestOrganization, "region-id-1").Return([]store.Cell{{ID: "cell_id", RegionID: "region-id-1"}}, nil).Once()
 				mockStore.EXPECT().ListInstanceTypes(mock.Anything, apitest.TestOrganization, "region-id-1").Return([]store.InstanceType{{Name: "xata.micro", VCPUsRequest: 250, VCPUsLimit: 2000, RAM: 1, StorageQoSClass: storageqos.ClassMicro}}, nil).Once()
 				mockPostgresConfig.EXPECT().GetDefaultPostgresParameters("xata.micro", mock.AnythingOfType("int"), mock.AnythingOfType("string"), mock.Anything).Return(map[string]string{
@@ -1035,12 +1055,12 @@ func TestCreateBranch(t *testing.T) {
 					}).Return(&branch, nil).Once()
 				mockAnalytics.EXPECT().Track(mock.Anything, events.NewBranchFromConfigurationEvent(
 					apitest.TestOrganization, "project_id", branch.ID, configuration.Region,
-					"postgres:17.11", configuration.InstanceType, int(configuration.Replicas), nil)).Return().Once()
+					testImage, configuration.InstanceType, int(configuration.Replicas), nil)).Return().Once()
 			},
 			validateCaptured: func(t *testing.T, payload *provisioner.ClusterServicePayload) {
 				require.NotNil(t, payload, "provisioner.CreateBranch should have been called")
 				require.Equal(t, configuration.Replicas+1, payload.Configuration.NumInstances)
-				require.Equal(t, "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.11", payload.Configuration.ImageName)
+				require.Equal(t, testImageURL, payload.Configuration.ImageName)
 				require.Equal(t, "250m", payload.Configuration.VcpuRequest)
 				require.Equal(t, "2", payload.Configuration.VcpuLimit)
 				require.Equal(t, "1Gi", payload.Configuration.Memory)
@@ -1069,8 +1089,8 @@ func TestCreateBranch(t *testing.T) {
 			configuration:    configuration,
 			setupMocks: func(capturedPayload **provisioner.ClusterServicePayload) {
 				mockStore.EXPECT().GetOrgLimits(mock.Anything, apitest.TestOrganization, "project_id").Return(map[store.LimitKey]any{}, nil).Once()
-				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{"postgres:17.11"}).Once()
-				mockImageProvider.EXPECT().BuildImageURL("postgres:17.11").Return("ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.11").Once()
+				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{testImage}).Once()
+				mockImageProvider.EXPECT().BuildImageURL(testImage).Return(testImageURL).Once()
 				mockStore.EXPECT().ListCells(mock.Anything, apitest.TestOrganization, "region-id-1").Return([]store.Cell{{ID: "cell_id", RegionID: "region-id-1"}}, nil).Once()
 				mockStore.EXPECT().ListInstanceTypes(mock.Anything, apitest.TestOrganization, "region-id-1").Return([]store.InstanceType{{Name: "xata.micro", VCPUsRequest: 250, VCPUsLimit: 2000, RAM: 1}}, nil).Once()
 				mockPostgresConfig.EXPECT().GetDefaultPostgresParameters("xata.micro", mock.AnythingOfType("int"), mock.AnythingOfType("string"), mock.Anything).Return(map[string]string{
@@ -1088,12 +1108,12 @@ func TestCreateBranch(t *testing.T) {
 					}).Return(&branch, nil).Once()
 				mockAnalytics.EXPECT().Track(mock.Anything, events.NewBranchFromConfigurationEvent(
 					apitest.TestOrganization, "project_id", branch.ID, configuration.Region,
-					"postgres:17.11", configuration.InstanceType, int(configuration.Replicas), nil)).Return().Once()
+					testImage, configuration.InstanceType, int(configuration.Replicas), nil)).Return().Once()
 			},
 			validateCaptured: func(t *testing.T, payload *provisioner.ClusterServicePayload) {
 				require.NotNil(t, payload, "provisioner.CreateBranch should have been called")
 				require.Equal(t, configuration.Replicas+1, payload.Configuration.NumInstances)
-				require.Equal(t, "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.11", payload.Configuration.ImageName)
+				require.Equal(t, testImageURL, payload.Configuration.ImageName)
 				require.Equal(t, "250m", payload.Configuration.VcpuRequest)
 				require.Equal(t, "2", payload.Configuration.VcpuLimit)
 				require.Equal(t, "1Gi", payload.Configuration.Memory)
@@ -1122,8 +1142,8 @@ func TestCreateBranch(t *testing.T) {
 			configuration:    configuration,
 			setupMocks: func(capturedPayload **provisioner.ClusterServicePayload) {
 				mockStore.EXPECT().GetOrgLimits(mock.Anything, apitest.TestOrganization, "project_id").Return(map[store.LimitKey]any{}, nil).Once()
-				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{"postgres:17.11"}).Once()
-				mockImageProvider.EXPECT().BuildImageURL("postgres:17.11").Return("ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.11").Once()
+				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{testImage}).Once()
+				mockImageProvider.EXPECT().BuildImageURL(testImage).Return(testImageURL).Once()
 				mockStore.EXPECT().ListCells(mock.Anything, apitest.TestOrganization, "region-id-1").Return([]store.Cell{{ID: "cell_id", RegionID: "region-id-1"}}, nil).Once()
 				mockStore.EXPECT().ListInstanceTypes(mock.Anything, apitest.TestOrganization, "region-id-1").Return([]store.InstanceType{{Name: "xata.micro", VCPUsRequest: 250, VCPUsLimit: 2000, RAM: 1}}, nil).Once()
 				mockPostgresConfig.EXPECT().GetDefaultPostgresParameters("xata.micro", mock.AnythingOfType("int"), mock.AnythingOfType("string"), mock.Anything).Return(map[string]string{
@@ -1141,12 +1161,12 @@ func TestCreateBranch(t *testing.T) {
 					}).Return(&branch, nil).Once()
 				mockAnalytics.EXPECT().Track(mock.Anything, events.NewBranchFromConfigurationEvent(
 					apitest.TestOrganization, "project_id", branch.ID, configuration.Region,
-					"postgres:17.11", configuration.InstanceType, int(configuration.Replicas), nil)).Return().Once()
+					testImage, configuration.InstanceType, int(configuration.Replicas), nil)).Return().Once()
 			},
 			validateCaptured: func(t *testing.T, payload *provisioner.ClusterServicePayload) {
 				require.NotNil(t, payload, "provisioner.CreateBranch should have been called")
 				require.Equal(t, configuration.Replicas+1, payload.Configuration.NumInstances)
-				require.Equal(t, "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.11", payload.Configuration.ImageName)
+				require.Equal(t, testImageURL, payload.Configuration.ImageName)
 				require.Equal(t, "250m", payload.Configuration.VcpuRequest)
 				require.Equal(t, "2", payload.Configuration.VcpuLimit)
 				require.Equal(t, "1Gi", payload.Configuration.Memory)
@@ -1219,8 +1239,8 @@ func TestCreateBranch(t *testing.T) {
 			jsonBody:  map[string]any{"name": branch.Name, "mode": "custom", "configuration": map[string]any{"image": configuration.Image, "replicas": configuration.Replicas, "storage": configuration.Storage, "region": configuration.Region, "instanceType": configuration.InstanceType}, "backupConfiguration": map[string]any{"retentionPeriod": 2, "backupTime": "2:23:23"}},
 			setupMocks: func(capturedPayload **provisioner.ClusterServicePayload) {
 				mockStore.EXPECT().GetOrgLimits(mock.Anything, apitest.TestOrganization, "project_id").Return(map[store.LimitKey]any{}, nil).Once()
-				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{"postgres:17.11"}).Once()
-				mockImageProvider.EXPECT().BuildImageURL("postgres:17.11").Return("ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.11").Once()
+				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{testImage}).Once()
+				mockImageProvider.EXPECT().BuildImageURL(testImage).Return(testImageURL).Once()
 				mockStore.EXPECT().ListCells(mock.Anything, apitest.TestOrganization, "region-id-1").Return([]store.Cell{{ID: "cell_id", RegionID: "region-id-1"}}, nil).Once()
 				mockStore.EXPECT().ListInstanceTypes(mock.Anything, apitest.TestOrganization, "region-id-1").Return([]store.InstanceType{{Name: "xata.micro", VCPUsRequest: 250, VCPUsLimit: 2000, RAM: 1}}, nil).Once()
 				mockPostgresConfig.EXPECT().GetDefaultPostgresParameters("xata.micro", mock.AnythingOfType("int"), mock.AnythingOfType("string"), mock.Anything).Return(map[string]string{
@@ -1245,8 +1265,8 @@ func TestCreateBranch(t *testing.T) {
 			configuration:    configuration,
 			setupMocks: func(capturedPayload **provisioner.ClusterServicePayload) {
 				mockStore.EXPECT().GetOrgLimits(mock.Anything, apitest.TestOrganization, "project_id").Return(map[store.LimitKey]any{}, nil).Once()
-				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{"postgres:17.11"}).Once()
-				mockImageProvider.EXPECT().BuildImageURL("postgres:17.11").Return("ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.11").Once()
+				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{testImage}).Once()
+				mockImageProvider.EXPECT().BuildImageURL(testImage).Return(testImageURL).Once()
 				mockStore.EXPECT().ListCells(mock.Anything, apitest.TestOrganization, "region-id-1").Return([]store.Cell{{ID: "cell_id", RegionID: "region-id-1"}}, nil).Once()
 				mockStore.EXPECT().ListInstanceTypes(mock.Anything, apitest.TestOrganization, "region-id-1").Return([]store.InstanceType{{Name: "xata.micro", VCPUsRequest: 250, VCPUsLimit: 2000, RAM: 1, StorageQoSClass: storageqos.ClassMicro}}, nil).Once()
 				mockPostgresConfig.EXPECT().GetDefaultPostgresParameters("xata.micro", mock.AnythingOfType("int"), mock.AnythingOfType("string"), mock.Anything).Return(map[string]string{
@@ -1264,13 +1284,13 @@ func TestCreateBranch(t *testing.T) {
 					}).Return(&branch, nil).Once()
 				mockAnalytics.EXPECT().Track(mock.Anything, events.NewBranchFromConfigurationEvent(
 					apitest.TestOrganization, "project_id", branch.ID, configuration.Region,
-					"postgres:17.11", configuration.InstanceType, int(configuration.Replicas), configuration.Storage)).Return().Once()
+					testImage, configuration.InstanceType, int(configuration.Replicas), configuration.Storage)).Return().Once()
 			},
 			validateCaptured: func(t *testing.T, payload *provisioner.ClusterServicePayload) {
 				require.NotNil(t, payload, "provisioner.CreateBranch should have been called")
 				require.Equal(t, defaultStorage, payload.Configuration.StorageSize, "requested storage must reach the cluster service")
 				require.Equal(t, configuration.Replicas+1, payload.Configuration.NumInstances)
-				require.Equal(t, "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.11", payload.Configuration.ImageName)
+				require.Equal(t, testImageURL, payload.Configuration.ImageName)
 				require.Equal(t, "250m", payload.Configuration.VcpuRequest)
 				require.Equal(t, "2", payload.Configuration.VcpuLimit)
 				require.Equal(t, "1Gi", payload.Configuration.Memory)
@@ -1308,8 +1328,8 @@ func TestCreateBranch(t *testing.T) {
 			jsonBody:  map[string]any{"name": branch.Name, "mode": "custom", "configuration": map[string]any{"image": configuration.Image, "replicas": configuration.Replicas, "storage": configuration.Storage, "region": configuration.Region, "instanceType": configuration.InstanceType}, "backupConfiguration": map[string]any{"retentionPeriod": 2, "backupTime": "2:23:23"}},
 			setupMocks: func(capturedPayload **provisioner.ClusterServicePayload) {
 				mockStore.EXPECT().GetOrgLimits(mock.Anything, apitest.TestOrganization, "project_id").Return(map[store.LimitKey]any{}, nil).Once()
-				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{"postgres:17.11"}).Once()
-				mockImageProvider.EXPECT().BuildImageURL("postgres:17.11").Return("ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.11").Once()
+				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{testImage}).Once()
+				mockImageProvider.EXPECT().BuildImageURL(testImage).Return(testImageURL).Once()
 				mockStore.EXPECT().ListCells(mock.Anything, apitest.TestOrganization, "region-id-1").Return([]store.Cell{{ID: "cell_id", RegionID: "region-id-1"}}, nil).Once()
 				mockStore.EXPECT().GetRegion(mock.Anything, apitest.TestOrganization, "region-id-1").Return(&store.Region{ID: configuration.Region, GatewayHostPort: "", BackupsEnabled: true}, nil).Once()
 				mockStore.EXPECT().ListInstanceTypes(mock.Anything, apitest.TestOrganization, "region-id-1").Return([]store.InstanceType{{Name: "xata.micro", VCPUsRequest: 250, VCPUsLimit: 2000, RAM: 1}}, nil).Once()
@@ -1409,8 +1429,8 @@ func TestCreateBranch(t *testing.T) {
 			jsonBody:         map[string]any{"name": branch.Name, "mode": "custom", "configuration": map[string]any{"image": configuration.Image, "replicas": configuration.Replicas, "storage": configuration.Storage, "region": configuration.Region, "instanceType": configuration.InstanceType}, "backupConfiguration": map[string]any{"retentionPeriod": 2, "backupTime": "2:23:23"}},
 			setupMocks: func(capturedPayload **provisioner.ClusterServicePayload) {
 				mockStore.EXPECT().GetOrgLimits(mock.Anything, apitest.TestOrganization, "project_id").Return(map[store.LimitKey]any{}, nil).Once()
-				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{"postgres:17.11"}).Once()
-				mockImageProvider.EXPECT().BuildImageURL("postgres:17.11").Return("ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.11").Once()
+				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{testImage}).Once()
+				mockImageProvider.EXPECT().BuildImageURL(testImage).Return(testImageURL).Once()
 				mockStore.EXPECT().ListCells(mock.Anything, apitest.TestOrganization, "region-id-1").Return([]store.Cell{{ID: "cell_id", RegionID: "region-id-1"}}, nil).Once()
 				mockStore.EXPECT().ListInstanceTypes(mock.Anything, apitest.TestOrganization, "region-id-1").Return([]store.InstanceType{{Name: "xata.micro", VCPUsRequest: 250, VCPUsLimit: 2000, RAM: 1}}, nil).Once()
 				mockPostgresConfig.EXPECT().GetDefaultPostgresParameters("xata.micro", mock.AnythingOfType("int"), mock.AnythingOfType("string"), mock.Anything).Return(map[string]string{
@@ -1432,7 +1452,7 @@ func TestCreateBranch(t *testing.T) {
 				storageSize := int32(250)
 				mockAnalytics.EXPECT().Track(mock.Anything, events.NewBranchFromConfigurationEvent(
 					apitest.TestOrganization, "project_id", branch.ID, configuration.Region,
-					"postgres:17.11", configuration.InstanceType, int(configuration.Replicas), &storageSize)).Return().Once()
+					testImage, configuration.InstanceType, int(configuration.Replicas), &storageSize)).Return().Once()
 			},
 			wantError: false,
 		},
@@ -1443,8 +1463,8 @@ func TestCreateBranch(t *testing.T) {
 			jsonBody:         map[string]any{"name": branch.Name, "description": correctDescription, "mode": "custom", "configuration": map[string]any{"image": configuration.Image, "replicas": configuration.Replicas, "storage": configuration.Storage, "region": configuration.Region, "instanceType": configuration.InstanceType}, "backupConfiguration": map[string]any{"retentionPeriod": 2, "backupTime": "2:23:23"}},
 			setupMocks: func(capturedPayload **provisioner.ClusterServicePayload) {
 				mockStore.EXPECT().GetOrgLimits(mock.Anything, apitest.TestOrganization, "project_id").Return(map[store.LimitKey]any{}, nil).Once()
-				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{"postgres:17.11"}).Once()
-				mockImageProvider.EXPECT().BuildImageURL("postgres:17.11").Return("ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.11").Once()
+				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{testImage}).Once()
+				mockImageProvider.EXPECT().BuildImageURL(testImage).Return(testImageURL).Once()
 				mockStore.EXPECT().ListCells(mock.Anything, apitest.TestOrganization, "region-id-1").Return([]store.Cell{{ID: "cell_id", RegionID: "region-id-1"}}, nil).Once()
 				mockStore.EXPECT().ListInstanceTypes(mock.Anything, apitest.TestOrganization, "region-id-1").Return([]store.InstanceType{{Name: "xata.micro", VCPUsRequest: 250, VCPUsLimit: 2000, RAM: 1}}, nil).Once()
 				mockPostgresConfig.EXPECT().GetDefaultPostgresParameters("xata.micro", mock.AnythingOfType("int"), mock.AnythingOfType("string"), mock.Anything).Return(map[string]string{
@@ -1468,7 +1488,7 @@ func TestCreateBranch(t *testing.T) {
 				storageSize := int32(250)
 				mockAnalytics.EXPECT().Track(mock.Anything, events.NewBranchFromConfigurationEvent(
 					apitest.TestOrganization, "project_id", branch.ID, configuration.Region,
-					"postgres:17.11", configuration.InstanceType, int(configuration.Replicas), &storageSize)).Return().Once()
+					testImage, configuration.InstanceType, int(configuration.Replicas), &storageSize)).Return().Once()
 			},
 			wantError: false,
 		},
@@ -1501,8 +1521,8 @@ func TestCreateBranch(t *testing.T) {
 			jsonBody: map[string]any{"name": branch.Name, "mode": "custom", "configuration": map[string]any{"image": configuration.Image, "replicas": configuration.Replicas, "storage": configuration.Storage, "region": configuration.Region, "instanceType": configuration.InstanceType}},
 			setupMocks: func(capturedPayload **provisioner.ClusterServicePayload) {
 				mockStore.EXPECT().GetOrgLimits(mock.Anything, apitest.TestOrganization, "project_id").Return(map[store.LimitKey]any{}, nil).Once()
-				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{"postgres:17.11"}).Once()
-				mockImageProvider.EXPECT().BuildImageURL("postgres:17.11").Return("ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.11").Once()
+				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{testImage}).Once()
+				mockImageProvider.EXPECT().BuildImageURL(testImage).Return(testImageURL).Once()
 				mockStore.EXPECT().GetRegion(mock.Anything, apitest.TestOrganization, "region-id-1").Return(&store.Region{ID: configuration.Region, GatewayHostPort: "", BackupsEnabled: true}, nil).Once()
 				mockStore.EXPECT().ListCells(mock.Anything, apitest.TestOrganization, "region-id-1").Return([]store.Cell{{ID: "cell_id", RegionID: "region-id-1"}}, nil).Once()
 				mockStore.EXPECT().ListInstanceTypes(mock.Anything, apitest.TestOrganization, "region-id-1").Return([]store.InstanceType{{Name: "xata.micro", VCPUsRequest: 250, VCPUsLimit: 2000, RAM: 1}}, nil).Once()
@@ -1535,8 +1555,8 @@ func TestCreateBranch(t *testing.T) {
 			},
 			setupMocks: func(capturedPayload **provisioner.ClusterServicePayload) {
 				mockStore.EXPECT().GetOrgLimits(mock.Anything, apitest.TestOrganization, "project_id").Return(map[store.LimitKey]any{}, nil).Once()
-				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{"postgres:17.11"}).Once()
-				mockImageProvider.EXPECT().BuildImageURL("postgres:17.11").Return("ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.11").Once()
+				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{testImage}).Once()
+				mockImageProvider.EXPECT().BuildImageURL(testImage).Return(testImageURL).Once()
 				mockStore.EXPECT().GetRegion(mock.Anything, apitest.TestOrganization, "region-id-1").Return(&store.Region{ID: configuration.Region, GatewayHostPort: "", BackupsEnabled: true}, nil).Once()
 				mockStore.EXPECT().ListCells(mock.Anything, apitest.TestOrganization, "region-id-1").Return([]store.Cell{{ID: "cell_id", RegionID: "region-id-1"}}, nil).Once()
 				mockStore.EXPECT().ListInstanceTypes(mock.Anything, apitest.TestOrganization, "region-id-1").Return([]store.InstanceType{{Name: "xata.micro", VCPUsRequest: 250, VCPUsLimit: 2000, RAM: 1}}, nil).Once()
@@ -1564,8 +1584,8 @@ func TestCreateBranch(t *testing.T) {
 			},
 			setupMocks: func(capturedPayload **provisioner.ClusterServicePayload) {
 				mockStore.EXPECT().GetOrgLimits(mock.Anything, apitest.TestOrganization, "project_id").Return(map[store.LimitKey]any{}, nil).Once()
-				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{"postgres:17.11"}).Once()
-				mockImageProvider.EXPECT().BuildImageURL("postgres:17.11").Return("ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.11").Once()
+				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{testImage}).Once()
+				mockImageProvider.EXPECT().BuildImageURL(testImage).Return(testImageURL).Once()
 				mockStore.EXPECT().GetRegion(mock.Anything, apitest.TestOrganization, "invalid-region").Return(nil, store.ErrRegionNotFound{ID: "invalid-region"}).Once()
 			},
 			wantError: true,
@@ -1645,8 +1665,8 @@ func TestCreateBranch(t *testing.T) {
 			configuration: configuration,
 			setupMocks: func(capturedPayload **provisioner.ClusterServicePayload) {
 				mockStore.EXPECT().GetOrgLimits(mock.Anything, apitest.TestOrganization, "project_id").Return(map[store.LimitKey]any{}, nil).Once()
-				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{"postgres:17.11"}).Once()
-				mockImageProvider.EXPECT().BuildImageURL("postgres:17.11").Return("ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.11").Once()
+				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{testImage}).Once()
+				mockImageProvider.EXPECT().BuildImageURL(testImage).Return(testImageURL).Once()
 				mockStore.EXPECT().ListCells(mock.Anything, apitest.TestOrganization, "region-id-1").Return([]store.Cell{{ID: "cell_id", RegionID: "region-id-1"}}, nil).Once()
 				mockStore.EXPECT().ListInstanceTypes(mock.Anything, apitest.TestOrganization, "region-id-1").Return([]store.InstanceType{{Name: "xata.micro", VCPUsRequest: 250, VCPUsLimit: 2000, RAM: 1}}, nil).Once()
 				// Note: GetDefaultPreloadLibraries should NOT be called when custom libraries are provided
@@ -1669,7 +1689,7 @@ func TestCreateBranch(t *testing.T) {
 					}).Return(&branch, nil).Once()
 				mockAnalytics.EXPECT().Track(mock.Anything, events.NewBranchFromConfigurationEvent(
 					apitest.TestOrganization, "project_id", branch.ID, configuration.Region,
-					"postgres:17.11", configuration.InstanceType, int(configuration.Replicas), nil)).Return().Once()
+					testImage, configuration.InstanceType, int(configuration.Replicas), nil)).Return().Once()
 			},
 			validateCaptured: func(t *testing.T, payload *provisioner.ClusterServicePayload) {
 				require.NotNil(t, payload, "provisioner.CreateBranch should have been called")
@@ -1703,8 +1723,8 @@ func TestCreateBranch(t *testing.T) {
 			configuration: configuration,
 			setupMocks: func(capturedPayload **provisioner.ClusterServicePayload) {
 				mockStore.EXPECT().GetOrgLimits(mock.Anything, apitest.TestOrganization, "project_id").Return(map[store.LimitKey]any{}, nil).Once()
-				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{"postgres:17.11"}).Once()
-				mockImageProvider.EXPECT().BuildImageURL("postgres:17.11").Return("ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.11").Once()
+				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{testImage}).Once()
+				mockImageProvider.EXPECT().BuildImageURL(testImage).Return(testImageURL).Once()
 				mockStore.EXPECT().ListCells(mock.Anything, apitest.TestOrganization, "region-id-1").Return([]store.Cell{{ID: "cell_id", RegionID: "region-id-1"}}, nil).Once()
 				mockStore.EXPECT().ListInstanceTypes(mock.Anything, apitest.TestOrganization, "region-id-1").Return([]store.InstanceType{{Name: "xata.micro", VCPUsRequest: 250, VCPUsLimit: 2000, RAM: 1}}, nil).Once()
 				mockPostgresConfig.EXPECT().GetDefaultPreloadLibraries(mock.AnythingOfType("string")).Return([]string{"pg_stat_statements", "auto_explain"}, nil).Once()
@@ -1727,7 +1747,7 @@ func TestCreateBranch(t *testing.T) {
 					}).Return(&branch, nil).Once()
 				mockAnalytics.EXPECT().Track(mock.Anything, events.NewBranchFromConfigurationEvent(
 					apitest.TestOrganization, "project_id", branch.ID, configuration.Region,
-					"postgres:17.11", configuration.InstanceType, int(configuration.Replicas), nil)).Return().Once()
+					testImage, configuration.InstanceType, int(configuration.Replicas), nil)).Return().Once()
 			},
 			validateCaptured: func(t *testing.T, payload *provisioner.ClusterServicePayload) {
 				require.NotNil(t, payload, "provisioner.CreateBranch should have been called")
@@ -1761,8 +1781,8 @@ func TestCreateBranch(t *testing.T) {
 			configuration: configuration,
 			setupMocks: func(capturedPayload **provisioner.ClusterServicePayload) {
 				mockStore.EXPECT().GetOrgLimits(mock.Anything, apitest.TestOrganization, "project_id").Return(map[store.LimitKey]any{}, nil).Once()
-				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{"postgres:17.11"}).Once()
-				mockImageProvider.EXPECT().BuildImageURL("postgres:17.11").Return("ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.11").Once()
+				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{testImage}).Once()
+				mockImageProvider.EXPECT().BuildImageURL(testImage).Return(testImageURL).Once()
 				mockStore.EXPECT().ListCells(mock.Anything, apitest.TestOrganization, "region-id-1").Return([]store.Cell{{ID: "cell_id", RegionID: "region-id-1"}}, nil).Once()
 				mockStore.EXPECT().ListInstanceTypes(mock.Anything, apitest.TestOrganization, "region-id-1").Return([]store.InstanceType{{Name: "xata.micro", VCPUsRequest: 250, VCPUsLimit: 2000, RAM: 1}}, nil).Once()
 				// Note: GetDefaultPreloadLibraries should NOT be called when custom libraries are provided
@@ -1784,7 +1804,7 @@ func TestCreateBranch(t *testing.T) {
 					}).Return(&branch, nil).Once()
 				mockAnalytics.EXPECT().Track(mock.Anything, events.NewBranchFromConfigurationEvent(
 					apitest.TestOrganization, "project_id", branch.ID, configuration.Region,
-					"postgres:17.11", configuration.InstanceType, int(configuration.Replicas), nil)).Return().Once()
+					testImage, configuration.InstanceType, int(configuration.Replicas), nil)).Return().Once()
 			},
 			validateCaptured: func(t *testing.T, payload *provisioner.ClusterServicePayload) {
 				require.NotNil(t, payload, "provisioner.CreateBranch should have been called")
@@ -1814,8 +1834,8 @@ func TestCreateBranch(t *testing.T) {
 			configuration: configuration,
 			setupMocks: func(capturedPayload **provisioner.ClusterServicePayload) {
 				mockStore.EXPECT().GetOrgLimits(mock.Anything, apitest.TestOrganization, "project_id").Return(map[store.LimitKey]any{}, nil).Once()
-				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{"postgres:17.11"}).Once()
-				mockImageProvider.EXPECT().BuildImageURL("postgres:17.11").Return("ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.11").Once()
+				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{testImage}).Once()
+				mockImageProvider.EXPECT().BuildImageURL(testImage).Return(testImageURL).Once()
 				mockStore.EXPECT().GetRegion(mock.Anything, apitest.TestOrganization, "region-id-1").Return(&store.Region{ID: configuration.Region, GatewayHostPort: "", BackupsEnabled: true}, nil).Once()
 				mockStore.EXPECT().ListCells(mock.Anything, apitest.TestOrganization, "region-id-1").Return([]store.Cell{{ID: "cell_id", RegionID: "region-id-1"}}, nil).Once()
 				mockStore.EXPECT().ListInstanceTypes(mock.Anything, apitest.TestOrganization, "region-id-1").Return([]store.InstanceType{{Name: "xata.micro", VCPUsRequest: 250, VCPUsLimit: 2000, RAM: 1}}, nil).Once()
@@ -1846,8 +1866,8 @@ func TestCreateBranch(t *testing.T) {
 			configuration: configuration,
 			setupMocks: func(capturedPayload **provisioner.ClusterServicePayload) {
 				mockStore.EXPECT().GetOrgLimits(mock.Anything, apitest.TestOrganization, "project_id").Return(map[store.LimitKey]any{}, nil).Once()
-				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{"postgres:17.11"}).Once()
-				mockImageProvider.EXPECT().BuildImageURL("postgres:17.11").Return("ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.11").Once()
+				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{testImage}).Once()
+				mockImageProvider.EXPECT().BuildImageURL(testImage).Return(testImageURL).Once()
 				mockStore.EXPECT().GetRegion(mock.Anything, apitest.TestOrganization, "region-id-1").Return(&store.Region{ID: configuration.Region, GatewayHostPort: "", BackupsEnabled: true}, nil).Once()
 				mockStore.EXPECT().ListCells(mock.Anything, apitest.TestOrganization, "region-id-1").Return([]store.Cell{{ID: "cell_id", RegionID: "region-id-1"}}, nil).Once()
 				mockStore.EXPECT().ListInstanceTypes(mock.Anything, apitest.TestOrganization, "region-id-1").Return([]store.InstanceType{{Name: "xata.micro", VCPUsRequest: 250, VCPUsLimit: 2000, RAM: 1}}, nil).Once()
@@ -2019,7 +2039,7 @@ func TestRestoreFromBackup(t *testing.T) {
 	}
 	configuration := spec.ClusterConfiguration{
 		Replicas:     int32(0),
-		Image:        "postgres:17.11",
+		Image:        testImage,
 		Storage:      new(defaultStorage),
 		InstanceType: "xata.micro",
 		Region:       "region-id-1",
@@ -2041,8 +2061,8 @@ func TestRestoreFromBackup(t *testing.T) {
 			mode: "custom",
 			setupMocks: func(mockStore *mocks.ProjectsStore, mockClusters *protomocks.ClustersServiceClient, mockPostgresConfig *postgrescfgmocks.PostgresConfigProvider, mockImageProvider *postgresversionsmocks.ImageProvider) {
 				mockStore.EXPECT().DescribeBranch(mock.Anything, apitest.TestOrganization, "project_id", sourceBranchID).Return(&sourceBranch, nil).Once()
-				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{"postgres:17.11"}).Once()
-				mockImageProvider.EXPECT().BuildImageURL("postgres:17.11").Return("ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.11").Once()
+				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{testImage}).Once()
+				mockImageProvider.EXPECT().BuildImageURL(testImage).Return(testImageURL).Once()
 				mockStore.EXPECT().ListCells(mock.Anything, apitest.TestOrganization, "region-id-1").Return([]store.Cell{{ID: "cell_id", RegionID: "region-id-1"}}, nil).Once()
 				mockStore.EXPECT().ListInstanceTypes(mock.Anything, apitest.TestOrganization, "region-id-1").Return([]store.InstanceType{{Name: "xata.micro", VCPUsRequest: 250, VCPUsLimit: 2000, RAM: 1}}, nil).Once()
 				mockPostgresConfig.EXPECT().GetDefaultPostgresParameters("xata.micro", mock.AnythingOfType("int"), mock.AnythingOfType("string"), mock.Anything).Return(map[string]string{
@@ -2190,8 +2210,8 @@ func TestRestoreFromBackup(t *testing.T) {
 			expectedError:         errors.New("connection failed"),
 			setupMocks: func(mockStore *mocks.ProjectsStore, mockClusters *protomocks.ClustersServiceClient, mockPostgresConfig *postgrescfgmocks.PostgresConfigProvider, mockImageProvider *postgresversionsmocks.ImageProvider) {
 				mockStore.EXPECT().DescribeBranch(mock.Anything, apitest.TestOrganization, "project_id", sourceBranchID).Return(&sourceBranch, nil).Once()
-				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{"postgres:17.11"}).Once()
-				mockImageProvider.EXPECT().BuildImageURL("postgres:17.11").Return("ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.11").Once()
+				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{testImage}).Once()
+				mockImageProvider.EXPECT().BuildImageURL(testImage).Return(testImageURL).Once()
 				mockStore.EXPECT().ListCells(mock.Anything, apitest.TestOrganization, "region-id-1").Return([]store.Cell{{ID: "cell_id", RegionID: "region-id-1"}}, nil).Once()
 				mockStore.EXPECT().ListInstanceTypes(mock.Anything, apitest.TestOrganization, "region-id-1").Return([]store.InstanceType{{Name: "xata.micro", VCPUsRequest: 250, VCPUsLimit: 2000, RAM: 1}}, nil).Once()
 				mockPostgresConfig.EXPECT().GetDefaultPostgresParameters("xata.micro", mock.AnythingOfType("int"), mock.AnythingOfType("string"), mock.Anything).Return(map[string]string{
@@ -2211,8 +2231,8 @@ func TestRestoreFromBackup(t *testing.T) {
 			expectedError: ErrorBranchNotFound{BranchID: sourceBranchID},
 			setupMocks: func(mockStore *mocks.ProjectsStore, mockClusters *protomocks.ClustersServiceClient, mockPostgresConfig *postgrescfgmocks.PostgresConfigProvider, mockImageProvider *postgresversionsmocks.ImageProvider) {
 				mockStore.EXPECT().DescribeBranch(mock.Anything, apitest.TestOrganization, "project_id", sourceBranchID).Return(&sourceBranch, nil).Once()
-				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{"postgres:17.11"}).Once()
-				mockImageProvider.EXPECT().BuildImageURL("postgres:17.11").Return("ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.11").Once()
+				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{testImage}).Once()
+				mockImageProvider.EXPECT().BuildImageURL(testImage).Return(testImageURL).Once()
 				mockStore.EXPECT().ListCells(mock.Anything, apitest.TestOrganization, "region-id-1").Return([]store.Cell{{ID: "cell_id", RegionID: "region-id-1"}}, nil).Once()
 				mockStore.EXPECT().ListInstanceTypes(mock.Anything, apitest.TestOrganization, "region-id-1").Return([]store.InstanceType{{Name: "xata.micro", VCPUsRequest: 250, VCPUsLimit: 2000, RAM: 1}}, nil).Once()
 				mockPostgresConfig.EXPECT().GetDefaultPostgresParameters("xata.micro", mock.AnythingOfType("int"), mock.AnythingOfType("string"), mock.Anything).Return(map[string]string{
@@ -2238,8 +2258,8 @@ func TestRestoreFromBackup(t *testing.T) {
 			expectedError: ErrorInvalidParam{BranchName: restoredBranch.Name, Param: "configuration", Message: "invalid configuration parameter"},
 			setupMocks: func(mockStore *mocks.ProjectsStore, mockClusters *protomocks.ClustersServiceClient, mockPostgresConfig *postgrescfgmocks.PostgresConfigProvider, mockImageProvider *postgresversionsmocks.ImageProvider) {
 				mockStore.EXPECT().DescribeBranch(mock.Anything, apitest.TestOrganization, "project_id", sourceBranchID).Return(&sourceBranch, nil).Once()
-				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{"postgres:17.11"}).Once()
-				mockImageProvider.EXPECT().BuildImageURL("postgres:17.11").Return("ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.11").Once()
+				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{testImage}).Once()
+				mockImageProvider.EXPECT().BuildImageURL(testImage).Return(testImageURL).Once()
 				mockStore.EXPECT().ListCells(mock.Anything, apitest.TestOrganization, "region-id-1").Return([]store.Cell{{ID: "cell_id", RegionID: "region-id-1"}}, nil).Once()
 				mockStore.EXPECT().ListInstanceTypes(mock.Anything, apitest.TestOrganization, "region-id-1").Return([]store.InstanceType{{Name: "xata.micro", VCPUsRequest: 250, VCPUsLimit: 2000, RAM: 1}}, nil).Once()
 				mockPostgresConfig.EXPECT().GetDefaultPostgresParameters("xata.micro", mock.AnythingOfType("int"), mock.AnythingOfType("string"), mock.Anything).Return(map[string]string{
@@ -2265,8 +2285,8 @@ func TestRestoreFromBackup(t *testing.T) {
 			expectedError: status.Error(codes.Internal, "internal server error"),
 			setupMocks: func(mockStore *mocks.ProjectsStore, mockClusters *protomocks.ClustersServiceClient, mockPostgresConfig *postgrescfgmocks.PostgresConfigProvider, mockImageProvider *postgresversionsmocks.ImageProvider) {
 				mockStore.EXPECT().DescribeBranch(mock.Anything, apitest.TestOrganization, "project_id", sourceBranchID).Return(&sourceBranch, nil).Once()
-				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{"postgres:17.11"}).Once()
-				mockImageProvider.EXPECT().BuildImageURL("postgres:17.11").Return("ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.11").Once()
+				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{testImage}).Once()
+				mockImageProvider.EXPECT().BuildImageURL(testImage).Return(testImageURL).Once()
 				mockStore.EXPECT().ListCells(mock.Anything, apitest.TestOrganization, "region-id-1").Return([]store.Cell{{ID: "cell_id", RegionID: "region-id-1"}}, nil).Once()
 				mockStore.EXPECT().ListInstanceTypes(mock.Anything, apitest.TestOrganization, "region-id-1").Return([]store.InstanceType{{Name: "xata.micro", VCPUsRequest: 250, VCPUsLimit: 2000, RAM: 1}}, nil).Once()
 				mockPostgresConfig.EXPECT().GetDefaultPostgresParameters("xata.micro", mock.AnythingOfType("int"), mock.AnythingOfType("string"), mock.Anything).Return(map[string]string{
@@ -2290,14 +2310,14 @@ func TestRestoreFromBackup(t *testing.T) {
 			mode: "custom",
 			body: map[string]any{
 				"name":                "restored",
-				"configuration":       map[string]any{"image": "postgres:17.11", "replicas": int32(0), "region": "region-id-1", "instanceType": "xata.micro"},
+				"configuration":       map[string]any{"image": testImage, "replicas": int32(0), "region": "region-id-1", "instanceType": "xata.micro"},
 				"backupConfiguration": map[string]any{"retentionPeriod": 7},
 			},
 			expectedError: ErrorInvalidParam{BranchName: "restored", Param: "backupConfiguration", Message: "backup configuration cannot be specified when backups are disabled in the selected region"},
 			setupMocks: func(mockStore *mocks.ProjectsStore, mockClusters *protomocks.ClustersServiceClient, mockPostgresConfig *postgrescfgmocks.PostgresConfigProvider, mockImageProvider *postgresversionsmocks.ImageProvider) {
 				mockStore.EXPECT().DescribeBranch(mock.Anything, apitest.TestOrganization, "project_id", sourceBranchID).Return(&sourceBranch, nil).Once()
-				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{"postgres:17.11"}).Once()
-				mockImageProvider.EXPECT().BuildImageURL("postgres:17.11").Return("ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.11").Once()
+				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{testImage}).Once()
+				mockImageProvider.EXPECT().BuildImageURL(testImage).Return(testImageURL).Once()
 				mockStore.EXPECT().ListCells(mock.Anything, apitest.TestOrganization, "region-id-1").Return([]store.Cell{{ID: "cell_id", RegionID: "region-id-1"}}, nil).Once()
 				mockStore.EXPECT().ListInstanceTypes(mock.Anything, apitest.TestOrganization, "region-id-1").Return([]store.InstanceType{{Name: "xata.micro", VCPUsRequest: 250, VCPUsLimit: 2000, RAM: 1}}, nil).Once()
 				mockPostgresConfig.EXPECT().GetDefaultPostgresParameters("xata.micro", mock.AnythingOfType("int"), mock.AnythingOfType("string"), mock.Anything).Return(map[string]string{
@@ -2314,7 +2334,7 @@ func TestRestoreFromBackup(t *testing.T) {
 			mode: "custom",
 			body: map[string]any{
 				"name":          "restored",
-				"configuration": map[string]any{"image": "postgres:17.11", "replicas": int32(0), "region": "different-region", "instanceType": "xata.micro"},
+				"configuration": map[string]any{"image": testImage, "replicas": int32(0), "region": "different-region", "instanceType": "xata.micro"},
 			},
 			expectedError: ErrorInvalidParam{BranchName: "restored", Param: "region", Message: "restore must be in the same region as the source branch"},
 			setupMocks: func(mockStore *mocks.ProjectsStore, mockClusters *protomocks.ClustersServiceClient, mockPostgresConfig *postgrescfgmocks.PostgresConfigProvider, mockImageProvider *postgresversionsmocks.ImageProvider) {
@@ -2342,13 +2362,13 @@ func TestRestoreFromBackup(t *testing.T) {
 			mode: "custom",
 			body: map[string]any{
 				"name":          "restored",
-				"configuration": map[string]any{"image": "postgres:17.11", "replicas": int32(0), "region": "", "instanceType": "xata.micro"},
+				"configuration": map[string]any{"image": testImage, "replicas": int32(0), "region": "", "instanceType": "xata.micro"},
 			},
 			expectSuccess: true,
 			setupMocks: func(mockStore *mocks.ProjectsStore, mockClusters *protomocks.ClustersServiceClient, mockPostgresConfig *postgrescfgmocks.PostgresConfigProvider, mockImageProvider *postgresversionsmocks.ImageProvider) {
 				mockStore.EXPECT().DescribeBranch(mock.Anything, apitest.TestOrganization, "project_id", sourceBranchID).Return(&sourceBranch, nil).Once()
-				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{"postgres:17.11"}).Once()
-				mockImageProvider.EXPECT().BuildImageURL("postgres:17.11").Return("ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.11").Once()
+				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{testImage}).Once()
+				mockImageProvider.EXPECT().BuildImageURL(testImage).Return(testImageURL).Once()
 				mockStore.EXPECT().ListCells(mock.Anything, apitest.TestOrganization, "region-id-1").Return([]store.Cell{{ID: "cell_id", RegionID: "region-id-1"}}, nil).Once()
 				mockStore.EXPECT().ListInstanceTypes(mock.Anything, apitest.TestOrganization, "region-id-1").Return([]store.InstanceType{{Name: "xata.micro", VCPUsRequest: 250, VCPUsLimit: 2000, RAM: 1}}, nil).Once()
 				mockPostgresConfig.EXPECT().GetDefaultPostgresParameters("xata.micro", mock.AnythingOfType("int"), mock.AnythingOfType("string"), mock.Anything).Return(map[string]string{
@@ -2897,7 +2917,7 @@ func TestDescribeBranch(t *testing.T) {
 						VcpuRequest:      "500m",
 						VcpuLimit:        "2",
 						Memory:           "2",
-						ImageName:        "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.11",
+						ImageName:        testImageURL,
 						PreloadLibraries: []string{"pg_stat_statements", "auto_explain", "pg_cron"},
 					},
 					Status: &clustersv1.ClusterStatus{
@@ -2914,7 +2934,7 @@ func TestDescribeBranch(t *testing.T) {
 						BackupRetention: "7d",
 					},
 				}, nil).Once()
-				mockPostgresConfig.EXPECT().FilterConfigurableParameters(mock.Anything, mock.AnythingOfType("int"), "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.11", []string{"pg_stat_statements", "auto_explain", "pg_cron"}).Return(map[string]string{}).Once()
+				mockPostgresConfig.EXPECT().FilterConfigurableParameters(mock.Anything, mock.AnythingOfType("int"), testImageURL, []string{"pg_stat_statements", "auto_explain", "pg_cron"}).Return(map[string]string{}).Once()
 				mockClusters.EXPECT().GetPostgresClusterCredentials(mock.Anything, &clustersv1.GetPostgresClusterCredentialsRequest{Id: branch.ID, Username: "app"}).Return(credentials, nil).Once()
 				mockStore.EXPECT().GetRegion(mock.Anything, apitest.TestOrganization, branch.Region).Return(region, nil).Once()
 				mockStore.EXPECT().ListInstanceTypes(mock.Anything, apitest.TestOrganization, region.ID).Return(instanceTypes, nil).Once()
@@ -2931,7 +2951,7 @@ func TestDescribeBranch(t *testing.T) {
 				assert.Equal(t, new("postgresql://user:pass@branchID-deprecated.footest.tld:1234/xata?sslmode=require"), got.ConnectionString)
 				assert.Equal(t, int32(0), got.Configuration.Replicas)
 				assert.Equal(t, "xata.small", got.Configuration.InstanceType) // assuming VcpuLimit: 0.5, VcpuRequest: 2 / Ram 2 → xata.small
-				assert.Equal(t, "postgres:17.11", got.Configuration.Image)
+				assert.Equal(t, testImage, got.Configuration.Image)
 				assert.Equal(t, apiv1.PhaseHealthy, got.Status.Status)
 				assert.Equal(t, 1, got.Status.InstanceCount)
 				assert.Equal(t, 1, got.Status.InstanceReadyCount)
@@ -2959,7 +2979,7 @@ func TestDescribeBranch(t *testing.T) {
 						VcpuRequest:      "500m",
 						VcpuLimit:        "2",
 						Memory:           "2",
-						ImageName:        "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.11",
+						ImageName:        testImageURL,
 						PreloadLibraries: []string{"pg_stat_statements", "auto_explain", "pg_cron"},
 					},
 					Status: &clustersv1.ClusterStatus{
@@ -2976,7 +2996,7 @@ func TestDescribeBranch(t *testing.T) {
 						BackupRetention: "7d",
 					},
 				}, nil).Once()
-				mockPostgresConfig.EXPECT().FilterConfigurableParameters(mock.Anything, mock.AnythingOfType("int"), "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.11", []string{"pg_stat_statements", "auto_explain", "pg_cron"}).Return(map[string]string{}).Once()
+				mockPostgresConfig.EXPECT().FilterConfigurableParameters(mock.Anything, mock.AnythingOfType("int"), testImageURL, []string{"pg_stat_statements", "auto_explain", "pg_cron"}).Return(map[string]string{}).Once()
 				mockClusters.EXPECT().GetPostgresClusterCredentials(mock.Anything, &clustersv1.GetPostgresClusterCredentialsRequest{Id: branch.ID, Username: "app"}).Return(credentials, nil).Once()
 				mockStore.EXPECT().GetRegion(mock.Anything, apitest.TestOrganization, branch.Region).Return(region, nil).Once()
 				mockStore.EXPECT().ListInstanceTypes(mock.Anything, apitest.TestOrganization, region.ID).Return(instanceTypes, nil).Once()
@@ -2993,7 +3013,7 @@ func TestDescribeBranch(t *testing.T) {
 				assert.Equal(t, new("postgresql://user:pass@branchID-deprecated.footest.tld:1234/xata?sslmode=require"), got.ConnectionString)
 				assert.Equal(t, int32(0), got.Configuration.Replicas)
 				assert.Equal(t, "xata.small", got.Configuration.InstanceType) // assuming Vcpu 2 / Ram 2 → xata.small
-				assert.Equal(t, "postgres:17.11", got.Configuration.Image)
+				assert.Equal(t, testImage, got.Configuration.Image)
 				assert.Equal(t, apiv1.PhaseHealthy, got.Status.Status)
 				assert.Equal(t, clustersv1.ClusterStatus_STATUS_TYPE_HIBERNATED.String(), got.Status.StatusType)
 				assert.Equal(t, 1, got.Status.InstanceCount)
@@ -3028,7 +3048,7 @@ func TestDescribeBranch(t *testing.T) {
 							VcpuRequest:      "500m",
 							VcpuLimit:        "2",
 							Memory:           "2",
-							ImageName:        "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.11",
+							ImageName:        testImageURL,
 							PreloadLibraries: []string{"pg_stat_statements", "auto_explain", "pg_cron"},
 						},
 						Status: &clustersv1.ClusterStatus{
@@ -3047,7 +3067,7 @@ func TestDescribeBranch(t *testing.T) {
 						},
 					}, nil).Once()
 
-				mockPostgresConfig.EXPECT().FilterConfigurableParameters(mock.Anything, mock.AnythingOfType("int"), "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.11", []string{"pg_stat_statements", "auto_explain", "pg_cron"}).Return(map[string]string{}).Once()
+				mockPostgresConfig.EXPECT().FilterConfigurableParameters(mock.Anything, mock.AnythingOfType("int"), testImageURL, []string{"pg_stat_statements", "auto_explain", "pg_cron"}).Return(map[string]string{}).Once()
 
 				mockClusters.EXPECT().
 					GetPostgresClusterCredentials(mock.Anything, &clustersv1.GetPostgresClusterCredentialsRequest{Id: branch.ID, Username: "app"}).
@@ -3075,7 +3095,7 @@ func TestDescribeBranch(t *testing.T) {
 				require.Len(t, got.Status.Instances, 2)
 				assert.True(t, got.Status.Instances[0].Primary)
 				assert.False(t, got.Status.Instances[1].Primary)
-				assert.Equal(t, "postgres:17.11", got.Configuration.Image)
+				assert.Equal(t, testImage, got.Configuration.Image)
 				assert.Equal(t, scaleToZero.Enabled, got.ScaleToZero.Enabled)
 				assert.Equal(t, int(scaleToZero.InactivityPeriodMinutes), got.ScaleToZero.InactivityPeriodMinutes)
 				assert.NotNil(t, got.BackupConfiguration)
@@ -3097,7 +3117,7 @@ func TestDescribeBranch(t *testing.T) {
 						VcpuRequest:      wrongVcpu,
 						VcpuLimit:        wrongVcpu,
 						Memory:           wrongMemory,
-						ImageName:        "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.11",
+						ImageName:        testImageURL,
 						PreloadLibraries: []string{"pg_stat_statements", "auto_explain", "pg_cron"},
 					},
 					Status: &clustersv1.ClusterStatus{
@@ -3113,7 +3133,7 @@ func TestDescribeBranch(t *testing.T) {
 						BackupRetention: "7d",
 					},
 				}, nil).Once()
-				mockPostgresConfig.EXPECT().FilterConfigurableParameters(mock.Anything, mock.AnythingOfType("int"), "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.11", []string{"pg_stat_statements", "auto_explain", "pg_cron"}).Return(map[string]string{}).Once()
+				mockPostgresConfig.EXPECT().FilterConfigurableParameters(mock.Anything, mock.AnythingOfType("int"), testImageURL, []string{"pg_stat_statements", "auto_explain", "pg_cron"}).Return(map[string]string{}).Once()
 				mockClusters.EXPECT().GetPostgresClusterCredentials(mock.Anything, &clustersv1.GetPostgresClusterCredentialsRequest{Id: branch.ID, Username: "app"}).Return(credentials, nil).Once()
 				mockStore.EXPECT().GetRegion(mock.Anything, apitest.TestOrganization, branch.Region).Return(region, nil).Once()
 				mockStore.EXPECT().ListInstanceTypes(mock.Anything, apitest.TestOrganization, region.ID).Return(instanceTypes, nil).Once()
@@ -3131,7 +3151,7 @@ func TestDescribeBranch(t *testing.T) {
 				assert.Equal(t, int32(0), got.Configuration.Replicas)
 				assert.Equal(t, defaultStorage, *got.Configuration.Storage)
 				assert.Equal(t, branchsvc.FallbackInstanceType, got.Configuration.InstanceType)
-				assert.Equal(t, "postgres:17.11", got.Configuration.Image)
+				assert.Equal(t, testImage, got.Configuration.Image)
 				assert.Equal(t, apiv1.PhaseHealthy, got.Status.Status)
 				assert.Equal(t, 1, got.Status.InstanceCount)
 				assert.Equal(t, 1, got.Status.InstanceReadyCount)
@@ -3159,12 +3179,12 @@ func TestDescribeBranch(t *testing.T) {
 						VcpuRequest:      "500m",
 						VcpuLimit:        "2",
 						Memory:           "2",
-						ImageName:        "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.11",
+						ImageName:        testImageURL,
 						PreloadLibraries: []string{"pg_stat_statements", "auto_explain", "pg_cron"},
 					},
 					Status: &clustersv1.ClusterStatus{Status: "healthy", InstanceCount: 2, InstanceReadyCount: 1, Instances: map[string]*clustersv1.InstanceStatus{"1": {Status: "healthy", Primary: true}, "2": {Status: "non-healthy", Primary: false}}},
 				}, nil).Once()
-				mockPostgresConfig.EXPECT().FilterConfigurableParameters(mock.Anything, mock.AnythingOfType("int"), "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.11", []string{"pg_stat_statements", "auto_explain", "pg_cron"}).Return(map[string]string{}).Once()
+				mockPostgresConfig.EXPECT().FilterConfigurableParameters(mock.Anything, mock.AnythingOfType("int"), testImageURL, []string{"pg_stat_statements", "auto_explain", "pg_cron"}).Return(map[string]string{}).Once()
 				mockClusters.EXPECT().GetPostgresClusterCredentials(mock.Anything, &clustersv1.GetPostgresClusterCredentialsRequest{Id: branch.ID, Username: "app"}).Return(nil, errors.New("failed to get credentials")).Once()
 				mockStore.EXPECT().GetRegion(mock.Anything, apitest.TestOrganization, branch.Region).Return(region, nil).Once()
 				mockStore.EXPECT().ListInstanceTypes(mock.Anything, apitest.TestOrganization, region.ID).Return([]store.InstanceType{{Name: "xata.micro", VCPUsRequest: 250, VCPUsLimit: 2000, RAM: 1}, {Name: "xata.small", VCPUsRequest: 500, VCPUsLimit: 2000, RAM: 2}}, nil).Once()
@@ -3201,7 +3221,7 @@ func TestDescribeBranch(t *testing.T) {
 						VcpuRequest:      "500m",
 						VcpuLimit:        "2",
 						Memory:           "2",
-						ImageName:        "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.11",
+						ImageName:        testImageURL,
 						PreloadLibraries: []string{"pg_stat_statements", "auto_explain", "pg_cron"},
 					},
 					Status: &clustersv1.ClusterStatus{
@@ -3214,7 +3234,7 @@ func TestDescribeBranch(t *testing.T) {
 						},
 					},
 				}, nil).Once()
-				mockPostgresConfig.EXPECT().FilterConfigurableParameters(mock.Anything, mock.AnythingOfType("int"), "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.11", []string{"pg_stat_statements", "auto_explain", "pg_cron"}).Return(map[string]string{}).Once()
+				mockPostgresConfig.EXPECT().FilterConfigurableParameters(mock.Anything, mock.AnythingOfType("int"), testImageURL, []string{"pg_stat_statements", "auto_explain", "pg_cron"}).Return(map[string]string{}).Once()
 				mockClusters.EXPECT().GetPostgresClusterCredentials(mock.Anything, &clustersv1.GetPostgresClusterCredentialsRequest{Id: branch.ID, Username: "app"}).Return(credentials, nil).Once()
 				mockStore.EXPECT().GetRegion(mock.Anything, apitest.TestOrganization, branch.Region).Return(region, nil).Once()
 				mockStore.EXPECT().ListInstanceTypes(mock.Anything, apitest.TestOrganization, region.ID).Return(instanceTypes, nil).Once()
@@ -3228,7 +3248,7 @@ func TestDescribeBranch(t *testing.T) {
 				assert.Equal(t, new("postgresql://user:pass@branchID-deprecated.footest.tld:1234/xata?sslmode=require"), got.ConnectionString)
 				assert.Equal(t, int32(0), got.Configuration.Replicas)
 				assert.Equal(t, "xata.small", got.Configuration.InstanceType)
-				assert.Equal(t, "postgres:17.11", got.Configuration.Image)
+				assert.Equal(t, testImage, got.Configuration.Image)
 				assert.Equal(t, apiv1.PhaseHealthy, got.Status.Status)
 			},
 		},
@@ -3309,7 +3329,7 @@ func TestDescribeBranchXataUser(t *testing.T) {
 			VcpuRequest:      "500m",
 			VcpuLimit:        "2",
 			Memory:           "2",
-			ImageName:        "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.11",
+			ImageName:        testImageURL,
 			PreloadLibraries: []string{"pg_stat_statements", "auto_explain", "pg_cron"},
 		},
 		Status: &clustersv1.ClusterStatus{
@@ -3322,7 +3342,7 @@ func TestDescribeBranchXataUser(t *testing.T) {
 			},
 		},
 	}, nil).Once()
-	mockPostgresConfig.EXPECT().FilterConfigurableParameters(mock.Anything, mock.AnythingOfType("int"), "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.11", []string{"pg_stat_statements", "auto_explain", "pg_cron"}).Return(map[string]string{}).Once()
+	mockPostgresConfig.EXPECT().FilterConfigurableParameters(mock.Anything, mock.AnythingOfType("int"), testImageURL, []string{"pg_stat_statements", "auto_explain", "pg_cron"}).Return(map[string]string{}).Once()
 	mockClusters.EXPECT().GetPostgresClusterCredentials(mock.Anything, &clustersv1.GetPostgresClusterCredentialsRequest{Id: branch.ID, Username: "app"}).Return(credentials, nil).Once()
 	mockStore.EXPECT().GetRegion(mock.Anything, apitest.TestOrganization, branch.Region).Return(region, nil).Once()
 	mockStore.EXPECT().ListInstanceTypes(mock.Anything, apitest.TestOrganization, region.ID).Return(instanceTypes, nil).Once()
@@ -5666,13 +5686,13 @@ func TestUpdateBranch(t *testing.T) {
 				mockClusters.EXPECT().DescribePostgresCluster(mock.Anything, &clustersv1.DescribePostgresClusterRequest{Id: "123"}).Return(&clustersv1.DescribePostgresClusterResponse{
 					Id: "123",
 					Configuration: &clustersv1.ClusterConfiguration{
-						ImageName: "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.11",
+						ImageName: testImageURL,
 					},
 				}, nil).Once()
 				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{"postgres:17.4"}).Once()
 				mockImageProvider.EXPECT().BuildImageURL("postgres:17.4").Return("ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.4").Once()
 				mockImageProvider.EXPECT().ParseImageVersion("ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.4").Return(&postgresversions.ImageVersion{Offering: "postgres", Major: 17, Minor: 7}, nil).Once()
-				mockImageProvider.EXPECT().ParseImageVersion("ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.11").Return(&postgresversions.ImageVersion{Offering: "postgres", Major: 17, Minor: 5}, nil).Once()
+				mockImageProvider.EXPECT().ParseImageVersion(testImageURL).Return(&postgresversions.ImageVersion{Offering: "postgres", Major: 17, Minor: 5}, nil).Once()
 				mockClusters.EXPECT().UpdatePostgresCluster(mock.Anything, &clustersv1.UpdatePostgresClusterRequest{
 					Id: "123",
 					UpdateConfiguration: &clustersv1.UpdateClusterConfiguration{
@@ -5733,13 +5753,13 @@ func TestUpdateBranch(t *testing.T) {
 				mockClusters.EXPECT().DescribePostgresCluster(mock.Anything, &clustersv1.DescribePostgresClusterRequest{Id: "123"}).Return(&clustersv1.DescribePostgresClusterResponse{
 					Id: "123",
 					Configuration: &clustersv1.ClusterConfiguration{
-						ImageName: "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.11",
+						ImageName: testImageURL,
 					},
 				}, nil).Once()
 				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{"postgres:18.0"}).Once()
 				mockImageProvider.EXPECT().BuildImageURL("postgres:18.0").Return("ghcr.io/xataio/postgres-images/cnpg-postgres-plus:18.0").Once()
 				mockImageProvider.EXPECT().ParseImageVersion("ghcr.io/xataio/postgres-images/cnpg-postgres-plus:18.0").Return(&postgresversions.ImageVersion{Offering: "postgres", Major: 18, Minor: 0}, nil).Once()
-				mockImageProvider.EXPECT().ParseImageVersion("ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.11").Return(&postgresversions.ImageVersion{Offering: "postgres", Major: 17, Minor: 5}, nil).Once()
+				mockImageProvider.EXPECT().ParseImageVersion(testImageURL).Return(&postgresversions.ImageVersion{Offering: "postgres", Major: 17, Minor: 5}, nil).Once()
 			},
 			wantError:     true,
 			expectedError: ErrorInvalidParam{BranchName: "123", Param: "image", Message: "no major version upgrades supported: 18 is different than current 17"},
@@ -5764,13 +5784,13 @@ func TestUpdateBranch(t *testing.T) {
 				mockClusters.EXPECT().DescribePostgresCluster(mock.Anything, &clustersv1.DescribePostgresClusterRequest{Id: "123"}).Return(&clustersv1.DescribePostgresClusterResponse{
 					Id: "123",
 					Configuration: &clustersv1.ClusterConfiguration{
-						ImageName: "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.11",
+						ImageName: testImageURL,
 					},
 				}, nil).Once()
 				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{"postgres:17.3"}).Once()
 				mockImageProvider.EXPECT().BuildImageURL("postgres:17.3").Return("ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.3").Once()
 				mockImageProvider.EXPECT().ParseImageVersion("ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.3").Return(&postgresversions.ImageVersion{Offering: "postgres", Major: 17, Minor: 3}, nil).Once()
-				mockImageProvider.EXPECT().ParseImageVersion("ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.11").Return(&postgresversions.ImageVersion{Offering: "postgres", Major: 17, Minor: 5}, nil).Once()
+				mockImageProvider.EXPECT().ParseImageVersion(testImageURL).Return(&postgresversions.ImageVersion{Offering: "postgres", Major: 17, Minor: 5}, nil).Once()
 			},
 			wantError:     true,
 			expectedError: ErrorInvalidParam{BranchName: "123", Param: "image", Message: "new minor: 3 is older than current  5"},
@@ -5795,10 +5815,10 @@ func TestUpdateBranch(t *testing.T) {
 				mockClusters.EXPECT().DescribePostgresCluster(mock.Anything, &clustersv1.DescribePostgresClusterRequest{Id: "123"}).Return(&clustersv1.DescribePostgresClusterResponse{
 					Id: "123",
 					Configuration: &clustersv1.ClusterConfiguration{
-						ImageName: "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.11",
+						ImageName: testImageURL,
 					},
 				}, nil).Once()
-				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{"postgres:17.11"}).Once()
+				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{testImage}).Once()
 			},
 			wantError:     true,
 			expectedError: ErrorInvalidParam{BranchName: "123", Param: "image", Message: "image postgres:99.99 is not valid"},
@@ -6573,8 +6593,8 @@ func TestListImages(t *testing.T) {
 					{ID: "us-west-2", PublicAccess: true},
 				}
 				mockStore.EXPECT().ListRegions(mock.Anything, apitest.TestOrganization).Return(regions, nil).Once()
-				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{"postgres:17.11", "postgres:17.4", "postgres:16.3", "postgres:16.4"}).Once()
-				mockImageProvider.EXPECT().ExtractVersionFromImageName("postgres:17.11").Return("17.5").Once()
+				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{testImage, "postgres:17.4", "postgres:16.3", "postgres:16.4"}).Once()
+				mockImageProvider.EXPECT().ExtractVersionFromImageName(testImage).Return("17.5").Once()
 				mockImageProvider.EXPECT().GetMajorForVersion("17.5").Return("17").Once()
 				mockImageProvider.EXPECT().ExtractVersionFromImageName("postgres:17.4").Return("17.4").Once()
 				mockImageProvider.EXPECT().GetMajorForVersion("17.4").Return("17").Once()
@@ -6588,7 +6608,7 @@ func TestListImages(t *testing.T) {
 				{
 					MajorVersion: "17",
 					FullVersion:  "17.5",
-					Name:         "postgres:17.11",
+					Name:         testImage,
 				},
 				{
 					MajorVersion: "17",
@@ -7266,7 +7286,7 @@ func TestExtractMajorVersionFromImage(t *testing.T) {
 		// Full registry path format
 		{
 			name:        "full_registry_path_17_5",
-			imageName:   "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.11",
+			imageName:   testImageURL,
 			expected:    17,
 			description: "Full registry path with PostgreSQL 17.5",
 		},
@@ -7372,7 +7392,7 @@ func TestExtractMajorVersionFromImage(t *testing.T) {
 		// Different registry formats
 		{
 			name:        "docker_hub_format",
-			imageName:   "postgres:17.11",
+			imageName:   testImage,
 			expected:    17,
 			description: "Docker Hub format should work",
 		},
