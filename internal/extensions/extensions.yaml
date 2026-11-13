@@ -1,14 +1,14 @@
 # PostgreSQL extensions available in each image offering
 # This file is automatically updated by a sync workflow from the postgres-images repo
 
-last_updated: "2026-11-04T16:42:37Z"
+last_updated: "2026-11-13T02:32:34Z"
 updated_by: workflow
 offerings:
   analytics:
     "17":
       extensions:
         - name: pg_partman
-          version: "5.4.1"
+          version: "5.5.0"
           description: "Partition management extension for PostgreSQL"
           docs_url: "https://github.com/pgpartman/pg_partman"
           preload_required: false
@@ -126,7 +126,7 @@ offerings:
           docs_url: "https://www.postgresql.org/docs/current/fuzzystrmatch.html"
           preload_required: false
         - name: hll
-          version: "2.20"
+          version: "2.21"
           description: "HyperLogLog data type for cardinality estimation"
           docs_url: "https://github.com/citusdata/postgresql-hll"
           preload_required: false
@@ -136,7 +136,7 @@ offerings:
           docs_url: "https://github.com/RhodiumToad/ip4r"
           preload_required: false
         - name: pg_hint_plan
-          version: "1.7.1"
+          version: "1.7.2"
           description: "Query execution plan hinting"
           docs_url: "https://github.com/ossc-db/pg_hint_plan"
           preload_required: true
@@ -331,7 +331,7 @@ offerings:
           docs_url: "https://postgis.net/docs/SFCGAL_User_Manual.html"
           preload_required: false
         - name: xatautils
-          version: "0.3.13"
+          version: "0.3.14"
           description: "Xata utilities (built from source)"
           docs_url: "https://github.com/xataio/xata-utils"
           preload_required: true
@@ -456,7 +456,7 @@ offerings:
           docs_url: "https://github.com/RhodiumToad/ip4r"
           preload_required: false
         - name: pg_hint_plan
-          version: "1.8.0"
+          version: "1.8.1"
           description: "Query execution plan hinting"
           docs_url: "https://github.com/ossc-db/pg_hint_plan"
           preload_required: true
@@ -656,17 +656,17 @@ offerings:
           docs_url: "https://github.com/pgaudit/pgaudit"
           preload_required: true
         - name: hll
-          version: "2.20"
+          version: "2.21"
           description: "HyperLogLog data type for cardinality estimation"
           docs_url: "https://github.com/citusdata/postgresql-hll"
           preload_required: false
         - name: pg_partman
-          version: "5.4.1"
+          version: "5.5.0"
           description: "Partition management extension for PostgreSQL"
           docs_url: "https://github.com/pgpartman/pg_partman"
           preload_required: false
         - name: xatautils
-          version: "0.3.13"
+          version: "0.3.14"
           description: "Xata utilities (built from source)"
           docs_url: "https://github.com/xataio/xata-utils"
           preload_required: true
@@ -679,7 +679,7 @@ offerings:
     "14":
       extensions:
         - name: pg_partman
-          version: "5.4.1"
+          version: "5.5.0"
           description: "Partition management extension for PostgreSQL"
           docs_url: "https://github.com/pgpartman/pg_partman"
           preload_required: false
@@ -792,7 +792,7 @@ offerings:
           docs_url: "https://www.postgresql.org/docs/current/fuzzystrmatch.html"
           preload_required: false
         - name: hll
-          version: "2.20"
+          version: "2.21"
           description: "HyperLogLog data type for cardinality estimation"
           docs_url: "https://github.com/citusdata/postgresql-hll"
           preload_required: false
@@ -987,7 +987,7 @@ offerings:
           docs_url: "https://github.com/pgaudit/pgaudit"
           preload_required: true
         - name: xatautils
-          version: "0.3.13"
+          version: "0.3.14"
           description: "Xata utilities (built from source)"
           docs_url: "https://github.com/xataio/xata-utils"
           preload_required: true
@@ -999,7 +999,7 @@ offerings:
     "15":
       extensions:
         - name: pg_partman
-          version: "5.4.1"
+          version: "5.5.0"
           description: "Partition management extension for PostgreSQL"
           docs_url: "https://github.com/pgpartman/pg_partman"
           preload_required: false
@@ -1112,7 +1112,7 @@ offerings:
           docs_url: "https://www.postgresql.org/docs/current/fuzzystrmatch.html"
           preload_required: false
         - name: hll
-          version: "2.20"
+          version: "2.21"
           description: "HyperLogLog data type for cardinality estimation"
           docs_url: "https://github.com/citusdata/postgresql-hll"
           preload_required: false
@@ -1307,7 +1307,7 @@ offerings:
           docs_url: "https://github.com/pgaudit/pgaudit"
           preload_required: true
         - name: xatautils
-          version: "0.3.13"
+          version: "0.3.14"
           description: "Xata utilities (built from source)"
           docs_url: "https://github.com/xataio/xata-utils"
           preload_required: true
@@ -1319,7 +1319,7 @@ offerings:
     "16":
       extensions:
         - name: pg_partman
-          version: "5.4.1"
+          version: "5.5.0"
           description: "Partition management extension for PostgreSQL"
           docs_url: "https://github.com/pgpartman/pg_partman"
           preload_required: false
@@ -1437,7 +1437,7 @@ offerings:
           docs_url: "https://www.postgresql.org/docs/current/fuzzystrmatch.html"
           preload_required: false
         - name: hll
-          version: "2.20"
+          version: "2.21"
           description: "HyperLogLog data type for cardinality estimation"
           docs_url: "https://github.com/citusdata/postgresql-hll"
           preload_required: false
@@ -1447,7 +1447,7 @@ offerings:
           docs_url: "https://github.com/RhodiumToad/ip4r"
           preload_required: false
         - name: pg_hint_plan
-          version: "1.6.2"
+          version: "1.6.3"
           description: "Query execution plan hinting"
           docs_url: "https://github.com/ossc-db/pg_hint_plan"
           preload_required: true
@@ -1642,7 +1642,7 @@ offerings:
           docs_url: "https://postgis.net/docs/SFCGAL_User_Manual.html"
           preload_required: false
         - name: xatautils
-          version: "0.3.13"
+          version: "0.3.14"
           description: "Xata utilities (built from source)"
           docs_url: "https://github.com/xataio/xata-utils"
           preload_required: true
@@ -1654,7 +1654,7 @@ offerings:
     "17":
       extensions:
         - name: pg_partman
-          version: "5.4.1"
+          version: "5.5.0"
           description: "Partition management extension for PostgreSQL"
           docs_url: "https://github.com/pgpartman/pg_partman"
           preload_required: false
@@ -1772,7 +1772,7 @@ offerings:
           docs_url: "https://www.postgresql.org/docs/current/fuzzystrmatch.html"
           preload_required: false
         - name: hll
-          version: "2.20"
+          version: "2.21"
           description: "HyperLogLog data type for cardinality estimation"
           docs_url: "https://github.com/citusdata/postgresql-hll"
           preload_required: false
@@ -1782,7 +1782,7 @@ offerings:
           docs_url: "https://github.com/RhodiumToad/ip4r"
           preload_required: false
         - name: pg_hint_plan
-          version: "1.7.1"
+          version: "1.7.2"
           description: "Query execution plan hinting"
           docs_url: "https://github.com/ossc-db/pg_hint_plan"
           preload_required: true
@@ -1977,7 +1977,7 @@ offerings:
           docs_url: "https://postgis.net/docs/SFCGAL_User_Manual.html"
           preload_required: false
         - name: xatautils
-          version: "0.3.13"
+          version: "0.3.14"
           description: "Xata utilities (built from source)"
           docs_url: "https://github.com/xataio/xata-utils"
           preload_required: true
@@ -2102,7 +2102,7 @@ offerings:
           docs_url: "https://github.com/RhodiumToad/ip4r"
           preload_required: false
         - name: pg_hint_plan
-          version: "1.8.0"
+          version: "1.8.1"
           description: "Query execution plan hinting"
           docs_url: "https://github.com/ossc-db/pg_hint_plan"
           preload_required: true
@@ -2302,17 +2302,17 @@ offerings:
           docs_url: "https://github.com/pgaudit/pgaudit"
           preload_required: true
         - name: hll
-          version: "2.20"
+          version: "2.21"
           description: "HyperLogLog data type for cardinality estimation"
           docs_url: "https://github.com/citusdata/postgresql-hll"
           preload_required: false
         - name: pg_partman
-          version: "5.4.1"
+          version: "5.5.0"
           description: "Partition management extension for PostgreSQL"
           docs_url: "https://github.com/pgpartman/pg_partman"
           preload_required: false
         - name: xatautils
-          version: "0.3.13"
+          version: "0.3.14"
           description: "Xata utilities (built from source)"
           docs_url: "https://github.com/xataio/xata-utils"
           preload_required: true
@@ -2325,7 +2325,7 @@ offerings:
     "16":
       extensions:
         - name: pg_partman
-          version: "5.4.1"
+          version: "5.5.0"
           description: "Partition management extension for PostgreSQL"
           docs_url: "https://github.com/pgpartman/pg_partman"
           preload_required: false
@@ -2443,7 +2443,7 @@ offerings:
           docs_url: "https://www.postgresql.org/docs/current/fuzzystrmatch.html"
           preload_required: false
         - name: hll
-          version: "2.20"
+          version: "2.21"
           description: "HyperLogLog data type for cardinality estimation"
           docs_url: "https://github.com/citusdata/postgresql-hll"
           preload_required: false
@@ -2453,7 +2453,7 @@ offerings:
           docs_url: "https://github.com/RhodiumToad/ip4r"
           preload_required: false
         - name: pg_hint_plan
-          version: "1.6.2"
+          version: "1.6.3"
           description: "Query execution plan hinting"
           docs_url: "https://github.com/ossc-db/pg_hint_plan"
           preload_required: true
@@ -2648,14 +2648,14 @@ offerings:
           docs_url: "https://postgis.net/docs/SFCGAL_User_Manual.html"
           preload_required: false
         - name: xatautils
-          version: "0.3.13"
+          version: "0.3.14"
           description: "Xata utilities (built from source)"
           docs_url: "https://github.com/xataio/xata-utils"
           preload_required: true
     "17":
       extensions:
         - name: pg_partman
-          version: "5.4.1"
+          version: "5.5.0"
           description: "Partition management extension for PostgreSQL"
           docs_url: "https://github.com/pgpartman/pg_partman"
           preload_required: false
@@ -2773,7 +2773,7 @@ offerings:
           docs_url: "https://www.postgresql.org/docs/current/fuzzystrmatch.html"
           preload_required: false
         - name: hll
-          version: "2.20"
+          version: "2.21"
           description: "HyperLogLog data type for cardinality estimation"
           docs_url: "https://github.com/citusdata/postgresql-hll"
           preload_required: false
@@ -2783,7 +2783,7 @@ offerings:
           docs_url: "https://github.com/RhodiumToad/ip4r"
           preload_required: false
         - name: pg_hint_plan
-          version: "1.7.1"
+          version: "1.7.2"
           description: "Query execution plan hinting"
           docs_url: "https://github.com/ossc-db/pg_hint_plan"
           preload_required: true
@@ -2978,7 +2978,7 @@ offerings:
           docs_url: "https://postgis.net/docs/SFCGAL_User_Manual.html"
           preload_required: false
         - name: xatautils
-          version: "0.3.13"
+          version: "0.3.14"
           description: "Xata utilities (built from source)"
           docs_url: "https://github.com/xataio/xata-utils"
           preload_required: true
@@ -3103,7 +3103,7 @@ offerings:
           docs_url: "https://github.com/RhodiumToad/ip4r"
           preload_required: false
         - name: pg_hint_plan
-          version: "1.8.0"
+          version: "1.8.1"
           description: "Query execution plan hinting"
           docs_url: "https://github.com/ossc-db/pg_hint_plan"
           preload_required: true
@@ -3303,12 +3303,12 @@ offerings:
           docs_url: "https://github.com/pgaudit/pgaudit"
           preload_required: true
         - name: hll
-          version: "2.20"
+          version: "2.21"
           description: "HyperLogLog data type for cardinality estimation"
           docs_url: "https://github.com/citusdata/postgresql-hll"
           preload_required: false
         - name: pg_partman
-          version: "5.4.1"
+          version: "5.5.0"
           description: "Partition management extension for PostgreSQL"
           docs_url: "https://github.com/pgpartman/pg_partman"
           preload_required: false
@@ -3323,7 +3323,7 @@ offerings:
           docs_url: "https://github.com/timescale/pg_textsearch"
           preload_required: true
         - name: xatautils
-          version: "0.3.13"
+          version: "0.3.14"
           description: "Xata utilities (built from source)"
           docs_url: "https://github.com/xataio/xata-utils"
           preload_required: true
@@ -3447,7 +3447,7 @@ offerings:
           docs_url: "https://pgtap.org/"
           preload_required: false
         - name: vector
-          version: "0.8.6"
+          version: "0.8.7"
           description: "Vector similarity search for PostgreSQL"
           docs_url: "https://github.com/pgvector/pgvector"
           preload_required: false
@@ -3637,12 +3637,12 @@ offerings:
           docs_url: "https://github.com/citusdata/postgresql-hll"
           preload_required: false
         - name: pg_partman
-          version: "5.4.3"
+          version: "5.5.0"
           description: "Partition management extension for PostgreSQL"
           docs_url: "https://github.com/pgpartman/pg_partman"
           preload_required: false
         - name: xatautils
-          version: "0.3.13"
+          version: "0.3.14"
           description: "Xata utilities (built from source)"
           docs_url: "https://github.com/xataio/xata-utils"
           preload_required: true
