@@ -23,10 +23,6 @@ patches:
     target:
       kind: Deployment
       name: cnpg-controller-manager
-  - path: patch-scale-to-zero-rbac.yaml.patch
-    target:
-      kind: ClusterRole
-      name: cnpg-scale-to-zero-sidecar-role
   # Add dataplane tolerations to CNPG deployments.
   - target:
       kind: Deployment

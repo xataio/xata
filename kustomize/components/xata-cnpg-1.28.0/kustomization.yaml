@@ -23,10 +23,6 @@ resources:
   - https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.82.0/example/prometheus-operator-crd/monitoring.coreos.com_podmonitors.yaml
 
 patches:
-  - path: patch-scale-to-zero-rbac.yaml.patch
-    target:
-      kind: ClusterRole
-      name: cnpg-scale-to-zero-sidecar-role
   # Add dataplane tolerations to CNPG deployments.
   - target:
       kind: Deployment
