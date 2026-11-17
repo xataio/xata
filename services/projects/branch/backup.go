@@ -57,10 +57,10 @@ func BackupRetentionDays(backupConfig *BackupConfiguration) int {
 }
 
 // ClustersBackupConfig builds the clusters backup configuration from the neutral
-// backup configuration, the region's backups-enabled flag, and the pgBackRest
-// preference. It is exported so the api adapters can delegate to it instead of
-// keeping a copy.
-func ClustersBackupConfig(backupConfig *BackupConfiguration, backupsEnabled, usePgBackRest bool) *clustersv1.BackupConfiguration {
+// backup configuration and the region's backups-enabled flag. pgbackrest is the
+// only backup method; the barman-cloud plugin is no longer deployed. It is
+// exported so the api adapters can delegate to it instead of keeping a copy.
+func ClustersBackupConfig(backupConfig *BackupConfiguration, backupsEnabled bool) *clustersv1.BackupConfiguration {
 	// if backups are disabled, return a disabled configuration
 	if !backupsEnabled {
 		return &clustersv1.BackupConfiguration{
@@ -70,20 +70,18 @@ func ClustersBackupConfig(backupConfig *BackupConfiguration, backupsEnabled, use
 
 	// if nothing was set via the API request, use defaults = weekly, sunday random
 	if backupConfig == nil {
-		cfg := &clustersv1.BackupConfiguration{
+		return &clustersv1.BackupConfiguration{
 			BackupSchedule:  GenerateRandomBackupCron(),
 			BackupRetention: fmt.Sprintf("%dd", DefaultBackupRetentionPeriod),
 			BackupsEnabled:  backupsEnabled,
+			BackupMethod:    BackupMethodPgBackRest,
 		}
-		if usePgBackRest {
-			cfg.BackupMethod = BackupMethodPgBackRest
-		} else {
-			cfg.BackupMethod = BackupMethodBarman
-		}
-		return cfg
 	}
 
-	var backupConfiguration clustersv1.BackupConfiguration
+	backupConfiguration := clustersv1.BackupConfiguration{
+		BackupsEnabled: backupsEnabled,
+		BackupMethod:   BackupMethodPgBackRest,
+	}
 	if backupConfig.BackupTime == nil || *backupConfig.BackupTime == "" {
 		backupConfiguration.BackupSchedule = GenerateRandomBackupCron()
 	} else {
@@ -94,12 +92,6 @@ func ClustersBackupConfig(backupConfig *BackupConfiguration, backupsEnabled, use
 		backupConfiguration.BackupRetention = fmt.Sprintf("%dd", DefaultBackupRetentionPeriod)
 	} else {
 		backupConfiguration.BackupRetention = fmt.Sprintf("%dd", *backupConfig.RetentionPeriod)
-	}
-	backupConfiguration.BackupsEnabled = backupsEnabled
-	if usePgBackRest {
-		backupConfiguration.BackupMethod = BackupMethodPgBackRest
-	} else {
-		backupConfiguration.BackupMethod = BackupMethodBarman
 	}
 	return &backupConfiguration
 }

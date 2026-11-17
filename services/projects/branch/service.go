@@ -24,11 +24,9 @@ const (
 	// api package shares this constant instead of keeping its own copy.
 	FallbackInstanceType = "custom"
 
-	// DefaultBackupRetentionPeriod, BackupMethodBarman, and BackupMethodPgBackRest
-	// are exported so the api backup adapters delegate here instead of keeping
-	// their own copies.
+	// DefaultBackupRetentionPeriod and BackupMethodPgBackRest are exported so
+	// the api backup adapters delegate here instead of keeping their own copies.
 	DefaultBackupRetentionPeriod = 2 // days
-	BackupMethodBarman           = "barman"
 	BackupMethodPgBackRest       = "pgbackrest"
 
 	// branchDatabaseName is the database managed users connect to on every branch.
@@ -92,7 +90,6 @@ type CreateInput struct {
 	UsageTier      string
 	OrgLimits      provisioner.OrgLimits
 	Flags          provisioner.FlagsConfig
-	UsePgBackRest  bool
 	Description    *string
 	Backup         *BackupConfiguration
 	ScaleToZero    *ScaleToZero

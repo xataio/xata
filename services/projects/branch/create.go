@@ -91,7 +91,7 @@ func (s *Service) Provision(ctx context.Context, in CreateInput, payload *provis
 	// Populate remaining payload fields for the provisioner
 	payload.Description = in.Description
 	payload.BackupRetentionPeriod = BackupRetentionDays(in.Backup)
-	payload.BackupConfig = ClustersBackupConfig(in.Backup, payload.BackupsEnabled, in.UsePgBackRest)
+	payload.BackupConfig = ClustersBackupConfig(in.Backup, payload.BackupsEnabled)
 	payload.Flags = in.Flags
 	payload.UsageTier = in.UsageTier
 	payload.Limits = in.OrgLimits.StoreLimits()

@@ -173,5 +173,5 @@ trialExpiryEmails:
       cpu: 50m
       memory: 64Mi
 
-# XATA_FEATURE_FLAGS overrides that win over PostHog, e.g. usePgBackRest:true,useClusterPool:false.
+# XATA_FEATURE_FLAGS overrides that win over PostHog, e.g. useClusterPool:false.
 featureFlags: ""

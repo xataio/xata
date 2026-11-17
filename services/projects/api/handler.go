@@ -708,8 +708,6 @@ func (s *handler) CreateBranch(c echo.Context, organizationID spec.OrganizationI
 
 		ctx := c.Request().Context()
 		useXatastor := s.feat.BoolValue(ctx, flags.UseXatastor)
-		usePgBackRest := s.feat.BoolValue(ctx, flags.UsePgBackRest)
-		log.Ctx(ctx).Info().Bool("usePgBackRest", usePgBackRest).Msg("pgbackrest feature flag")
 
 		claims := api.GetUserClaims(c)
 		marketplace := claims.Organizations[organizationID].Marketplace
@@ -767,7 +765,6 @@ func (s *handler) CreateBranch(c echo.Context, organizationID spec.OrganizationI
 			UsageTier:      claims.Organizations[organizationID].UsageTier,
 			OrgLimits:      orgLimits,
 			Flags:          featureFlags,
-			UsePgBackRest:  usePgBackRest,
 			Description:    body.Description,
 			Backup:         toBranchBackup(body.BackupConfiguration),
 			ScaleToZero:    toBranchScaleToZero(body.ScaleToZero),
@@ -1652,8 +1649,6 @@ func (s *handler) RestoreFromBackup(c echo.Context, organizationID spec.Organiza
 		}
 
 		var createClusterPayload ClusterServicePayload
-		usePgBackRest := s.feat.BoolValue(ctx, flags.UsePgBackRest)
-		log.Ctx(ctx).Info().Bool("usePgBackRest", usePgBackRest).Msg("pgbackrest feature flag")
 
 		// restore must happen in the same cell where the backup exists
 		// otherwise we don't have access to the source object store
@@ -1743,7 +1738,7 @@ func (s *handler) RestoreFromBackup(c echo.Context, organizationID spec.Organiza
 					DataSource: &clustersv1.CreatePostgresClusterRequest_ContinuousBackup{
 						ContinuousBackup: continuousBackupSource(branchID, body.TargetTime),
 					},
-					BackupConfiguration: apiToClustersBackupConfig(body.BackupConfiguration, createClusterPayload.BackupsEnabled, usePgBackRest),
+					BackupConfiguration: apiToClustersBackupConfig(body.BackupConfiguration, createClusterPayload.BackupsEnabled),
 				}
 
 				if _, err := client.CreatePostgresCluster(ctx, &request); err != nil {

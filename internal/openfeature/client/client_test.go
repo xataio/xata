@@ -15,17 +15,17 @@ func TestBoolValueOverrides(t *testing.T) {
 		want bool
 	}{
 		"enabled by override": {
-			env:  "usePgBackRest:true",
-			flag: FeatureFlag{Name: "usePgBackRest", DefaultEnabled: false},
+			env:  "useXatastor:true",
+			flag: FeatureFlag{Name: "useXatastor", DefaultEnabled: false},
 			want: true,
 		},
 		"disabled by override": {
-			env:  "usePgBackRest:true,organizationCreation:false",
+			env:  "useXatastor:true,organizationCreation:false",
 			flag: FeatureFlag{Name: "organizationCreation", DefaultEnabled: true},
 			want: false,
 		},
 		"not overridden": {
-			env:  "usePgBackRest:true",
+			env:  "useXatastor:true",
 			flag: FeatureFlag{Name: "useClusterPool", DefaultEnabled: false},
 			want: false,
 		},
@@ -49,7 +49,7 @@ func TestBoolValueOverrides(t *testing.T) {
 }
 
 func TestNewClientInvalidOverrides(t *testing.T) {
-	t.Setenv("XATA_FEATURE_FLAGS", "usePgBackRest:yes")
+	t.Setenv("XATA_FEATURE_FLAGS", "useXatastor:yes")
 
 	_, err := NewClient("test", openfeature.NoopProvider{})
 	require.ErrorContains(t, err, "read feature flags config")

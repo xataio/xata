@@ -12,7 +12,6 @@ func TestClustersBackupConfig(t *testing.T) {
 		name           string
 		backupConfig   *BackupConfiguration
 		backupsEnabled bool
-		usePgBackRest  bool
 		wantSchedule   bool
 		wantMethod     string
 	}{
@@ -23,32 +22,16 @@ func TestClustersBackupConfig(t *testing.T) {
 			wantSchedule:   false,
 		},
 		{
-			name:           "backups enabled with no config returns default barman",
+			name:           "backups enabled with no config returns default pgbackrest",
 			backupConfig:   nil,
 			backupsEnabled: true,
-			wantSchedule:   true,
-			wantMethod:     BackupMethodBarman,
-		},
-		{
-			name:           "backups enabled with config returns schedule barman",
-			backupConfig:   &BackupConfiguration{BackupTime: new("0:14:30")},
-			backupsEnabled: true,
-			wantSchedule:   true,
-			wantMethod:     BackupMethodBarman,
-		},
-		{
-			name:           "pgbackrest with no config returns default pgbackrest",
-			backupConfig:   nil,
-			backupsEnabled: true,
-			usePgBackRest:  true,
 			wantSchedule:   true,
 			wantMethod:     BackupMethodPgBackRest,
 		},
 		{
-			name:           "pgbackrest with config returns schedule pgbackrest",
+			name:           "backups enabled with config returns schedule pgbackrest",
 			backupConfig:   &BackupConfiguration{BackupTime: new("0:14:30")},
 			backupsEnabled: true,
-			usePgBackRest:  true,
 			wantSchedule:   true,
 			wantMethod:     BackupMethodPgBackRest,
 		},
@@ -56,7 +39,7 @@ func TestClustersBackupConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := ClustersBackupConfig(tt.backupConfig, tt.backupsEnabled, tt.usePgBackRest)
+			result := ClustersBackupConfig(tt.backupConfig, tt.backupsEnabled)
 
 			require.Equal(t, tt.backupsEnabled, result.BackupsEnabled)
 

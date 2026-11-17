@@ -308,8 +308,8 @@ func generateSchedule(cron string) string {
 // apiToClustersBackupConfig maps the spec backup configuration to the clusters
 // backup configuration by delegating to the branch service, so the conversion
 // logic lives in one place.
-func apiToClustersBackupConfig(backupConfig *spec.BackupConfiguration, backupsEnabled bool, usePgBackRest bool) *clustersv1.BackupConfiguration {
-	return branchsvc.ClustersBackupConfig(toBranchBackup(backupConfig), backupsEnabled, usePgBackRest)
+func apiToClustersBackupConfig(backupConfig *spec.BackupConfiguration, backupsEnabled bool) *clustersv1.BackupConfiguration {
+	return branchsvc.ClustersBackupConfig(toBranchBackup(backupConfig), backupsEnabled)
 }
 
 func clustersToAPIBackupConfig(backupConfig *clustersv1.BackupConfiguration) *spec.BackupConfiguration {

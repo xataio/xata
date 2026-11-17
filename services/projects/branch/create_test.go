@@ -252,7 +252,7 @@ func TestProvision(t *testing.T) {
 				require.NotNil(t, tc.payload.BackupConfig)
 				require.True(t, tc.payload.BackupConfig.BackupsEnabled)
 				require.Equal(t, "2d", tc.payload.BackupConfig.BackupRetention)
-				require.Equal(t, BackupMethodBarman, tc.payload.BackupConfig.BackupMethod)
+				require.Equal(t, BackupMethodPgBackRest, tc.payload.BackupConfig.BackupMethod)
 			default:
 				require.Equal(t, tc.wantErr, err)
 			}

@@ -58,7 +58,6 @@ func (p *ProjectsService) CreateBranch(ctx context.Context, req *projectsv1.Crea
 		branchFlags.UsePool = p.feat.BoolValue(ctx, flags.UseClusterPool)
 		branchFlags.UseXatastor = p.feat.BoolValue(ctx, flags.UseXatastor)
 	}
-	usePgBackRest := p.feat != nil && p.feat.BoolValue(ctx, flags.UsePgBackRest)
 
 	limits, err := provisioner.ResolveOrgLimits(ctx, p.store, req.GetUsageTier(), req.GetOrganizationId(), req.GetProjectId(), branchFlags)
 	if err != nil {
@@ -74,7 +73,6 @@ func (p *ProjectsService) CreateBranch(ctx context.Context, req *projectsv1.Crea
 		UsageTier:      req.GetUsageTier(),
 		OrgLimits:      limits,
 		Flags:          branchFlags,
-		UsePgBackRest:  usePgBackRest,
 		ScaleToZero:    scaleToZeroFromProto(req.GetScaleToZero()),
 	}
 	payload, err := p.branches.BuildPayload(ctx, in)
