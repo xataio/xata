@@ -46,6 +46,7 @@ type PostgresParameterSpec struct {
 	RestartRequired        bool
 	AllowEmpty             bool
 	PostgresMinimumVersion *int   // Optional minimum PostgreSQL major version (e.g. 15, 17, 18)
+	PostgresMaximumVersion *int   // Optional maximum PostgreSQL major version, for removed parameters
 	Extension              string // Optional extension name - parameter only available if extension exists for the image
 }
 
@@ -63,6 +64,7 @@ type yamlParameterSpec struct {
 	RestartRequired        bool     `yaml:"restart_required,omitempty"`
 	AllowEmpty             bool     `yaml:"allow_empty,omitempty"`
 	PostgresMinimumVersion *int     `yaml:"postgres_minimum_version,omitempty"`
+	PostgresMaximumVersion *int     `yaml:"postgres_maximum_version,omitempty"`
 	Extension              string   `yaml:"extension,omitempty"`
 }
 
@@ -134,6 +136,7 @@ func convertYAMLSpec(yamlSpec yamlParameterSpec) (PostgresParameterSpec, error) 
 		RestartRequired:        yamlSpec.RestartRequired,
 		AllowEmpty:             yamlSpec.AllowEmpty,
 		PostgresMinimumVersion: yamlSpec.PostgresMinimumVersion,
+		PostgresMaximumVersion: yamlSpec.PostgresMaximumVersion,
 		Extension:              yamlSpec.Extension,
 	}, nil
 }
@@ -167,6 +170,9 @@ func GetConfigurableParameters(majorVersion int, image string, preloadLibraries 
 	for name, spec := range configurableParameters {
 		// Filter by PostgreSQL version
 		if majorVersion != 0 && spec.PostgresMinimumVersion != nil && *spec.PostgresMinimumVersion > majorVersion {
+			continue
+		}
+		if majorVersion != 0 && spec.PostgresMaximumVersion != nil && *spec.PostgresMaximumVersion < majorVersion {
 			continue
 		}
 

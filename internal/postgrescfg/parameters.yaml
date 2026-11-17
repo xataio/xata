@@ -243,9 +243,34 @@ io_workers:
   min_value: 1
   max_value: 32
   default_value: 3
-  docs_link: "https://www.postgresql.org/docs/current/runtime-config-resource.html#GUC-IO-WORKERS"
+  docs_link: "https://www.postgresql.org/docs/18/runtime-config-resource.html#GUC-IO-WORKERS"
   postgres_minimum_version: 18
+  postgres_maximum_version: 18
   restart_required: true
+  recommendation: |
+    Keep the default for the small instance sizes, increase on the larger instance sizes.
+
+io_min_workers:
+  section: "Async behavior"
+  parameter_type: int
+  description: "Minimum number of IO worker processes, for io_method=worker"
+  min_value: 1
+  max_value: 32
+  default_value: 2
+  docs_link: "https://www.postgresql.org/docs/19/runtime-config-resource.html#GUC-IO-MIN-WORKERS"
+  postgres_minimum_version: 19
+  recommendation: |
+    Keep the default. PostgreSQL starts more workers up to io_max_workers when the IO queue grows.
+
+io_max_workers:
+  section: "Async behavior"
+  parameter_type: int
+  description: "Maximum number of IO worker processes, for io_method=worker"
+  min_value: 1
+  max_value: 32
+  default_value: 8
+  docs_link: "https://www.postgresql.org/docs/19/runtime-config-resource.html#GUC-IO-MAX-WORKERS"
+  postgres_minimum_version: 19
   recommendation: |
     Keep the default for the small instance sizes, increase on the larger instance sizes.
 

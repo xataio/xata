@@ -125,3 +125,19 @@ func TestVersionFiltering(t *testing.T) {
 		t.Error("io_combine_limit should be available in PostgreSQL 17")
 	}
 }
+
+func TestVersionFilteringMaximum(t *testing.T) {
+	params18 := GetConfigurableParameters(18, "", nil)
+	params19 := GetConfigurableParameters(19, "", nil)
+
+	// PostgreSQL 19 replaced io_workers with io_min_workers and io_max_workers,
+	// and refuses to start with the removed name in its configuration.
+	for name, want18 := range map[string]bool{"io_workers": true, "io_min_workers": false, "io_max_workers": false} {
+		if _, got := params18[name]; got != want18 {
+			t.Errorf("%s in PostgreSQL 18 = %v, want %v", name, got, want18)
+		}
+		if _, got := params19[name]; got == want18 {
+			t.Errorf("%s in PostgreSQL 19 = %v, want %v", name, got, !want18)
+		}
+	}
+}
