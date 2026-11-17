@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	barmanPluginApi "github.com/cloudnative-pg/plugin-barman-cloud/api/v1"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	apiv1 "github.com/xataio/xata-cnpg/api/v1"
@@ -47,7 +46,6 @@ func TestCreatePostgresCluster(t *testing.T) {
 		nodeSelector       map[string]string
 		parentBranch       *v1alpha1.Branch
 		sourceCluster      *apiv1.Cluster
-		objectStore        *barmanPluginApi.ObjectStore
 		extraObjects       []client.Object
 		xatastorEnabled    bool
 		serviceOpts        []testServiceOption
@@ -317,7 +315,6 @@ func TestCreatePostgresCluster(t *testing.T) {
 			name:          "restore from ContinuousBackup without timestamp (latest)",
 			parentBranch:  nil,
 			sourceCluster: sourceClusterForPITR(),
-			objectStore:   objectStoreForPITR(),
 			extraObjects:  []client.Object{sourceBranchForPITR()},
 			requestFn: func(r *clustersv1.CreatePostgresClusterRequest) {
 				r.DataSource = &clustersv1.CreatePostgresClusterRequest_ContinuousBackup{
@@ -337,7 +334,6 @@ func TestCreatePostgresCluster(t *testing.T) {
 			name:          "restore from ContinuousBackup with timestamp (PITR)",
 			parentBranch:  nil,
 			sourceCluster: sourceClusterForPITR(),
-			objectStore:   objectStoreForPITR(),
 			extraObjects:  []client.Object{sourceBranchForPITR()},
 			requestFn: func(r *clustersv1.CreatePostgresClusterRequest) {
 				r.DataSource = &clustersv1.CreatePostgresClusterRequest_ContinuousBackup{
@@ -359,7 +355,6 @@ func TestCreatePostgresCluster(t *testing.T) {
 			name:          "error - restore from ContinuousBackup with non-existent source cluster",
 			parentBranch:  nil,
 			sourceCluster: nil,
-			objectStore:   nil,
 			requestFn: func(r *clustersv1.CreatePostgresClusterRequest) {
 				r.DataSource = &clustersv1.CreatePostgresClusterRequest_ContinuousBackup{
 					ContinuousBackup: &clustersv1.ContinuousBackup{
@@ -370,68 +365,9 @@ func TestCreatePostgresCluster(t *testing.T) {
 			expectedStatusCode: codes.NotFound,
 		},
 		{
-			name:          "error - restore from ContinuousBackup with non-existent ObjectStore",
-			parentBranch:  nil,
-			sourceCluster: sourceClusterForPITR(),
-			objectStore:   nil,
-			requestFn: func(r *clustersv1.CreatePostgresClusterRequest) {
-				r.DataSource = &clustersv1.CreatePostgresClusterRequest_ContinuousBackup{
-					ContinuousBackup: &clustersv1.ContinuousBackup{
-						ClusterId: "source-cluster-for-pitr",
-					},
-				}
-			},
-			expectedStatusCode: codes.NotFound,
-		},
-		{
-			name:          "error - restore from ContinuousBackup with ObjectStore missing recovery window",
-			parentBranch:  nil,
-			sourceCluster: sourceClusterForPITR(),
-			objectStore: &barmanPluginApi.ObjectStore{
-				Name:      "source-cluster-for-pitr",
-				Namespace: "xata-clusters",
-				Status: barmanPluginApi.ObjectStoreStatus{
-					ServerRecoveryWindow: map[string]barmanPluginApi.RecoveryWindow{},
-				},
-			},
-			requestFn: func(r *clustersv1.CreatePostgresClusterRequest) {
-				r.DataSource = &clustersv1.CreatePostgresClusterRequest_ContinuousBackup{
-					ContinuousBackup: &clustersv1.ContinuousBackup{
-						ClusterId: "source-cluster-for-pitr",
-					},
-				}
-			},
-			expectedStatusCode: codes.NotFound,
-		},
-		{
-			name:          "error - restore from ContinuousBackup with ObjectStore having nil FirstRecoverabilityPoint",
-			parentBranch:  nil,
-			sourceCluster: sourceClusterForPITR(),
-			objectStore: &barmanPluginApi.ObjectStore{
-				Name:      "source-cluster-for-pitr",
-				Namespace: "xata-clusters",
-				Status: barmanPluginApi.ObjectStoreStatus{
-					ServerRecoveryWindow: map[string]barmanPluginApi.RecoveryWindow{
-						"source-cluster-for-pitr": {
-							FirstRecoverabilityPoint: nil,
-						},
-					},
-				},
-			},
-			requestFn: func(r *clustersv1.CreatePostgresClusterRequest) {
-				r.DataSource = &clustersv1.CreatePostgresClusterRequest_ContinuousBackup{
-					ContinuousBackup: &clustersv1.ContinuousBackup{
-						ClusterId: "source-cluster-for-pitr",
-					},
-				}
-			},
-			expectedStatusCode: codes.NotFound,
-		},
-		{
 			name:          "error - restore from ContinuousBackup with empty ClusterId",
 			parentBranch:  nil,
 			sourceCluster: nil,
-			objectStore:   nil,
 			requestFn: func(r *clustersv1.CreatePostgresClusterRequest) {
 				r.DataSource = &clustersv1.CreatePostgresClusterRequest_ContinuousBackup{
 					ContinuousBackup: &clustersv1.ContinuousBackup{
@@ -442,7 +378,7 @@ func TestCreatePostgresCluster(t *testing.T) {
 			expectedStatusCode: codes.InvalidArgument,
 		},
 		{
-			name: "use_pool with matching pool - adopts pool cluster",
+			name: "use_pool with matching pool - adopts pool cluster and keeps the branch backup spec",
 			extraObjects: []client.Object{
 				poolForTest("default-storage-class", testImage, "2", "3996Mi"),
 				poolClusterForTest(),
@@ -453,37 +389,6 @@ func TestCreatePostgresCluster(t *testing.T) {
 			},
 			expectedBranchFn: func(b *v1alpha1.Branch) {
 				b.Spec.ClusterSpec.Name = new("pool-cluster-1")
-				b.Spec.BackupSpec = nil
-				b.Annotations = map[string]string{v1alpha1.WakeupPoolAnnotation: "test-pool-slot"}
-			},
-		},
-		{
-			name: "use_pool with pgbackrest - adopts pool cluster and keeps backups",
-			extraObjects: []client.Object{
-				poolForTest("default-storage-class", testImage, "2", "3996Mi"),
-				poolClusterForTest(),
-				poolClusterAppSecretForTest("pool-password"),
-			},
-			requestFn: func(r *clustersv1.CreatePostgresClusterRequest) {
-				r.UsePool = new(true)
-				r.BackupConfiguration.BackupMethod = string(v1alpha1.BackupMethodPgBackRest)
-			},
-			expectedBranchFn: func(b *v1alpha1.Branch) {
-				b.Spec.ClusterSpec.Name = new("pool-cluster-1")
-				b.Spec.BackupSpec.Method = v1alpha1.BackupMethodPgBackRest
-				b.Spec.BackupSpec.PgBackRest = &v1alpha1.PgBackRestSpec{
-					S3: &v1alpha1.PgBackRestS3Spec{
-						Bucket:  "test-pgbackrest-bucket",
-						Region:  "us-east-1",
-						KeyType: webIdentityKeyType,
-					},
-					RepoPath:            webIdentityRepoPath(b.Name),
-					RetentionFullDays:   7,
-					CompressType:        DefaultPgBackRestCompressType,
-					ArchiveAsync:        DefaultPgBackRestArchiveAsync,
-					ArchivePushQueueMax: DefaultPgBackRestPushQueueMax,
-					ArchiveGetQueueMax:  DefaultPgBackRestGetQueueMax,
-				}
 				b.Annotations = map[string]string{v1alpha1.WakeupPoolAnnotation: "test-pool-slot"}
 			},
 		},
@@ -554,7 +459,6 @@ func TestCreatePostgresCluster(t *testing.T) {
 				b.Spec.ClusterSpec.Storage.StorageClass = new("xatastor")
 				b.Spec.ClusterSpec.Storage.VolumeSnapshotClass = new("xatastor")
 				b.Spec.ClusterSpec.Name = new("pool-cluster-1")
-				b.Spec.BackupSpec = nil
 				b.Annotations = map[string]string{v1alpha1.WakeupPoolAnnotation: "test-pool-slot"}
 			},
 		},
@@ -848,9 +752,6 @@ func TestCreatePostgresCluster(t *testing.T) {
 			}
 			if tt.sourceCluster != nil {
 				existingObjs = append(existingObjs, tt.sourceCluster)
-			}
-			if tt.objectStore != nil {
-				existingObjs = append(existingObjs, tt.objectStore)
 			}
 			existingObjs = append(existingObjs, tt.extraObjects...)
 			svc, k8sClient := setupTestClustersService(t,
@@ -1908,81 +1809,8 @@ func TestRotatePostgresClusterCredentials(t *testing.T) {
 	}
 }
 
-func TestGetObjectStore(t *testing.T) {
-	t.Parallel()
-
-	recoveryTime := metav1.Now()
-
-	tests := map[string]struct {
-		setupMock func(m *cnpgmocks.Connector)
-		wantErr   string
-		validate  func(t *testing.T, resp *clustersv1.GetObjectStoreResponse)
-	}{
-		"success with recovery windows": {
-			setupMock: func(m *cnpgmocks.Connector) {
-				m.EXPECT().GetObjectStore(mock.Anything, "cluster-1", "xata-clusters").
-					Return(&barmanPluginApi.ObjectStore{
-						Status: barmanPluginApi.ObjectStoreStatus{
-							ServerRecoveryWindow: map[string]barmanPluginApi.RecoveryWindow{
-								"cluster-1": {
-									FirstRecoverabilityPoint: &recoveryTime,
-									LastSuccessfulBackupTime: &recoveryTime,
-									LastFailedBackupTime:     &recoveryTime,
-								},
-							},
-						},
-					}, nil)
-			},
-			validate: func(t *testing.T, resp *clustersv1.GetObjectStoreResponse) {
-				require.Contains(t, resp.Status.ServerRecoveryWindow, "cluster-1")
-				w := resp.Status.ServerRecoveryWindow["cluster-1"]
-				require.NotEmpty(t, w.FirstRecoverabilityPoint)
-				require.NotEmpty(t, w.LastSuccessfulBackupTime)
-				require.NotEmpty(t, w.LastFailedBackupTime)
-			},
-		},
-		"not found": {
-			setupMock: func(m *cnpgmocks.Connector) {
-				m.EXPECT().GetObjectStore(mock.Anything, "cluster-1", "xata-clusters").
-					Return(nil, fmt.Errorf(`objectstores.barman.io "cluster-1" not found`))
-			},
-			wantErr: "object store not found",
-		},
-		"other error": {
-			setupMock: func(m *cnpgmocks.Connector) {
-				m.EXPECT().GetObjectStore(mock.Anything, "cluster-1", "xata-clusters").
-					Return(nil, fmt.Errorf("connection refused"))
-			},
-			wantErr: "get object store status",
-		},
-	}
-
-	for name, tt := range tests {
-		t.Run(name, func(t *testing.T) {
-			cnpgMock := cnpgmocks.NewConnector(t)
-			tt.setupMock(cnpgMock)
-
-			svc, _ := setupTestClustersService(t, withCNPGConnector(cnpgMock))
-
-			resp, err := svc.GetObjectStore(context.Background(),
-				&clustersv1.GetObjectStoreRequest{Id: "cluster-1"})
-
-			if tt.wantErr != "" {
-				require.ErrorContains(t, err, tt.wantErr)
-				return
-			}
-			require.NoError(t, err)
-			if tt.validate != nil {
-				tt.validate(t, resp)
-			}
-		})
-	}
-}
-
 func TestGetRecoveryWindow(t *testing.T) {
 	t.Parallel()
-
-	recoveryTime := metav1.NewTime(time.Date(2023, 1, 2, 15, 30, 0, 0, time.UTC))
 
 	pgbackrestBranch := &v1alpha1.Branch{
 		Name: "branch-1",
@@ -2000,27 +1828,18 @@ func TestGetRecoveryWindow(t *testing.T) {
 		},
 	}
 
-	barmanBranch := &v1alpha1.Branch{
-		Name: "branch-1",
-		Spec: v1alpha1.BranchSpec{
-			BackupSpec: &v1alpha1.BackupSpec{Method: v1alpha1.BackupMethodBarman},
-		},
-	}
-
 	branchWithoutBackups := &v1alpha1.Branch{
 		Name: "branch-1",
 	}
 
 	tests := map[string]struct {
-		branch    *v1alpha1.Branch
-		setupMock func(m *cnpgmocks.Connector)
-		wantErr   string
-		wantCode  codes.Code
-		validate  func(t *testing.T, resp *clustersv1.GetRecoveryWindowResponse)
+		branch   *v1alpha1.Branch
+		wantErr  string
+		wantCode codes.Code
+		validate func(t *testing.T, resp *clustersv1.GetRecoveryWindowResponse)
 	}{
-		"pgbackrest branch reads the Branch status": {
-			branch:    pgbackrestBranch,
-			setupMock: func(_ *cnpgmocks.Connector) {},
+		"branch with backups reads the Branch status": {
+			branch: pgbackrestBranch,
 			validate: func(t *testing.T, resp *clustersv1.GetRecoveryWindowResponse) {
 				require.Equal(t, "2023-01-01T10:00:00Z", resp.FirstRecoverabilityPoint)
 				require.Equal(t, "2023-01-02T16:00:00Z", resp.LastRecoverabilityPoint)
@@ -2028,71 +1847,21 @@ func TestGetRecoveryWindow(t *testing.T) {
 				require.Equal(t, "2023-01-02T09:00:00Z", resp.LastFailedBackup)
 			},
 		},
-		"barman branch reads the ObjectStore": {
-			branch: barmanBranch,
-			setupMock: func(m *cnpgmocks.Connector) {
-				m.EXPECT().GetObjectStore(mock.Anything, "branch-1", "xata-clusters").
-					Return(&barmanPluginApi.ObjectStore{
-						Status: barmanPluginApi.ObjectStoreStatus{
-							ServerRecoveryWindow: map[string]barmanPluginApi.RecoveryWindow{
-								"branch-1": {
-									FirstRecoverabilityPoint: &recoveryTime,
-									LastSuccessfulBackupTime: &recoveryTime,
-									LastFailedBackupTime:     &recoveryTime,
-								},
-							},
-						},
-					}, nil)
-			},
-			validate: func(t *testing.T, resp *clustersv1.GetRecoveryWindowResponse) {
-				require.Equal(t, "2023-01-02T15:30:00Z", resp.FirstRecoverabilityPoint)
-				require.Equal(t, "2023-01-02T15:30:00Z", resp.LastSuccessfulBackup)
-				require.Equal(t, "2023-01-02T15:30:00Z", resp.LastFailedBackup)
-				require.Empty(t, resp.LastRecoverabilityPoint)
-			},
-		},
-		"barman branch without a recovery window": {
-			branch: barmanBranch,
-			setupMock: func(m *cnpgmocks.Connector) {
-				m.EXPECT().GetObjectStore(mock.Anything, "branch-1", "xata-clusters").
-					Return(&barmanPluginApi.ObjectStore{}, nil)
-			},
-			validate: func(t *testing.T, resp *clustersv1.GetRecoveryWindowResponse) {
-				require.Empty(t, resp.FirstRecoverabilityPoint)
-				require.Empty(t, resp.LastRecoverabilityPoint)
-				require.Empty(t, resp.LastSuccessfulBackup)
-				require.Empty(t, resp.LastFailedBackup)
-			},
-		},
-		"barman branch without an ObjectStore": {
-			branch: barmanBranch,
-			setupMock: func(m *cnpgmocks.Connector) {
-				m.EXPECT().GetObjectStore(mock.Anything, "branch-1", "xata-clusters").
-					Return(nil, errors.NewNotFound(schema.GroupResource{Group: "barmancloud.cnpg.io", Resource: "objectstores"}, "branch-1"))
-			},
-			wantErr:  "object store not found",
+		"branch without backups": {
+			branch:   branchWithoutBackups,
+			wantErr:  "has no backups",
 			wantCode: codes.NotFound,
 		},
-		"branch without backups": {
-			branch:    branchWithoutBackups,
-			setupMock: func(_ *cnpgmocks.Connector) {},
-			wantErr:   "has no backups",
-			wantCode:  codes.NotFound,
-		},
 		"branch not found": {
-			branch:    nil,
-			setupMock: func(_ *cnpgmocks.Connector) {},
-			wantErr:   "not found",
-			wantCode:  codes.NotFound,
+			branch:   nil,
+			wantErr:  "not found",
+			wantCode: codes.NotFound,
 		},
 	}
 
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			cnpgMock := cnpgmocks.NewConnector(t)
-			tt.setupMock(cnpgMock)
-
-			opts := []testServiceOption{withCNPGConnector(cnpgMock)}
+			var opts []testServiceOption
 			if tt.branch != nil {
 				opts = append(opts, withExistingObjects(tt.branch.DeepCopy()))
 			}
@@ -2434,7 +2203,6 @@ func setupTestClustersService(t *testing.T, opts ...testServiceOption) (*Cluster
 	require.NoError(t, clientgoscheme.AddToScheme(scheme))
 	require.NoError(t, apiv1.AddToScheme(scheme))
 	require.NoError(t, v1alpha1.AddToScheme(scheme))
-	require.NoError(t, barmanPluginApi.AddToScheme(scheme))
 	require.NoError(t, cpv1alpha1.AddToScheme(scheme))
 
 	fakeClient := fake.NewClientBuilder().
@@ -2581,9 +2349,23 @@ func exampleRequestsAndBranches() (*clustersv1.CreatePostgresClusterRequest, *v1
 					},
 				},
 				BackupSpec: &v1alpha1.BackupSpec{
+					Method:    v1alpha1.BackupMethodPgBackRest,
 					Retention: "7d",
 					ScheduledBackup: &v1alpha1.ScheduledBackupSpec{
 						Schedule: "0 2 * * *",
+					},
+					PgBackRest: &v1alpha1.PgBackRestSpec{
+						S3: &v1alpha1.PgBackRestS3Spec{
+							Bucket:  "test-pgbackrest-bucket",
+							Region:  "us-east-1",
+							KeyType: webIdentityKeyType,
+						},
+						RepoPath:            webIdentityRepoPath("lsmevenv7t3l56euo1v9bh3b74"),
+						RetentionFullDays:   7,
+						CompressType:        DefaultPgBackRestCompressType,
+						ArchiveAsync:        DefaultPgBackRestArchiveAsync,
+						ArchivePushQueueMax: DefaultPgBackRestPushQueueMax,
+						ArchiveGetQueueMax:  DefaultPgBackRestGetQueueMax,
 					},
 				},
 				InheritedMetadata: &v1alpha1.InheritedMetadata{
@@ -2737,9 +2519,23 @@ func exampleRequestsAndBranches() (*clustersv1.CreatePostgresClusterRequest, *v1
 					},
 				},
 				BackupSpec: &v1alpha1.BackupSpec{
+					Method:    v1alpha1.BackupMethodPgBackRest,
 					Retention: "14d",
 					ScheduledBackup: &v1alpha1.ScheduledBackupSpec{
 						Schedule: "0 7 * * *",
+					},
+					PgBackRest: &v1alpha1.PgBackRestSpec{
+						S3: &v1alpha1.PgBackRestS3Spec{
+							Bucket:  "test-pgbackrest-bucket",
+							Region:  "us-east-1",
+							KeyType: webIdentityKeyType,
+						},
+						RepoPath:            webIdentityRepoPath("lsmevenv7t3l56euo1v9bh3b74"),
+						RetentionFullDays:   14,
+						CompressType:        DefaultPgBackRestCompressType,
+						ArchiveAsync:        DefaultPgBackRestArchiveAsync,
+						ArchivePushQueueMax: DefaultPgBackRestPushQueueMax,
+						ArchiveGetQueueMax:  DefaultPgBackRestGetQueueMax,
 					},
 				},
 				InheritedMetadata: &v1alpha1.InheritedMetadata{
@@ -2922,20 +2718,6 @@ func expectPgBackRestBackupSpec(b *v1alpha1.Branch) {
 		ArchiveAsync:        DefaultPgBackRestArchiveAsync,
 		ArchivePushQueueMax: DefaultPgBackRestPushQueueMax,
 		ArchiveGetQueueMax:  DefaultPgBackRestGetQueueMax,
-	}
-}
-
-func objectStoreForPITR() *barmanPluginApi.ObjectStore {
-	return &barmanPluginApi.ObjectStore{
-		Name:      "source-cluster-for-pitr",
-		Namespace: "xata-clusters",
-		Status: barmanPluginApi.ObjectStoreStatus{
-			ServerRecoveryWindow: map[string]barmanPluginApi.RecoveryWindow{
-				"source-cluster-for-pitr": {
-					FirstRecoverabilityPoint: &metav1.Time{Time: time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)},
-				},
-			},
-		},
 	}
 }
 

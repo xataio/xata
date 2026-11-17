@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
-	"time"
 
 	"github.com/rs/zerolog/log"
 
@@ -30,7 +28,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	barmanPluginApi "github.com/cloudnative-pg/plugin-barman-cloud/api/v1"
 	apiv1 "github.com/xataio/xata-cnpg/api/v1"
 
 	clustersv1 "xata/gen/proto/clusters/v1"
@@ -120,9 +117,6 @@ func (c *ClustersService) Init(ctx context.Context) error {
 	}
 	if err := apiv1.AddToScheme(scheme); err != nil {
 		return fmt.Errorf("cannot add cnpg scheme: %w", err)
-	}
-	if err := barmanPluginApi.AddToScheme(scheme); err != nil {
-		return fmt.Errorf("cannot add barman plugin scheme: %w", err)
 	}
 	if err := cpv1alpha1.AddToScheme(scheme); err != nil {
 		return fmt.Errorf("cannot add clusterpool scheme: %w", err)
@@ -331,11 +325,6 @@ func (c *ClustersService) CreatePostgresCluster(ctx context.Context, req *cluste
 	}
 
 	branch := branchBuilder.Build()
-	if continuousBackupSource != "" && !branch.Spec.BackupSpec.IsPgBackRest() {
-		if err := c.validateBarmanRecoverySource(ctx, continuousBackupSource); err != nil {
-			return nil, err
-		}
-	}
 
 	// Provision the <branchID>-app secret holding the xata role credentials
 	// before the Branch so that credentials for the branch are always available
@@ -619,46 +608,16 @@ func (c *ClustersService) GetPostgresClusterCredentials(ctx context.Context, req
 	}, nil
 }
 
-// GetObjectStore retrieves the Barman ObjectStore status and recovery windows
-// for a branch.
-func (c *ClustersService) GetObjectStore(ctx context.Context, request *clustersv1.GetObjectStoreRequest) (*clustersv1.GetObjectStoreResponse, error) {
-	objectStore, err := c.cnpgConnector.GetObjectStore(ctx, request.Id, c.config.ClustersNamespace)
-	if err != nil {
-		if strings.Contains(err.Error(), fmt.Sprintf("objectstores.barman.io \"%s\" not found", request.Id)) {
-			return nil, fmt.Errorf("object store not found for cluster %s", request.Id)
-		}
-		return nil, fmt.Errorf("get object store status: %w", err)
-	}
-
-	response := &clustersv1.GetObjectStoreResponse{
-		Status: &clustersv1.ObjectStoreStatus{
-			ServerRecoveryWindow: make(map[string]*clustersv1.RecoveryWindow),
-		},
-	}
-
-	for server, window := range objectStore.Status.ServerRecoveryWindow {
-		recoveryWindow := &clustersv1.RecoveryWindow{}
-
-		if window.FirstRecoverabilityPoint != nil {
-			recoveryWindow.FirstRecoverabilityPoint = window.FirstRecoverabilityPoint.String()
-		}
-		if window.LastSuccessfulBackupTime != nil {
-			recoveryWindow.LastSuccessfulBackupTime = window.LastSuccessfulBackupTime.String()
-		}
-		if window.LastFailedBackupTime != nil {
-			recoveryWindow.LastFailedBackupTime = window.LastFailedBackupTime.String()
-		}
-
-		response.Status.ServerRecoveryWindow[server] = recoveryWindow
-	}
-
-	return response, nil
+// GetObjectStore is the deprecated barman recovery-window RPC. The barman-cloud
+// plugin is no longer deployed, so there is no ObjectStore to read. The RPC
+// stays until it is removed from the proto; use GetRecoveryWindow instead.
+func (c *ClustersService) GetObjectStore(context.Context, *clustersv1.GetObjectStoreRequest) (*clustersv1.GetObjectStoreResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "GetObjectStore is no longer supported, use GetRecoveryWindow")
 }
 
-// GetRecoveryWindow returns the recovery window for a branch, independent of
-// the backup method. For pgbackrest the values come from the Branch status;
-// for barman they come from the ObjectStore CR maintained by the plugin.
-// All timestamps are RFC3339.
+// GetRecoveryWindow returns the recovery window for a branch from the Branch
+// status, which the branch-operator fills from pgbackrest. All timestamps are
+// RFC3339.
 func (c *ClustersService) GetRecoveryWindow(ctx context.Context, request *clustersv1.GetRecoveryWindowRequest) (*clustersv1.GetRecoveryWindowResponse, error) {
 	branch, err := c.getBranch(ctx, request.Id)
 	if err != nil {
@@ -669,40 +628,12 @@ func (c *ClustersService) GetRecoveryWindow(ctx context.Context, request *cluste
 		return nil, status.Errorf(codes.NotFound, "branch %s has no backups", request.Id)
 	}
 
-	if branch.Spec.BackupSpec.IsPgBackRest() {
-		return &clustersv1.GetRecoveryWindowResponse{
-			FirstRecoverabilityPoint: branch.Status.FirstRecoverabilityPoint,
-			LastRecoverabilityPoint:  branch.Status.LastRecoverabilityPoint,
-			LastSuccessfulBackup:     branch.Status.LastSuccessfulBackup,
-			LastFailedBackup:         branch.Status.LastFailedBackup,
-		}, nil
-	}
-
-	objectStore, err := c.cnpgConnector.GetObjectStore(ctx, request.Id, c.config.ClustersNamespace)
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			return nil, status.Errorf(codes.NotFound, "object store not found for branch %s", request.Id)
-		}
-		return nil, fmt.Errorf("get object store status: %w", err)
-	}
-
-	response := &clustersv1.GetRecoveryWindowResponse{}
-	window, ok := objectStore.Status.ServerRecoveryWindow[request.Id]
-	if !ok {
-		return response, nil
-	}
-
-	if window.FirstRecoverabilityPoint != nil {
-		response.FirstRecoverabilityPoint = window.FirstRecoverabilityPoint.UTC().Format(time.RFC3339)
-	}
-	if window.LastSuccessfulBackupTime != nil {
-		response.LastSuccessfulBackup = window.LastSuccessfulBackupTime.UTC().Format(time.RFC3339)
-	}
-	if window.LastFailedBackupTime != nil {
-		response.LastFailedBackup = window.LastFailedBackupTime.UTC().Format(time.RFC3339)
-	}
-
-	return response, nil
+	return &clustersv1.GetRecoveryWindowResponse{
+		FirstRecoverabilityPoint: branch.Status.FirstRecoverabilityPoint,
+		LastRecoverabilityPoint:  branch.Status.LastRecoverabilityPoint,
+		LastSuccessfulBackup:     branch.Status.LastSuccessfulBackup,
+		LastFailedBackup:         branch.Status.LastFailedBackup,
+	}, nil
 }
 
 // SetBranchIPFiltering sets the IP filtering configuration for a branch in the ConfigMap.
@@ -939,30 +870,4 @@ func (c *ClustersService) getCluster(ctx context.Context, id string) (*apiv1.Clu
 		return nil, err
 	}
 	return cluster, nil
-}
-
-// getObjectStore retrieves a CNPG Barman ObjectStore by ID
-func (c *ClustersService) getObjectStore(ctx context.Context, id string) (*barmanPluginApi.ObjectStore, error) {
-	objectStore := &barmanPluginApi.ObjectStore{}
-	err := c.kubeClient.Get(ctx, types.NamespacedName{
-		Name:      id,
-		Namespace: c.config.ClustersNamespace,
-	}, objectStore)
-	if err != nil {
-		return nil, err
-	}
-	return objectStore, nil
-}
-
-func (c *ClustersService) validateBarmanRecoverySource(ctx context.Context, sourceID string) error {
-	objectStore, err := c.getObjectStore(ctx, sourceID)
-	if err != nil {
-		return k8sErrorToGRPCError(err)
-	}
-
-	recoveryWindow, ok := objectStore.Status.ServerRecoveryWindow[sourceID]
-	if !ok || recoveryWindow.FirstRecoverabilityPoint.IsZero() {
-		return status.Errorf(codes.NotFound, "no continuous backup for source cluster %s", sourceID)
-	}
-	return nil
 }

@@ -245,7 +245,7 @@ func buildLogsQL(namespace, branchID string, filters []LogFilter, resumeOnOrBefo
 	var b strings.Builder
 	fmt.Fprintf(&b, "kubernetes.namespace_name:=%q AND kubernetes.container_name:=%q", namespace, "postgres")
 	// The postgres container streams output from CNPG's instance manager,
-	// which mixes its own logs (logger="instance-manager"), barman lines
+	// which mixes its own logs (logger="instance-manager"), backup lines
 	// (logger="backup") and actual postgres records (logger="postgres").
 	b.WriteString(` AND logger:in ("postgres","pgaudit")`)
 	fmt.Fprintf(&b, ` AND branch_id:=%q`, branchID)

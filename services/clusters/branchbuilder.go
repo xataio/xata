@@ -261,15 +261,9 @@ func (b *BranchBuilder) WithUpdatesFrom(req *clustersv1.UpdatePostgresClusterReq
 // WithClusterFromPool sets the cluster name to the pool cluster and annotates
 // the branch with the wakeup pool name so that both the scale-to-zero sidecar
 // and the manual hibernation path know to use pool hibernation.
-//
-// Only pgbackrest backup method is support. It is configured inline on the
-// cluster spec and is baked into the pool definition.
 func (b *BranchBuilder) WithClusterFromPool(clusterName, wakeupPool string) *BranchBuilder {
 	if clusterName != "" {
 		b.branch.Spec.ClusterSpec.Name = &clusterName
-		if !b.branch.Spec.BackupSpec.IsPgBackRest() {
-			b.branch.Spec.BackupSpec = nil
-		}
 		if b.branch.Annotations == nil {
 			b.branch.Annotations = make(map[string]string)
 		}
@@ -528,27 +522,23 @@ func backupSpec(b *clustersv1.BackupConfiguration) *v1alpha1.BackupSpec {
 		}
 	}
 
-	spec := &v1alpha1.BackupSpec{
-		ScheduledBackup: sbSpec,
-		Retention:       b.GetBackupRetention(),
+	retentionDays := DefaultPgBackRestRetentionDays
+	var parsed int
+	if _, err := fmt.Sscanf(b.GetBackupRetention(), "%dd", &parsed); err == nil && parsed > 0 {
+		retentionDays = parsed
 	}
 
-	if b.GetBackupMethod() == string(v1alpha1.BackupMethodPgBackRest) {
-		spec.Method = v1alpha1.BackupMethodPgBackRest
-
-		retentionDays := DefaultPgBackRestRetentionDays
-		var parsed int
-		if _, err := fmt.Sscanf(b.GetBackupRetention(), "%dd", &parsed); err == nil && parsed > 0 {
-			retentionDays = parsed
-		}
-
-		spec.PgBackRest = &v1alpha1.PgBackRestSpec{
+	spec := &v1alpha1.BackupSpec{
+		Method:          v1alpha1.BackupMethodPgBackRest,
+		ScheduledBackup: sbSpec,
+		Retention:       b.GetBackupRetention(),
+		PgBackRest: &v1alpha1.PgBackRestSpec{
 			RetentionFullDays:   retentionDays,
 			CompressType:        DefaultPgBackRestCompressType,
 			ArchiveAsync:        DefaultPgBackRestArchiveAsync,
 			ArchivePushQueueMax: DefaultPgBackRestPushQueueMax,
 			ArchiveGetQueueMax:  DefaultPgBackRestGetQueueMax,
-		}
+		},
 	}
 
 	return spec

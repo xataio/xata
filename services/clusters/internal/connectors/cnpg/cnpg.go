@@ -8,7 +8,6 @@ import (
 
 	"k8s.io/apimachinery/pkg/types"
 
-	barmanPluginApi "github.com/cloudnative-pg/plugin-barman-cloud/api/v1"
 	apiv1 "github.com/xataio/xata-cnpg/api/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -20,7 +19,6 @@ import (
 
 // Connector is an interface for interacting with the cnpg operator
 type Connector interface {
-	GetObjectStore(ctx context.Context, id, namespace string) (*barmanPluginApi.ObjectStore, error)
 	GetClusterCredentials(ctx context.Context, id, namespace, username string) (*Credentials, error)
 }
 
@@ -55,29 +53,12 @@ func NewConnector(kubeConfig string) (*DefaultConnector, error) {
 		return nil, fmt.Errorf("add to scheme cnpg %w", err)
 	}
 
-	// make the client aware of the barman cloud plugin scheme
-	if err = barmanPluginApi.AddToScheme(scheme); err != nil {
-		return nil, fmt.Errorf("add to scheme barman plugin %w", err)
-	}
-
 	clientK8s, err := client.New(cfg, client.Options{Scheme: scheme})
 	if err != nil {
 		return nil, fmt.Errorf("create clientset %w", err)
 	}
 
 	return &DefaultConnector{KubernetesClient: clientK8s}, nil
-}
-
-func (c *DefaultConnector) GetObjectStore(ctx context.Context, id, namespace string) (*barmanPluginApi.ObjectStore, error) {
-	objectStore := &barmanPluginApi.ObjectStore{}
-	err := c.KubernetesClient.Get(ctx, types.NamespacedName{
-		Namespace: namespace,
-		Name:      id,
-	}, objectStore)
-	if err != nil {
-		return nil, err
-	}
-	return objectStore, nil
 }
 
 func (c *DefaultConnector) GetClusterCredentials(ctx context.Context, id, namespace, username string) (*Credentials, error) {
