@@ -197,6 +197,43 @@ func TestLoggerMiddlewareLogLevel(t *testing.T) {
 	}
 }
 
+func TestLoggerMiddlewareRemoteIP(t *testing.T) {
+	tests := map[string]struct {
+		header string
+	}{
+		"direct request": {},
+		"spoofed real IP": {
+			header: echo.HeaderXRealIP,
+		},
+		"spoofed forwarded IP": {
+			header: echo.HeaderXForwardedFor,
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			var buf bytes.Buffer
+			logger := zerolog.New(&buf)
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			req.RemoteAddr = "192.0.2.10:1234"
+			if tt.header != "" {
+				req.Header.Set(tt.header, "198.51.100.77")
+			}
+			c := echo.New().NewContext(req, httptest.NewRecorder())
+			c.SetPath("/test")
+
+			err := LoggerMiddleware(&logger)(func(c echo.Context) error {
+				return c.NoContent(http.StatusOK)
+			})(c)
+			require.NoError(t, err)
+
+			var got map[string]any
+			require.NoError(t, json.Unmarshal(buf.Bytes(), &got))
+			require.Equal(t, "192.0.2.10", got[keyLogNetRemoteIP])
+		})
+	}
+}
+
 func TestMetricsMiddlewareReturnsHandlerError(t *testing.T) {
 	o := NewTestService(t)
 	want := errors.New("broken")
