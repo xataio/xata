@@ -11,6 +11,7 @@ import (
 	snapshotv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 	"github.com/stretchr/testify/require"
 	apiv1 "github.com/xataio/xata-cnpg/api/v1"
+	apiv1ac "github.com/xataio/xata-cnpg/pkg/client/applyconfiguration/api/v1"
 	"go.opentelemetry.io/otel/metric/noop"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -130,7 +131,10 @@ func TestReconcilePgBackRestToken(t *testing.T) {
 			require.NoError(t, v1alpha1.AddToScheme(scheme))
 			require.NoError(t, apiv1.AddToScheme(scheme))
 
-			branch := &v1alpha1.Branch{Name: "branch", UID: types.UID("branch-uid")}
+			branch := &v1alpha1.Branch{
+				Name: "branch", UID: types.UID("branch-uid"),
+				Spec: v1alpha1.BranchSpec{ClusterSpec: v1alpha1.ClusterSpec{Name: new("cluster")}},
+			}
 			secret := &corev1.Secret{
 				Name: "cluster-pgbackrest-web-identity", Namespace: "xata-clusters",
 				Annotations: tc.annotations,
@@ -163,7 +167,7 @@ func TestReconcilePgBackRestToken(t *testing.T) {
 				}).Build()
 			r := &BranchReconciler{Client: c, Scheme: scheme, ClustersNamespace: "xata-clusters"}
 
-			got, err := r.reconcilePgBackRestToken(ctx, branch, cluster, sa)
+			got, err := r.reconcilePgBackRestToken(ctx, branch, cluster, sa, pgBackRestAWSTokenAudience, pgBackRestTokenLifetime)
 			require.Equal(t, tc.wantRequests, requests)
 			if tc.wantErr {
 				require.Error(t, err)
@@ -704,6 +708,371 @@ func TestReconcileRestoreSourceAccess(t *testing.T) {
 			if err := c.Get(t.Context(), saKey, sa); !apierrors.IsNotFound(err) {
 				require.NoError(t, err)
 				require.NotContains(t, sa.Annotations, pgbackrest.GCSRestoreFolderAnnotation)
+			}
+		})
+	}
+}
+
+func TestLendRestoreSourceToken(t *testing.T) {
+	t.Parallel()
+
+	const roleARN = "arn:aws:iam::123456789012:role/cell-cnpg-backups-restore"
+	clusterKey := client.ObjectKey{Name: "cluster", Namespace: "xata-clusters"}
+	secretKey := client.ObjectKey{Name: "cluster-pgbackrest-web-identity", Namespace: "xata-clusters"}
+	lentRequest := "serviceAccount=source-pgbackrest,uid=source-uid,audiences=[sts.amazonaws.com/restore],expirationSeconds=3600"
+
+	s3Backup := func(keyType string) *v1alpha1.BackupSpec {
+		return &v1alpha1.BackupSpec{
+			Method: v1alpha1.BackupMethodPgBackRest,
+			PgBackRest: &v1alpha1.PgBackRestSpec{
+				S3: &v1alpha1.PgBackRestS3Spec{Bucket: "some-bucket", Region: "us-east-1", KeyType: keyType},
+			},
+		}
+	}
+	s3RestoreFrom := func(s3 v1alpha1.PgBackRestS3Spec) *v1alpha1.RestoreSpec {
+		return &v1alpha1.RestoreSpec{
+			Type: v1alpha1.RestoreTypeObjectStore,
+			Name: "source",
+			PgBackRest: &v1alpha1.RestorePgBackRestSpec{
+				RepoPath: "system:serviceaccount:xata-clusters:source-pgbackrest", StanzaName: "source", S3: &s3,
+			},
+		}
+	}
+	s3Restore := s3RestoreFrom(v1alpha1.PgBackRestS3Spec{
+		Bucket: "some-bucket", Region: "us-east-1", KeyType: pgbackrest.KeyTypeWebID,
+	})
+	newBranch := func(backup *v1alpha1.BackupSpec, restore *v1alpha1.RestoreSpec) *v1alpha1.Branch {
+		return &v1alpha1.Branch{
+			Name: "branch", UID: types.UID("branch-uid"),
+			Spec: v1alpha1.BranchSpec{
+				ClusterSpec: v1alpha1.ClusterSpec{
+					Name: new("cluster"), Image: "image", Instances: 1,
+					Storage: v1alpha1.StorageSpec{Size: "1Gi"},
+				},
+				BackupSpec: backup,
+				Restore:    restore.DeepCopy(),
+			},
+		}
+	}
+	sourceSA := func() *corev1.ServiceAccount {
+		return &corev1.ServiceAccount{Name: "source-pgbackrest", Namespace: "xata-clusters", UID: types.UID("source-uid")}
+	}
+
+	// recorder holds the ServiceAccounts that got a token and the Secret at
+	// the time the Cluster is applied. It fails the next failStatusWrites
+	// status writes and the token requests for failTokenFor.
+	type recorder struct {
+		tokensFor        []string
+		secretAtApply    *corev1.Secret
+		clusterApplied   bool
+		failStatusWrites int
+		failTokenFor     string
+	}
+	setup := func(t *testing.T, cloudProvider, restoreRoleARN string, objs ...client.Object) (*BranchReconciler, client.Client, *recorder) {
+		t.Helper()
+		scheme := runtime.NewScheme()
+		require.NoError(t, corev1.AddToScheme(scheme))
+		require.NoError(t, v1alpha1.AddToScheme(scheme))
+		require.NoError(t, apiv1.AddToScheme(scheme))
+		require.NoError(t, networkingv1.AddToScheme(scheme))
+		require.NoError(t, rbacv1.AddToScheme(scheme))
+		require.NoError(t, snapshotv1.AddToScheme(scheme))
+		m, err := metrics.New(noop.NewMeterProvider().Meter("test"))
+		require.NoError(t, err)
+
+		rec := &recorder{}
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(objs...).
+			WithStatusSubresource(&v1alpha1.Branch{}).
+			WithIndex(&apiv1.Cluster{}, ClusterOwnerKey, func(client.Object) []string { return nil }).
+			WithInterceptorFuncs(interceptor.Funcs{
+				Apply: func(ctx context.Context, cl client.WithWatch, obj runtime.ApplyConfiguration, opts ...client.ApplyOption) error {
+					if _, ok := obj.(*apiv1ac.ClusterApplyConfiguration); ok && !rec.clusterApplied {
+						rec.clusterApplied = true
+						secret := &corev1.Secret{}
+						if err := cl.Get(ctx, secretKey, secret); err == nil {
+							rec.secretAtApply = secret
+						}
+					}
+					return cl.Apply(ctx, obj, opts...)
+				},
+				SubResourceApply: func(ctx context.Context, cl client.Client, sub string, obj runtime.ApplyConfiguration, opts ...client.SubResourceApplyOption) error {
+					if rec.failStatusWrites > 0 {
+						rec.failStatusWrites--
+						return errors.New("status write failed")
+					}
+					return cl.SubResource(sub).Apply(ctx, obj, opts...)
+				},
+				SubResourceCreate: func(_ context.Context, _ client.Client, _ string, obj client.Object, sub client.Object, _ ...client.SubResourceCreateOption) error {
+					tr, ok := sub.(*authenticationv1.TokenRequest)
+					if !ok {
+						return fmt.Errorf("unexpected subresource %T", sub)
+					}
+					if obj.GetName() == rec.failTokenFor {
+						return errors.New("token request failed")
+					}
+					rec.tokensFor = append(rec.tokensFor, obj.GetName())
+					tr.Status.Token = fmt.Sprintf("token-%d", len(rec.tokensFor))
+					tr.Status.ExpirationTimestamp = metav1.NewTime(time.Now().Add(time.Duration(*tr.Spec.ExpirationSeconds) * time.Second))
+					return nil
+				},
+			}).Build()
+		return &BranchReconciler{
+			Client: c, Scheme: scheme, Metrics: m, ClustersNamespace: "xata-clusters",
+			CloudProvider: cloudProvider, PgBackRestS3RestoreRoleARN: restoreRoleARN,
+			PgBackRestWebIdentityRoleARN: "arn:aws:iam::123456789012:role/cell-cnpg-backups",
+		}, c, rec
+	}
+	reconcile := func(t *testing.T, r *BranchReconciler) ctrl.Result {
+		t.Helper()
+		res, err := r.Reconcile(t.Context(), ctrl.Request{Name: "branch"})
+		require.NoError(t, err)
+		return res
+	}
+	getCondition := func(t *testing.T, c client.Client, conditionType string) *metav1.Condition {
+		t.Helper()
+		br := &v1alpha1.Branch{}
+		require.NoError(t, c.Get(t.Context(), client.ObjectKey{Name: "branch"}, br))
+		return meta.FindStatusCondition(br.Status.Conditions, conditionType)
+	}
+	getSecret := func(t *testing.T, c client.Client) *corev1.Secret {
+		t.Helper()
+		secret := &corev1.Secret{}
+		require.NoError(t, c.Get(t.Context(), secretKey, secret))
+		return secret
+	}
+	requireNotReady := func(t *testing.T, c client.Client, reason string) *metav1.Condition {
+		t.Helper()
+		require.True(t, apierrors.IsNotFound(c.Get(t.Context(), clusterKey, &apiv1.Cluster{})))
+		require.True(t, apierrors.IsNotFound(c.Get(t.Context(), secretKey, &corev1.Secret{})))
+		require.Nil(t, getCondition(t, c, v1alpha1.RestoreSourceAccessConditionType))
+		ready := getCondition(t, c, v1alpha1.BranchReadyConditionType)
+		require.NotNil(t, ready)
+		require.Equal(t, metav1.ConditionFalse, ready.Status)
+		require.Equal(t, reason, ready.Reason)
+		return ready
+	}
+
+	t.Run("lends the source token before the Cluster and swaps after the first primary", func(t *testing.T) {
+		t.Parallel()
+		r, c, rec := setup(t, "aws", roleARN, newBranch(s3Backup(pgbackrest.KeyTypeWebID), s3Restore), sourceSA())
+
+		reconcile(t, r)
+		require.NotNil(t, rec.secretAtApply, "Secret must exist before the Cluster")
+		require.Equal(t, lentRequest, rec.secretAtApply.Annotations[PgBackRestTokenRequestAnnotation])
+		require.Equal(t, "token-1", string(rec.secretAtApply.Data[pgbackrest.TokenKey]))
+		require.Len(t, rec.secretAtApply.OwnerReferences, 1)
+		require.Equal(t, v1alpha1.BranchKind, rec.secretAtApply.OwnerReferences[0].Kind)
+		require.Equal(t, []string{"source-pgbackrest"}, rec.tokensFor)
+		require.Equal(t, v1alpha1.RestoreSourceAccessGrantedReason,
+			getCondition(t, c, v1alpha1.RestoreSourceAccessConditionType).Reason)
+
+		cluster := &apiv1.Cluster{}
+		require.NoError(t, c.Get(t.Context(), clusterKey, cluster))
+		require.Len(t, cluster.Spec.ExternalClusters, 1)
+		source := cluster.Spec.ExternalClusters[0].PgBackRest.Repository.S3
+		require.Equal(t, roleARN, source.RoleARN)
+		require.Equal(t, pgbackrest.KeyTypeWebID, source.KeyType)
+		require.Empty(t, cluster.Spec.Backup.PgBackRest.Repository.S3.RoleARN)
+
+		// The Cluster takes over the Secret from the Branch
+		secret := getSecret(t, c)
+		require.Len(t, secret.OwnerReferences, 1)
+		require.Equal(t, "Cluster", secret.OwnerReferences[0].Kind)
+		require.Equal(t, cluster.UID, secret.OwnerReferences[0].UID)
+		require.Equal(t, lentRequest, secret.Annotations[PgBackRestTokenRequestAnnotation])
+		require.Equal(t, []string{"source-pgbackrest"}, rec.tokensFor)
+
+		// A long restore refreshes the lent token
+		secret.Annotations[PgBackRestTokenRefreshAnnotation] = time.Now().Add(-time.Minute).UTC().Format(time.RFC3339)
+		require.NoError(t, c.Update(t.Context(), secret))
+		res := reconcile(t, r)
+		require.Equal(t, []string{"source-pgbackrest", "source-pgbackrest"}, rec.tokensFor)
+		require.LessOrEqual(t, res.RequeueAfter, pgBackRestRestoreTokenLifetime*8/10)
+		secret = getSecret(t, c)
+		require.Equal(t, lentRequest, secret.Annotations[PgBackRestTokenRequestAnnotation])
+		require.Equal(t, "token-2", string(secret.Data[pgbackrest.TokenKey]))
+
+		// The first instance pod marks itself as primary
+		require.NoError(t, c.Get(t.Context(), clusterKey, cluster))
+		cluster.Status.CurrentPrimary = "cluster-1"
+		require.NoError(t, c.Update(t.Context(), cluster))
+		reconcile(t, r)
+		require.Equal(t, v1alpha1.RestoreSourceAccessReleasedReason,
+			getCondition(t, c, v1alpha1.RestoreSourceAccessConditionType).Reason)
+		require.Equal(t, []string{"source-pgbackrest", "source-pgbackrest", "branch-pgbackrest"}, rec.tokensFor)
+		secret = getSecret(t, c)
+		require.Equal(t, "token-3", string(secret.Data[pgbackrest.TokenKey]))
+		require.Contains(t, secret.Annotations[PgBackRestTokenRequestAnnotation],
+			"serviceAccount=branch-pgbackrest,")
+		require.Contains(t, secret.Annotations[PgBackRestTokenRequestAnnotation],
+			",audiences=[sts.amazonaws.com],expirationSeconds=86400")
+
+		// Later reconciles keep the own token
+		reconcile(t, r)
+		require.Len(t, rec.tokensFor, 3)
+	})
+
+	// lend runs the first reconcile of a restore and returns the Cluster.
+	lend := func(t *testing.T, r *BranchReconciler, c client.Client) *apiv1.Cluster {
+		t.Helper()
+		reconcile(t, r)
+		require.Equal(t, lentRequest, getSecret(t, c).Annotations[PgBackRestTokenRequestAnnotation])
+		cluster := &apiv1.Cluster{}
+		require.NoError(t, c.Get(t.Context(), clusterKey, cluster))
+		cluster.Status.CurrentPrimary = "cluster-1"
+		require.NoError(t, c.Update(t.Context(), cluster))
+		return cluster
+	}
+
+	t.Run("release is persisted before the own token", func(t *testing.T) {
+		t.Parallel()
+		r, c, rec := setup(t, "aws", roleARN, newBranch(s3Backup(pgbackrest.KeyTypeWebID), s3Restore), sourceSA())
+		lend(t, r, c)
+
+		rec.failStatusWrites = 1
+		_, err := r.Reconcile(t.Context(), ctrl.Request{Name: "branch"})
+		require.ErrorContains(t, err, "persist restore source release")
+		require.Equal(t, lentRequest, getSecret(t, c).Annotations[PgBackRestTokenRequestAnnotation])
+		require.Equal(t, []string{"source-pgbackrest"}, rec.tokensFor)
+
+		reconcile(t, r)
+		require.Equal(t, v1alpha1.RestoreSourceAccessReleasedReason,
+			getCondition(t, c, v1alpha1.RestoreSourceAccessConditionType).Reason)
+		require.Equal(t, []string{"source-pgbackrest", "branch-pgbackrest"}, rec.tokensFor)
+		require.Contains(t, getSecret(t, c).Annotations[PgBackRestTokenRequestAnnotation],
+			"serviceAccount=branch-pgbackrest,")
+	})
+
+	t.Run("failed own token after the release clears the lent token", func(t *testing.T) {
+		t.Parallel()
+		r, c, rec := setup(t, "aws", roleARN, newBranch(s3Backup(pgbackrest.KeyTypeWebID), s3Restore), sourceSA())
+		lend(t, r, c)
+
+		rec.failTokenFor = "branch-pgbackrest"
+		_, err := r.Reconcile(t.Context(), ctrl.Request{Name: "branch"})
+		require.ErrorContains(t, err, "token request failed")
+		require.Equal(t, v1alpha1.RestoreSourceAccessReleasedReason,
+			getCondition(t, c, v1alpha1.RestoreSourceAccessConditionType).Reason)
+		secret := getSecret(t, c)
+		require.NotContains(t, secret.Data, pgbackrest.TokenKey)
+		require.NotContains(t, secret.Annotations, PgBackRestTokenRequestAnnotation)
+		require.NotContains(t, secret.Annotations, PgBackRestTokenExpirationAnnotation)
+		require.NotContains(t, secret.Annotations, PgBackRestTokenRefreshAnnotation)
+
+		rec.failTokenFor = ""
+		reconcile(t, r)
+		secret = getSecret(t, c)
+		require.Contains(t, secret.Annotations[PgBackRestTokenRequestAnnotation], "serviceAccount=branch-pgbackrest,")
+		require.NotEmpty(t, secret.Data[pgbackrest.TokenKey])
+	})
+
+	t.Run("failed refresh of the lent token keeps it", func(t *testing.T) {
+		t.Parallel()
+		r, c, rec := setup(t, "aws", roleARN, newBranch(s3Backup(pgbackrest.KeyTypeWebID), s3Restore), sourceSA())
+		reconcile(t, r)
+
+		secret := getSecret(t, c)
+		secret.Annotations[PgBackRestTokenRefreshAnnotation] = time.Now().Add(-time.Minute).UTC().Format(time.RFC3339)
+		require.NoError(t, c.Update(t.Context(), secret))
+		rec.failTokenFor = "source-pgbackrest"
+		reconcile(t, r)
+		secret = getSecret(t, c)
+		require.Equal(t, lentRequest, secret.Annotations[PgBackRestTokenRequestAnnotation])
+		require.Equal(t, "token-1", string(secret.Data[pgbackrest.TokenKey]))
+	})
+
+	t.Run("Branch with a primary is never lent", func(t *testing.T) {
+		t.Parallel()
+		cluster := &apiv1.Cluster{
+			Name: "cluster", Namespace: "xata-clusters",
+			Status: apiv1.ClusterStatus{CurrentPrimary: "cluster-1"},
+		}
+		r, c, rec := setup(t, "aws", roleARN, newBranch(s3Backup(pgbackrest.KeyTypeWebID), s3Restore), sourceSA(), cluster)
+
+		reconcile(t, r)
+		require.Equal(t, v1alpha1.RestoreSourceAccessReleasedReason,
+			getCondition(t, c, v1alpha1.RestoreSourceAccessConditionType).Reason)
+		require.Equal(t, []string{"branch-pgbackrest"}, rec.tokensFor)
+	})
+
+	t.Run("without a restore role the Cluster is not applied", func(t *testing.T) {
+		t.Parallel()
+		r, c, rec := setup(t, "aws", "", newBranch(s3Backup(pgbackrest.KeyTypeWebID), s3Restore), sourceSA())
+
+		res := reconcile(t, r)
+		require.Zero(t, res.RequeueAfter)
+		requireNotReady(t, c, v1alpha1.RestoreSourceRoleNotConfiguredReason)
+		require.Empty(t, rec.tokensFor)
+	})
+
+	t.Run("waits for the source ServiceAccount", func(t *testing.T) {
+		t.Parallel()
+		r, c, rec := setup(t, "aws", roleARN, newBranch(s3Backup(pgbackrest.KeyTypeWebID), s3Restore))
+
+		res := reconcile(t, r)
+		require.Equal(t, restoreSourceRetryDelay, res.RequeueAfter)
+		ready := requireNotReady(t, c, v1alpha1.AwaitingRestoreSourceAccessReason)
+		require.Contains(t, ready.Message, "source-pgbackrest")
+		require.Empty(t, rec.tokensFor)
+
+		require.NoError(t, c.Create(t.Context(), sourceSA()))
+		reconcile(t, r)
+		require.NoError(t, c.Get(t.Context(), clusterKey, &apiv1.Cluster{}))
+		require.Equal(t, []string{"source-pgbackrest"}, rec.tokensFor)
+	})
+
+	unchanged := map[string]struct {
+		cloudProvider string
+		branch        *v1alpha1.Branch
+	}{
+		"Branch without a restore": {
+			cloudProvider: "aws",
+			branch:        newBranch(s3Backup(pgbackrest.KeyTypeWebID), nil),
+		},
+		"restore from the repository of the Branch": {
+			cloudProvider: "aws",
+			branch: newBranch(s3Backup(pgbackrest.KeyTypeWebID), &v1alpha1.RestoreSpec{
+				Type: v1alpha1.RestoreTypeObjectStore, Name: "branch-1",
+			}),
+		},
+		"source with an endpoint": {
+			cloudProvider: "aws",
+			branch: newBranch(s3Backup(pgbackrest.KeyTypeWebID), s3RestoreFrom(v1alpha1.PgBackRestS3Spec{
+				Bucket: "some-bucket", Region: "us-east-1", Endpoint: "https://example.r2.cloudflarestorage.com",
+				KeyType: pgbackrest.KeyTypeWebID,
+			})),
+		},
+		"source in another bucket": {
+			cloudProvider: "aws",
+			branch: newBranch(s3Backup(pgbackrest.KeyTypeWebID), s3RestoreFrom(v1alpha1.PgBackRestS3Spec{
+				Bucket: "other-bucket", Region: "us-east-1", KeyType: pgbackrest.KeyTypeWebID,
+			})),
+		},
+		"source without web identity": {
+			cloudProvider: "aws",
+			branch: newBranch(s3Backup(pgbackrest.KeyTypeWebID), s3RestoreFrom(v1alpha1.PgBackRestS3Spec{
+				Bucket: "some-bucket", Region: "us-east-1", KeyType: "auto",
+			})),
+		},
+		"Branch without web identity": {
+			cloudProvider: "aws",
+			branch:        newBranch(s3Backup("auto"), s3Restore),
+		},
+	}
+	for name, tc := range unchanged {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			r, c, rec := setup(t, tc.cloudProvider, roleARN, tc.branch, sourceSA())
+
+			reconcile(t, r)
+			cluster := &apiv1.Cluster{}
+			require.NoError(t, c.Get(t.Context(), clusterKey, cluster))
+			require.Nil(t, getCondition(t, c, v1alpha1.RestoreSourceAccessConditionType))
+			require.NotContains(t, rec.tokensFor, "source-pgbackrest")
+			for _, ec := range cluster.Spec.ExternalClusters {
+				if ec.PgBackRest != nil && ec.PgBackRest.Repository.S3 != nil {
+					require.Empty(t, ec.PgBackRest.Repository.S3.RoleARN)
+				}
 			}
 		})
 	}

@@ -2,6 +2,7 @@ package reconciler_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,6 +14,8 @@ import (
 	apiv1 "github.com/xataio/xata-cnpg/api/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func TestPgBackRestIdentityReconciliation(t *testing.T) {
@@ -131,6 +134,69 @@ func TestPgBackRestIdentityReconciliation(t *testing.T) {
 			require.NoError(t, getK8SObject(ctx, pgbackrest.ServiceAccountName(br.Name), &corev1.ServiceAccount{}))
 		})
 	})
+	t.Run("restore from another Branch borrows its token until the first primary", func(t *testing.T) {
+		t.Parallel()
+		ctx := context.Background()
+
+		source := NewBranchBuilder().Build().Name
+		sourceSA := &corev1.ServiceAccount{Name: pgbackrest.ServiceAccountName(source), Namespace: XataClustersNamespace}
+		require.NoError(t, k8sClient.Create(ctx, sourceSA))
+
+		branch := NewBranchBuilder().WithPgBackRestWebIdentity("some-bucket", "us-east-1").Build()
+		branch.Spec.Restore = &v1alpha1.RestoreSpec{
+			Type: v1alpha1.RestoreTypeObjectStore,
+			Name: source,
+			PgBackRest: &v1alpha1.RestorePgBackRestSpec{
+				RepoPath:   pgbackrest.RepoPath(XataClustersNamespace, source),
+				StanzaName: source,
+				S3: &v1alpha1.PgBackRestS3Spec{
+					Bucket: "some-bucket", Region: "us-east-1", KeyType: pgbackrest.KeyTypeWebID,
+				},
+			},
+		}
+
+		withBranch(ctx, t, branch, func(t *testing.T, br *v1alpha1.Branch) {
+			cluster := apiv1.Cluster{}
+			requireEventuallyNoErr(t, func() error {
+				return getK8SObject(ctx, br.ClusterName(), &cluster)
+			})
+
+			// The API server accepts the role on the external cluster only
+			repo := cluster.Spec.ExternalClusters[0].PgBackRest.Repository.S3
+			require.Equal(t, testRestoreRoleARN, repo.RoleARN)
+			require.Equal(t, pgbackrest.KeyTypeWebID, repo.KeyType)
+			require.Empty(t, cluster.Spec.Backup.PgBackRest.Repository.S3.RoleARN)
+
+			secret := corev1.Secret{}
+			requireEventuallyTrue(t, func() bool {
+				err := getK8SObject(ctx, pgbackrest.WebIdentitySecretName(br.ClusterName()), &secret)
+				return err == nil && len(secret.OwnerReferences) == 1 && secret.OwnerReferences[0].Kind == "Cluster"
+			})
+			require.Equal(t, cluster.UID, secret.OwnerReferences[0].UID)
+			require.Equal(t, "serviceAccount="+sourceSA.Name+",uid="+string(sourceSA.UID)+
+				",audiences=[sts.amazonaws.com/restore],expirationSeconds=3600",
+				secret.Annotations[reconciler.PgBackRestTokenRequestAnnotation])
+
+			// The first instance pod marks itself as primary
+			require.NoError(t, retryStatusOnConflict(ctx, &cluster, func(c *apiv1.Cluster) {
+				c.Status.CurrentPrimary = c.Name + "-1"
+			}))
+			requireEventuallyTrue(t, func() bool {
+				err := getK8SObject(ctx, pgbackrest.WebIdentitySecretName(br.ClusterName()), &secret)
+				return err == nil && strings.HasPrefix(secret.Annotations[reconciler.PgBackRestTokenRequestAnnotation],
+					"serviceAccount="+pgbackrest.ServiceAccountName(br.Name)+",")
+			})
+			require.Contains(t, secret.Annotations[reconciler.PgBackRestTokenRequestAnnotation],
+				",audiences=[sts.amazonaws.com],expirationSeconds=86400")
+
+			b := v1alpha1.Branch{}
+			require.NoError(t, k8sClient.Get(ctx, client.ObjectKey{Name: br.Name}, &b))
+			cond := meta.FindStatusCondition(b.Status.Conditions, v1alpha1.RestoreSourceAccessConditionType)
+			require.NotNil(t, cond)
+			require.Equal(t, v1alpha1.RestoreSourceAccessReleasedReason, cond.Reason)
+		})
+	})
+
 	t.Run("Cluster mounts the web identity Secret", func(t *testing.T) {
 		t.Parallel()
 		ctx := context.Background()

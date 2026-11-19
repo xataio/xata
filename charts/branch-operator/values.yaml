@@ -15,6 +15,9 @@ config:
     # s3.keyType=web-id. If you set it, each Cluster gets the web identity
     # token volume and the AWS_ROLE_ARN environment variable.
     pgbackrestWebIdentityRoleARN: ""
+    # ARN of the read-only IAM role that pgBackRest uses to restore a
+    # Branch from the s3.keyType=web-id backups of another Branch.
+    pgbackrestWebIdentityRestoreRoleARN: ""
     # GKE Workload Identity pool (<project>.svc.id.goog). Enables
     # gcs.keyType=web-id for Branches.
     pgbackrestWorkloadIdentityPool: ""

@@ -1611,7 +1611,7 @@ spec:
                                 description: |-
                                   The reference to a Secret holding the service account JSON key when
                                   keyType is "service", or a bearer token when keyType is "token".
-                                  Required for those key types, must be unset for "auto".
+                                  Required for those key types, must be unset for "auto" and "web-id".
                                 properties:
                                   key:
                                     description: The key to select
@@ -1629,11 +1629,14 @@ spec:
                                   KeyType selects the authentication method. "auto" uses Workload
                                   Identity / Application Default Credentials (the GKE path). "service"
                                   reads a service account JSON key from KeyRef. "token" uses a bearer
-                                  token from KeyRef.
+                                  token from KeyRef. "web-id" uses Workload Identity Federation with the
+                                  external account credential file that the PGBACKREST_REPO1_GCS_KEY
+                                  environment variable of the instance pod names.
                                 enum:
                                 - auto
                                 - service
                                 - token
+                                - web-id
                                 type: string
                             required:
                             - bucket
@@ -1641,6 +1644,7 @@ spec:
                             x-kubernetes-validations:
                             - message: keyRef must be set when keyType is service
                                 or token, and must not be set when keyType is auto
+                                or web-id
                               rule: (has(self.keyType) && (self.keyType == 'service'
                                 || self.keyType == 'token')) == has(self.keyRef)
                           s3:
@@ -1690,6 +1694,13 @@ spec:
                               region:
                                 description: The S3 region
                                 type: string
+                              roleARN:
+                                description: |-
+                                  RoleARN overrides AWS_ROLE_ARN for the pgbackrest commands that read
+                                  this repository. Requires keyType web-id. Only honoured on the
+                                  repository of an external cluster used for recovery.
+                                pattern: ^arn:aws[a-z-]*:iam::[0-9]{12}:role/[A-Za-z0-9+=,.@_/-]+$
+                                type: string
                               secretAccessKey:
                                 description: The reference to the secret access key
                                 properties:
@@ -1711,6 +1722,9 @@ spec:
                             - message: accessKeyId and secretAccessKey must be specified
                                 together
                               rule: has(self.accessKeyId) == has(self.secretAccessKey)
+                            - message: roleARN requires keyType web-id
+                              rule: '!has(self.roleARN) || (has(self.keyType) && self.keyType
+                                == ''web-id'')'
                         type: object
                         x-kubernetes-validations:
                         - message: exactly one of s3, gcs, or azure must be specified
@@ -1726,6 +1740,9 @@ spec:
                     required:
                     - repository
                     type: object
+                    x-kubernetes-validations:
+                    - message: roleARN is only supported on external cluster repositories
+                      rule: '!has(self.repository.s3) || !has(self.repository.s3.roleARN)'
                   retentionPolicy:
                     description: |-
                       RetentionPolicy is the retention policy to be used for backups
@@ -3581,7 +3598,7 @@ spec:
                                   description: |-
                                     The reference to a Secret holding the service account JSON key when
                                     keyType is "service", or a bearer token when keyType is "token".
-                                    Required for those key types, must be unset for "auto".
+                                    Required for those key types, must be unset for "auto" and "web-id".
                                   properties:
                                     key:
                                       description: The key to select
@@ -3599,11 +3616,14 @@ spec:
                                     KeyType selects the authentication method. "auto" uses Workload
                                     Identity / Application Default Credentials (the GKE path). "service"
                                     reads a service account JSON key from KeyRef. "token" uses a bearer
-                                    token from KeyRef.
+                                    token from KeyRef. "web-id" uses Workload Identity Federation with the
+                                    external account credential file that the PGBACKREST_REPO1_GCS_KEY
+                                    environment variable of the instance pod names.
                                   enum:
                                   - auto
                                   - service
                                   - token
+                                  - web-id
                                   type: string
                               required:
                               - bucket
@@ -3611,6 +3631,7 @@ spec:
                               x-kubernetes-validations:
                               - message: keyRef must be set when keyType is service
                                   or token, and must not be set when keyType is auto
+                                  or web-id
                                 rule: (has(self.keyType) && (self.keyType == 'service'
                                   || self.keyType == 'token')) == has(self.keyRef)
                             s3:
@@ -3660,6 +3681,13 @@ spec:
                                 region:
                                   description: The S3 region
                                   type: string
+                                roleARN:
+                                  description: |-
+                                    RoleARN overrides AWS_ROLE_ARN for the pgbackrest commands that read
+                                    this repository. Requires keyType web-id. Only honoured on the
+                                    repository of an external cluster used for recovery.
+                                  pattern: ^arn:aws[a-z-]*:iam::[0-9]{12}:role/[A-Za-z0-9+=,.@_/-]+$
+                                  type: string
                                 secretAccessKey:
                                   description: The reference to the secret access
                                     key
@@ -3682,6 +3710,9 @@ spec:
                               - message: accessKeyId and secretAccessKey must be specified
                                   together
                                 rule: has(self.accessKeyId) == has(self.secretAccessKey)
+                              - message: roleARN requires keyType web-id
+                                rule: '!has(self.roleARN) || (has(self.keyType) &&
+                                  self.keyType == ''web-id'')'
                           type: object
                           x-kubernetes-validations:
                           - message: exactly one of s3, gcs, or azure must be specified

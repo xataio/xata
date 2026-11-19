@@ -5,12 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"math/rand/v2"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	apiv1 "github.com/xataio/xata-cnpg/api/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -59,6 +61,17 @@ const (
 	// random time up to the same value is added, so failed refreshes do not
 	// retry together.
 	pgBackRestTokenRetryDelay = 5 * time.Minute
+
+	// pgBackRestRestoreTokenAudience is the audience of a token that a Branch
+	// borrows to restore from the backups of another Branch. Only the
+	// read-only restore role accepts it.
+	pgBackRestRestoreTokenAudience = "sts.amazonaws.com/restore"
+	// pgBackRestRestoreTokenLifetime is the lifetime of a borrowed token. AWS
+	// STS accepts the token until it expires, also after the restore.
+	pgBackRestRestoreTokenLifetime = time.Hour
+	// restoreSourceRetryDelay is the time between checks for the
+	// ServiceAccount of a restore source. The operator does not watch it.
+	restoreSourceRetryDelay = time.Minute
 )
 
 // reconcilePgBackRestIdentity keeps a ServiceAccount for the Branch and a
@@ -69,7 +82,8 @@ const (
 // lifecycle. The Cluster owns the Secret, so Kubernetes deletes the Secret
 // with the Cluster: when the Branch hibernates, moves to another cluster, or
 // is deleted. A token for the Branch never stays in the Secret of a cluster
-// the Branch no longer uses.
+// the Branch no longer uses. A restore can write the Secret before the
+// Cluster exists. Until then the Branch owns it.
 //
 // On AWS, the operator keeps the identity for each Branch that can use it,
 // also if the Branch does not use it. Only Branches with s3.keyType=web-id use
@@ -100,7 +114,16 @@ func (r *BranchReconciler) reconcilePgBackRestIdentity(
 		return 0, fmt.Errorf("get Cluster %s: %w", key.Name, err)
 	}
 
-	refreshIn, err := r.reconcilePgBackRestToken(ctx, branch, cluster, sa)
+	audience, lifetime := r.pgBackRestTokenAudience(), pgBackRestTokenLifetime
+	if r.lendsRestoreSourceToken(branch) {
+		// The restore reads the repository of the source with its token.
+		if sa, err = r.getRestoreSourceServiceAccount(ctx, branch); err != nil {
+			return 0, fmt.Errorf("get restore source ServiceAccount: %w", err)
+		}
+		audience, lifetime = pgBackRestRestoreTokenAudience, pgBackRestRestoreTokenLifetime
+	}
+
+	refreshIn, err := r.reconcilePgBackRestToken(ctx, branch, cluster, sa, audience, lifetime)
 	if err != nil {
 		return 0, fmt.Errorf("reconcile pgbackrest web identity Secret: %w", err)
 	}
@@ -169,47 +192,117 @@ func (r *BranchReconciler) reconcilePgBackRestServiceAccount(
 	return sa, err
 }
 
-// reconcileRestoreSourceAccess requests read access to the GCS folder of the
-// restore source before the Cluster bootstraps from it, and releases it once
-// the Cluster has a primary. It returns false while the grant is not observed.
+// reconcileRestoreSourceAccess gives the Branch read access to the repository
+// of its restore source before the Cluster bootstraps from it, and releases
+// it once the Cluster has a primary. While the access is not ready, it returns
+// false and the time after which to check again, or zero to wait for a watch.
 func (r *BranchReconciler) reconcileRestoreSourceAccess(
 	ctx context.Context,
 	branch *v1alpha1.Branch,
-) (bool, error) {
+) (bool, time.Duration, error) {
 	folder := r.restoreSourceFolder(branch)
-	if folder == "" || !branch.HasClusterName() || restoreSourceAccessReleased(branch) {
-		return true, nil
+	borrow := r.restoreBorrowsSourceToken(branch)
+	if (folder == "" && !borrow) || !branch.HasClusterName() || restoreSourceAccessReleased(branch) {
+		return true, 0, nil
 	}
 
 	cluster := &apiv1.Cluster{}
 	key := client.ObjectKey{Name: branch.ClusterName(), Namespace: r.ClustersNamespace}
-	if err := r.Get(ctx, key, cluster); client.IgnoreNotFound(err) != nil {
-		return false, fmt.Errorf("get Cluster %s: %w", key.Name, err)
-	}
-	if cluster.Status.CurrentPrimary != "" {
+	if err := r.Get(ctx, key, cluster); apierrors.IsNotFound(err) {
+		cluster = nil
+	} else if err != nil {
+		return false, 0, fmt.Errorf("get Cluster %s: %w", key.Name, err)
+	} else if cluster.Status.CurrentPrimary != "" {
 		setStatusCondition(branch, v1alpha1.RestoreSourceAccessConditionType,
 			metav1.ConditionFalse, v1alpha1.RestoreSourceAccessReleasedReason)
-		return true, nil
+		// Persist the release before acting on it, or a lost write lends again.
+		if err := r.applyStatus(ctx, branch); err != nil {
+			return false, 0, fmt.Errorf("persist restore source release: %w", err)
+		}
+		return true, 0, nil
 	}
 
-	sa, err := r.reconcilePgBackRestServiceAccount(ctx, branch)
-	if err != nil {
-		return false, fmt.Errorf("reconcile pgbackrest ServiceAccount: %w", err)
+	var wait restoreSourceWait
+	var err error
+	if folder != "" {
+		wait, err = r.requestRestoreSourceFolder(ctx, branch, folder)
+	} else {
+		wait, err = r.lendRestoreSourceToken(ctx, branch, cluster)
 	}
-	if sa.Annotations[gcsfolder.ObservedRestoreFolderAnnotation] != folder {
-		reason := v1alpha1.AwaitingRestoreSourceAccessReason
+	if err != nil {
+		return false, 0, err
+	}
+	if wait.reason != "" {
 		meta.SetStatusCondition(&branch.Status.Conditions, metav1.Condition{
 			Type:               v1alpha1.BranchReadyConditionType,
 			Status:             metav1.ConditionFalse,
-			Reason:             reason,
-			Message:            v1alpha1.BranchConditionMessages[reason] + " " + folder,
+			Reason:             wait.reason,
+			Message:            strings.TrimSpace(v1alpha1.BranchConditionMessages[wait.reason] + " " + wait.detail),
 			ObservedGeneration: branch.Generation,
 		})
-		return false, nil
+		return false, wait.retryAfter, nil
 	}
 	setStatusCondition(branch, v1alpha1.RestoreSourceAccessConditionType,
 		metav1.ConditionTrue, v1alpha1.RestoreSourceAccessGrantedReason)
-	return true, nil
+	return true, 0, nil
+}
+
+// restoreSourceWait says why the restore cannot start yet. An empty reason
+// means that it can.
+type restoreSourceWait struct {
+	reason     string
+	detail     string
+	retryAfter time.Duration
+}
+
+// requestRestoreSourceFolder asks gcsfolder for read access to the GCS folder
+// of the restore source. The ServiceAccount watch wakes the reconcile when the
+// grant is observed.
+func (r *BranchReconciler) requestRestoreSourceFolder(
+	ctx context.Context,
+	branch *v1alpha1.Branch,
+	folder string,
+) (restoreSourceWait, error) {
+	sa, err := r.reconcilePgBackRestServiceAccount(ctx, branch)
+	if err != nil {
+		return restoreSourceWait{}, fmt.Errorf("reconcile pgbackrest ServiceAccount: %w", err)
+	}
+	if sa.Annotations[gcsfolder.ObservedRestoreFolderAnnotation] != folder {
+		return restoreSourceWait{reason: v1alpha1.AwaitingRestoreSourceAccessReason, detail: folder}, nil
+	}
+	return restoreSourceWait{}, nil
+}
+
+// lendRestoreSourceToken writes a token of the ServiceAccount of the restore
+// source to the Secret before the Cluster exists, so the bootstrap job mounts
+// it at start. Once the Cluster exists, reconcilePgBackRestIdentity keeps it.
+func (r *BranchReconciler) lendRestoreSourceToken(
+	ctx context.Context,
+	branch *v1alpha1.Branch,
+	cluster *apiv1.Cluster,
+) (restoreSourceWait, error) {
+	if r.PgBackRestS3RestoreRoleARN == "" {
+		return restoreSourceWait{reason: v1alpha1.RestoreSourceRoleNotConfiguredReason}, nil
+	}
+	sa, err := r.getRestoreSourceServiceAccount(ctx, branch)
+	if apierrors.IsNotFound(err) {
+		return restoreSourceWait{
+			reason:     v1alpha1.AwaitingRestoreSourceAccessReason,
+			detail:     "ServiceAccount " + pgbackrest.ServiceAccountName(branch.Spec.Restore.Name),
+			retryAfter: restoreSourceRetryDelay,
+		}, nil
+	}
+	if err != nil {
+		return restoreSourceWait{}, fmt.Errorf("get restore source ServiceAccount: %w", err)
+	}
+	if cluster == nil {
+		_, err := r.reconcilePgBackRestToken(ctx, branch, nil, sa,
+			pgBackRestRestoreTokenAudience, pgBackRestRestoreTokenLifetime)
+		if err != nil {
+			return restoreSourceWait{}, fmt.Errorf("lend restore source token: %w", err)
+		}
+	}
+	return restoreSourceWait{}, nil
 }
 
 // restoreSourceFolder returns the GCS folder of the restore source that the
@@ -230,6 +323,50 @@ func (r *BranchReconciler) restoreSourceFolder(branch *v1alpha1.Branch) string {
 	return pgbackrest.GCSFolderURI(rs.PgBackRest.GCS.Bucket, rs.PgBackRest.RepoPath)
 }
 
+// restoreBorrowsSourceToken reports whether the restore reads an S3 source
+// with a token of the source ServiceAccount. IAM lets a token read only the
+// prefix of its own ServiceAccount.
+func (r *BranchReconciler) restoreBorrowsSourceToken(branch *v1alpha1.Branch) bool {
+	b := branch.Spec.BackupSpec
+	if r.CloudProvider != cloudProviderAWS || !r.usesPgBackRestBranchIdentity(branch) ||
+		b.PgBackRest.S3.KeyType != pgbackrest.KeyTypeWebID {
+		return false
+	}
+	rs := branch.Spec.Restore
+	// The source must be in the backup bucket of the Branch.
+	return rs.IsObjectStoreType() && rs.PgBackRest != nil && rs.PgBackRest.S3 != nil &&
+		rs.PgBackRest.S3.KeyType == pgbackrest.KeyTypeWebID && rs.PgBackRest.S3.Endpoint == "" &&
+		rs.PgBackRest.S3.Bucket == b.PgBackRest.S3.Bucket
+}
+
+// lendsRestoreSourceToken reports whether the Secret holds a token of the
+// restore source and not of the Branch.
+func (r *BranchReconciler) lendsRestoreSourceToken(branch *v1alpha1.Branch) bool {
+	return r.PgBackRestS3RestoreRoleARN != "" && r.restoreBorrowsSourceToken(branch) &&
+		!restoreSourceAccessReleased(branch)
+}
+
+// restoreRoleARN returns the role for the S3 repository of the restore
+// source, or "" if the restore does not borrow the token of the source.
+func (r *BranchReconciler) restoreRoleARN(branch *v1alpha1.Branch) string {
+	if !r.restoreBorrowsSourceToken(branch) {
+		return ""
+	}
+	return r.PgBackRestS3RestoreRoleARN
+}
+
+func (r *BranchReconciler) getRestoreSourceServiceAccount(
+	ctx context.Context,
+	branch *v1alpha1.Branch,
+) (*corev1.ServiceAccount, error) {
+	sa := &corev1.ServiceAccount{}
+	key := client.ObjectKey{
+		Name:      pgbackrest.ServiceAccountName(branch.Spec.Restore.Name),
+		Namespace: r.ClustersNamespace,
+	}
+	return sa, r.Get(ctx, key, sa)
+}
+
 func restoreSourceAccessReleased(branch *v1alpha1.Branch) bool {
 	c := meta.FindStatusCondition(branch.Status.Conditions, v1alpha1.RestoreSourceAccessConditionType)
 	return c != nil && c.Reason == v1alpha1.RestoreSourceAccessReleasedReason
@@ -238,15 +375,18 @@ func restoreSourceAccessReleased(branch *v1alpha1.Branch) bool {
 // reconcilePgBackRestToken writes a new token to the Secret when the Secret
 // has no token, a token from a different request, or a token that is due for
 // refresh. When a refresh fails and the current token is still valid, it keeps
-// the token and tries again later, as the kubelet does.
+// the token and tries again later, as the kubelet does. The cluster is nil
+// before the Cluster exists.
 func (r *BranchReconciler) reconcilePgBackRestToken(
 	ctx context.Context,
 	branch *v1alpha1.Branch,
 	cluster *apiv1.Cluster,
 	sa *corev1.ServiceAccount,
+	audience string,
+	lifetime time.Duration,
 ) (time.Duration, error) {
 	secret := &corev1.Secret{
-		Name:      pgbackrest.WebIdentitySecretName(cluster.Name),
+		Name:      pgbackrest.WebIdentitySecretName(branch.ClusterName()),
 		Namespace: r.ClustersNamespace,
 	}
 
@@ -255,8 +395,8 @@ func (r *BranchReconciler) reconcilePgBackRestToken(
 		// deleted and created again after the operator read it.
 		UID: sa.UID,
 		Spec: authenticationv1.TokenRequestSpec{
-			Audiences:         []string{r.pgBackRestTokenAudience()},
-			ExpirationSeconds: new(int64(pgBackRestTokenLifetime.Seconds())),
+			Audiences:         []string{audience},
+			ExpirationSeconds: new(int64(lifetime.Seconds())),
 		},
 	}
 	request := pgBackRestTokenRequestKey(sa, tr)
@@ -273,7 +413,12 @@ func (r *BranchReconciler) reconcilePgBackRestToken(
 	if !current.valid || !now.Before(current.refreshAt) {
 		if err := r.SubResource("token").Create(ctx, sa, tr); err != nil {
 			if !current.valid || !now.Before(current.expiresAt) {
-				return 0, fmt.Errorf("request token for ServiceAccount %s: %w", sa.Name, err)
+				err = fmt.Errorf("request token for ServiceAccount %s: %w", sa.Name, err)
+				if audience != pgBackRestRestoreTokenAudience && holdsLentPgBackRestToken(secret) {
+					// Do not keep the lent token after the release.
+					return 0, errors.Join(err, r.clearPgBackRestToken(ctx, secret))
+				}
+				return 0, err
 			}
 			ctrl.LoggerFrom(ctx).Error(err, "refreshing pgbackrest token, keeping the current token",
 				"serviceAccount", sa.Name, "expiresAt", current.expiresAt)
@@ -288,9 +433,7 @@ func (r *BranchReconciler) reconcilePgBackRestToken(
 	}
 
 	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, secret, func() error {
-		// A plain owner reference and not a controller reference, so the CNPG
-		// operator does not reconcile the Cluster when the Secret changes.
-		if err := controllerutil.SetOwnerReference(cluster, secret, r.Scheme); err != nil {
+		if err := r.setPgBackRestTokenOwner(branch, cluster, secret); err != nil {
 			return err
 		}
 		ensureLabels(secret, branch.Spec.InheritedMetadata)
@@ -310,6 +453,45 @@ func (r *BranchReconciler) reconcilePgBackRestToken(
 	}
 
 	return max(time.Until(next), time.Second), nil
+}
+
+// holdsLentPgBackRestToken reports whether the Secret holds a token of a
+// restore source.
+func holdsLentPgBackRestToken(secret *corev1.Secret) bool {
+	return strings.Contains(secret.Annotations[PgBackRestTokenRequestAnnotation],
+		"audiences=["+pgBackRestRestoreTokenAudience+"]")
+}
+
+// clearPgBackRestToken removes the token and its annotations from the Secret.
+func (r *BranchReconciler) clearPgBackRestToken(ctx context.Context, secret *corev1.Secret) error {
+	patch := client.MergeFrom(secret.DeepCopy())
+	delete(secret.Data, pgbackrest.TokenKey)
+	delete(secret.Annotations, PgBackRestTokenRequestAnnotation)
+	delete(secret.Annotations, PgBackRestTokenExpirationAnnotation)
+	delete(secret.Annotations, PgBackRestTokenRefreshAnnotation)
+	if err := r.Patch(ctx, secret, patch); err != nil {
+		return fmt.Errorf("clear lent token from Secret %s: %w", secret.Name, err)
+	}
+	return nil
+}
+
+// setPgBackRestTokenOwner makes the Cluster the owner of the Secret, so the
+// Secret is deleted with the Cluster. Until the Cluster exists, the Branch
+// owns it.
+func (r *BranchReconciler) setPgBackRestTokenOwner(branch *v1alpha1.Branch, cluster *apiv1.Cluster, secret *corev1.Secret) error {
+	if cluster == nil {
+		return controllerutil.SetOwnerReference(branch, secret, r.Scheme)
+	}
+	// A plain owner reference and not a controller reference, so the CNPG
+	// operator does not reconcile the Cluster when the Secret changes.
+	if err := controllerutil.SetOwnerReference(cluster, secret, r.Scheme); err != nil {
+		return err
+	}
+	owned, err := controllerutil.HasOwnerReference(secret.OwnerReferences, branch, r.Scheme)
+	if err != nil || !owned {
+		return err
+	}
+	return controllerutil.RemoveOwnerReference(branch, secret, r.Scheme)
 }
 
 // setGCSCredentials writes the external account credential file for the token

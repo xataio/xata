@@ -1032,11 +1032,31 @@ func TestClusterSpecPgBackRestRestoreSource(t *testing.T) {
 	}
 
 	tests := map[string]struct {
-		backup *v1alpha1.BackupSpec
-		cipher *corev1.SecretKeySelector
-		source *v1alpha1.RestorePgBackRestSpec
-		want   *apiv1ac.PgBackRestRepositoryApplyConfiguration
+		backup  *v1alpha1.BackupSpec
+		cipher  *corev1.SecretKeySelector
+		source  *v1alpha1.RestorePgBackRestSpec
+		roleARN string
+		want    *apiv1ac.PgBackRestRepositoryApplyConfiguration
 	}{
+		"aws web-id source with a restore role": {
+			backup:  ownBackup,
+			roleARN: "arn:aws:iam::123456789012:role/cell-cnpg-backups-restore",
+			source: &v1alpha1.RestorePgBackRestSpec{
+				RepoPath:   "source-repo-path",
+				StanzaName: "source-branch-1",
+				S3: &v1alpha1.PgBackRestS3Spec{
+					Bucket:  "own-bucket",
+					Region:  "us-east-1",
+					KeyType: pgbackrest.KeyTypeWebID,
+				},
+			},
+			want: apiv1ac.PgBackRestRepository().
+				WithS3(apiv1ac.PgBackRestS3().
+					WithBucket("own-bucket").
+					WithRegion("us-east-1").
+					WithKeyType(pgbackrest.KeyTypeWebID).
+					WithRoleARN("arn:aws:iam::123456789012:role/cell-cnpg-backups-restore")),
+		},
 		"aws web-id source": {
 			backup: ownBackup,
 			cipher: &corev1.SecretKeySelector{Name: "branch-pgbackrest", Key: pgbackrest.RestoreCipherPassphraseKey},
@@ -1059,7 +1079,8 @@ func TestClusterSpecPgBackRestRestoreSource(t *testing.T) {
 					WithPassphrase(machineryapi.SecretKeySelector{Name: "branch-pgbackrest", Key: pgbackrest.RestoreCipherPassphraseKey})),
 		},
 		"gcs web-id source": {
-			backup: ownBackup,
+			backup:  ownBackup,
+			roleARN: "arn:aws:iam::123456789012:role/cell-cnpg-backups-restore",
 			source: &v1alpha1.RestorePgBackRestSpec{
 				RepoPath:   "source-repo-path",
 				StanzaName: "source-branch-1",
@@ -1113,6 +1134,7 @@ func TestClusterSpecPgBackRestRestoreSource(t *testing.T) {
 
 			cfg := baseClusterConfig()
 			cfg.BackupSpec = tc.backup
+			cfg.PgBackRestRestoreRoleARN = tc.roleARN
 			cfg.RestoreSpec = &v1alpha1.RestoreSpec{
 				Type:                                v1alpha1.RestoreTypeObjectStore,
 				Name:                                "source-branch",
@@ -1139,6 +1161,7 @@ func TestClusterSpecPgBackRestRestoreSource(t *testing.T) {
 			}
 			require.Equal(t, new(testBranchName), got.Backup.PgBackRest.StanzaName)
 			require.Equal(t, new("own-bucket"), got.Backup.PgBackRest.Repository.S3.Bucket)
+			require.Nil(t, got.Backup.PgBackRest.Repository.S3.RoleARN)
 			require.Equal(t, new("own-repo-path"), got.Backup.PgBackRest.Options.RepoPath)
 		})
 	}

@@ -165,6 +165,7 @@ func (s *BranchOperatorService) Init(ctx context.Context) error {
 		BackupsBucket:                        s.config.BackupsBucket,
 		BackupsEndpoint:                      s.config.BackupsEndpoint,
 		PgBackRestWebIdentityRoleARN:         s.config.PgBackRestWebIdentityRoleARN,
+		PgBackRestS3RestoreRoleARN:           s.config.PgBackRestS3RestoreRoleARN,
 		PgBackRestWorkloadIdentityPool:       s.config.PgBackRestWorkloadIdentityPool,
 		PgBackRestGCSProjectNumber:           s.config.PgBackRestGCSProjectNumber,
 		BackupsCredentialsSecretName:         s.config.BackupsCredentialsSecretName,

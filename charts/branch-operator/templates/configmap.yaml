@@ -12,6 +12,9 @@ data:
   {{- with .Values.config.branchOperator.pgbackrestWebIdentityRoleARN }}
   XATA_PGBACKREST_S3_WEB_IDENTITY_ROLE_ARN: {{ . | quote }}
   {{- end }}
+  {{- with .Values.config.branchOperator.pgbackrestWebIdentityRestoreRoleARN }}
+  XATA_PGBACKREST_S3_RESTORE_ROLE_ARN: {{ . | quote }}
+  {{- end }}
   {{- with .Values.config.branchOperator.pgbackrestWorkloadIdentityPool }}
   XATA_PGBACKREST_GCS_WORKLOAD_IDENTITY_POOL: {{ . | quote }}
   {{- end }}

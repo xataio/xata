@@ -11,6 +11,7 @@ type Config struct {
 	BackupsBucket                  string `env:"XATA_BACKUPS_BUCKET" env-description:"bucket for storing the cluster backups"`
 	BackupsEndpoint                string `env:"XATA_BACKUPS_ENDPOINT" env-description:"endpoint for reaching the backups bucket; set for a non-AWS S3-compatible store such as Cloudflare R2"`
 	PgBackRestWebIdentityRoleARN   string `env:"XATA_PGBACKREST_S3_WEB_IDENTITY_ROLE_ARN" env-description:"AWS IRSA role that pgbackrest assumes for Branches with s3.keyType=web-id"`
+	PgBackRestS3RestoreRoleARN     string `env:"XATA_PGBACKREST_S3_RESTORE_ROLE_ARN" env-description:"read-only AWS IAM role that pgbackrest assumes to restore a Branch from the backups of another Branch"`
 	PgBackRestWorkloadIdentityPool string `env:"XATA_PGBACKREST_GCS_WORKLOAD_IDENTITY_POOL" env-description:"GKE Workload Identity pool (<project>.svc.id.goog); enables gcs.keyType=web-id for Branches"`
 	PgBackRestGCSProjectNumber     string `env:"XATA_PGBACKREST_GCS_PROJECT_NUMBER" env-description:"number of the GCP project that owns the Workload Identity pool; required for managed folder IAM policies"`
 	// When BackupsEndpoint is set (non-AWS S3-compatible store), backups

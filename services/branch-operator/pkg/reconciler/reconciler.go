@@ -58,6 +58,7 @@ type BranchReconciler struct {
 	BackupsBucket                        string
 	BackupsEndpoint                      string
 	PgBackRestWebIdentityRoleARN         string
+	PgBackRestS3RestoreRoleARN           string
 	PgBackRestWorkloadIdentityPool       string
 	PgBackRestGCSProjectNumber           string
 	BackupsCredentialsSecretName         string
@@ -146,14 +147,14 @@ func (r *BranchReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 
 	// Grant access to the restore source before the Cluster bootstraps from it
 	var ready bool
-	ready, err = r.reconcileRestoreSourceAccess(ctx, branch)
+	var retryIn time.Duration
+	ready, retryIn, err = r.reconcileRestoreSourceAccess(ctx, branch)
 	if err != nil {
 		log.Error(err, "reconciling restore source access")
 		return ctrl.Result{}, err
 	}
 	if !ready {
-		// The ServiceAccount watch wakes the reconcile when the grant is observed
-		return ctrl.Result{}, nil
+		return ctrl.Result{RequeueAfter: retryIn}, nil
 	}
 
 	// Reconcile the CNPG Cluster for the branch

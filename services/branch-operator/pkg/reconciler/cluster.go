@@ -50,6 +50,7 @@ func (r *BranchReconciler) reconcileCluster(
 			SecretAccessKeyKey: r.BackupsCredentialsSecretAccessKeyKey,
 		},
 		PgBackRestWebIdentityRoleARN: r.PgBackRestWebIdentityRoleARN,
+		PgBackRestRestoreRoleARN:     r.restoreRoleARN(branch),
 		PgBackRestGCSWebIdentity:     r.PgBackRestWorkloadIdentityPool != "",
 	}
 

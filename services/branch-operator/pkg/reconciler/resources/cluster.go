@@ -142,6 +142,10 @@ type ClusterConfig struct {
 	// Branches with s3.keyType=web-id. If it is set, each Cluster gets the web
 	// identity token volume and the AWS_ROLE_ARN environment variable.
 	PgBackRestWebIdentityRoleARN string
+	// PgBackRestRestoreRoleARN is the read-only IAM role that pgBackRest uses
+	// for the S3 repository of the restore source. Set it only when the
+	// Branch borrows the token of the source.
+	PgBackRestRestoreRoleARN string
 	// PgBackRestGCSWebIdentity gives each Cluster the web identity token
 	// volume and the PGBACKREST_REPO1_GCS_KEY environment variable, which
 	// pgBackRest uses for Branches with gcs.keyType=web-id.
@@ -324,15 +328,19 @@ func ExternalClusters(cfg ClusterConfig) []*apiv1ac.ExternalClusterApplyConfigur
 	// pgbackrest with the source repository set on the restore. The external
 	// cluster name is the stanza that pgbackrest reads.
 	if src := cfg.RestoreSpec.PgBackRest; src != nil {
+		repo := pgbackrestRepository(
+			&v1alpha1.PgBackRestSpec{S3: src.S3, GCS: src.GCS, Azure: src.Azure},
+			cfg.BackupCredentials,
+			cfg.RestoreSpec.PgBackRestCipherPassphraseSecretRef,
+		)
+		if repo.S3 != nil && cfg.PgBackRestRestoreRoleARN != "" {
+			repo.S3.WithRoleARN(cfg.PgBackRestRestoreRoleARN)
+		}
 		return []*apiv1ac.ExternalClusterApplyConfiguration{
 			apiv1ac.ExternalCluster().
 				WithName(externalClusterName(cfg.RestoreSpec)).
 				WithPgBackRest(apiv1ac.PgBackRestExternalCluster().
-					WithRepository(pgbackrestRepository(
-						&v1alpha1.PgBackRestSpec{S3: src.S3, GCS: src.GCS, Azure: src.Azure},
-						cfg.BackupCredentials,
-						cfg.RestoreSpec.PgBackRestCipherPassphraseSecretRef,
-					)).
+					WithRepository(repo).
 					WithOptions(apiv1ac.PgBackRestOptions().
 						WithRepoPath(src.RepoPath))),
 		}

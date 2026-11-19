@@ -28,6 +28,8 @@ const (
 	ThirdPartyCRDsPath       = "./testutils/crds/"
 	SharedThirdPartyCRDsPath = "../../testutils/crds/"
 	XataClustersNamespace    = "xata-clusters"
+
+	testRestoreRoleARN = "arn:aws:iam::123456789012:role/test-cnpg-backups-restore"
 )
 
 // k8sClient is a live Kubernetes client connected to the test environment.
@@ -66,6 +68,7 @@ func TestMain(m *testing.M) {
 					CloudProvider:     "aws",
 					// Each Cluster gets the web identity volume and environment variables.
 					PgBackRestWebIdentityRoleARN: "arn:aws:iam::123456789012:role/test-cnpg-backups",
+					PgBackRestS3RestoreRoleARN:   testRestoreRoleARN,
 					Tolerations:                  nil,
 					EnforceZone:                  false,
 					ImagePullSecrets:             nil,
