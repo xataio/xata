@@ -8,19 +8,28 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	snapshotv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 	"github.com/stretchr/testify/require"
 	apiv1 "github.com/xataio/xata-cnpg/api/v1"
+	"go.opentelemetry.io/otel/metric/noop"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	"xata/internal/pgbackrest"
 	"xata/services/branch-operator/api/v1alpha1"
+	"xata/services/branch-operator/pkg/gcp/gcsfolder"
+	"xata/services/branch-operator/pkg/reconciler/metrics"
 )
 
 func TestReconcilePgBackRestToken(t *testing.T) {
@@ -439,6 +448,263 @@ func TestSetGCSCredentials(t *testing.T) {
 
 			_, got := secret.Data[pgbackrest.GCSCredentialsKey]
 			require.Equal(t, tc.want, got)
+		})
+	}
+}
+
+func TestReconcileRestoreSourceAccess(t *testing.T) {
+	t.Parallel()
+
+	const (
+		sourceFolder = "gs://some-bucket/source/repo/"
+		pool         = "project.svc.id.goog"
+	)
+	saKey := client.ObjectKey{Name: "branch-pgbackrest", Namespace: "xata-clusters"}
+	clusterKey := client.ObjectKey{Name: "cluster", Namespace: "xata-clusters"}
+
+	gcsBackup := func(keyType string) *v1alpha1.BackupSpec {
+		return &v1alpha1.BackupSpec{
+			Method: v1alpha1.BackupMethodPgBackRest,
+			PgBackRest: &v1alpha1.PgBackRestSpec{
+				GCS: &v1alpha1.PgBackRestGCSSpec{Bucket: "some-bucket", KeyType: keyType},
+			},
+		}
+	}
+	gcsRestoreFrom := func(bucket, keyType string) *v1alpha1.RestoreSpec {
+		return &v1alpha1.RestoreSpec{
+			Type: v1alpha1.RestoreTypeObjectStore,
+			Name: "source",
+			PgBackRest: &v1alpha1.RestorePgBackRestSpec{
+				RepoPath:   "source/repo",
+				StanzaName: "source",
+				GCS:        &v1alpha1.PgBackRestGCSSpec{Bucket: bucket, KeyType: keyType},
+			},
+		}
+	}
+	gcsRestore := func(keyType string) *v1alpha1.RestoreSpec {
+		return gcsRestoreFrom("some-bucket", keyType)
+	}
+	newBranch := func(backup *v1alpha1.BackupSpec, restore *v1alpha1.RestoreSpec) *v1alpha1.Branch {
+		return &v1alpha1.Branch{
+			Name: "branch", UID: types.UID("branch-uid"),
+			Spec: v1alpha1.BranchSpec{
+				ClusterSpec: v1alpha1.ClusterSpec{
+					Name: new("cluster"), Image: "image", Instances: 1,
+					Storage: v1alpha1.StorageSpec{Size: "1Gi"},
+				},
+				BackupSpec: backup,
+				Restore:    restore,
+			},
+		}
+	}
+	setup := func(t *testing.T, cloudProvider, pool string, objs ...client.Object) (*BranchReconciler, client.Client) {
+		t.Helper()
+		scheme := runtime.NewScheme()
+		require.NoError(t, corev1.AddToScheme(scheme))
+		require.NoError(t, v1alpha1.AddToScheme(scheme))
+		require.NoError(t, apiv1.AddToScheme(scheme))
+		require.NoError(t, networkingv1.AddToScheme(scheme))
+		require.NoError(t, rbacv1.AddToScheme(scheme))
+		require.NoError(t, snapshotv1.AddToScheme(scheme))
+
+		token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{Issuer: "https://issuer"}).
+			SignedString([]byte("key"))
+		require.NoError(t, err)
+		m, err := metrics.New(noop.NewMeterProvider().Meter("test"))
+		require.NoError(t, err)
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(objs...).
+			WithStatusSubresource(&v1alpha1.Branch{}).
+			WithIndex(&apiv1.Cluster{}, ClusterOwnerKey, func(client.Object) []string { return nil }).
+			WithInterceptorFuncs(interceptor.Funcs{
+				SubResourceCreate: func(_ context.Context, _ client.Client, _ string, _ client.Object, sub client.Object, _ ...client.SubResourceCreateOption) error {
+					tr, ok := sub.(*authenticationv1.TokenRequest)
+					if !ok {
+						return fmt.Errorf("unexpected subresource %T", sub)
+					}
+					tr.Status.Token = token
+					tr.Status.ExpirationTimestamp = metav1.NewTime(time.Now().Add(time.Hour))
+					return nil
+				},
+			}).Build()
+		return &BranchReconciler{
+			Client: c, Scheme: scheme, Metrics: m, ClustersNamespace: "xata-clusters",
+			CloudProvider: cloudProvider, PgBackRestWorkloadIdentityPool: pool,
+			PgBackRestGCSProjectNumber: "123456",
+		}, c
+	}
+	reconcile := func(t *testing.T, r *BranchReconciler) {
+		t.Helper()
+		_, err := r.Reconcile(t.Context(), ctrl.Request{Name: "branch"})
+		require.NoError(t, err)
+	}
+	getConditionOfType := func(t *testing.T, c client.Client, conditionType string) *metav1.Condition {
+		t.Helper()
+		br := &v1alpha1.Branch{}
+		require.NoError(t, c.Get(t.Context(), client.ObjectKey{Name: "branch"}, br))
+		return meta.FindStatusCondition(br.Status.Conditions, conditionType)
+	}
+	getCondition := func(t *testing.T, c client.Client) *metav1.Condition {
+		t.Helper()
+		return getConditionOfType(t, c, v1alpha1.RestoreSourceAccessConditionType)
+	}
+	patchSA := func(t *testing.T, c client.Client, key, value string) {
+		t.Helper()
+		sa := &corev1.ServiceAccount{}
+		require.NoError(t, c.Get(t.Context(), saKey, sa))
+		if value == "" {
+			delete(sa.Annotations, key)
+		} else {
+			sa.Annotations[key] = value
+		}
+		require.NoError(t, c.Update(t.Context(), sa))
+	}
+	getSA := func(t *testing.T, c client.Client) *corev1.ServiceAccount {
+		t.Helper()
+		sa := &corev1.ServiceAccount{}
+		require.NoError(t, c.Get(t.Context(), saKey, sa))
+		return sa
+	}
+
+	t.Run("grants before the Cluster and releases after the first primary", func(t *testing.T) {
+		t.Parallel()
+		r, c := setup(t, "gcp", pool, newBranch(gcsBackup(pgbackrest.KeyTypeWebID), gcsRestore(pgbackrest.KeyTypeWebID)))
+
+		reconcile(t, r)
+		require.Equal(t, sourceFolder, getSA(t, c).Annotations[pgbackrest.GCSRestoreFolderAnnotation])
+		require.True(t, apierrors.IsNotFound(c.Get(t.Context(), clusterKey, &apiv1.Cluster{})))
+		require.Nil(t, getCondition(t, c))
+		ready := getConditionOfType(t, c, v1alpha1.BranchReadyConditionType)
+		require.NotNil(t, ready)
+		require.Equal(t, metav1.ConditionFalse, ready.Status)
+		require.Equal(t, v1alpha1.AwaitingRestoreSourceAccessReason, ready.Reason)
+		require.Contains(t, ready.Message, sourceFolder)
+
+		// gcsfolder observes the grant
+		patchSA(t, c, gcsfolder.ObservedRestoreFolderAnnotation, sourceFolder)
+		reconcile(t, r)
+		cluster := &apiv1.Cluster{}
+		require.NoError(t, c.Get(t.Context(), clusterKey, cluster))
+		cond := getCondition(t, c)
+		require.NotNil(t, cond)
+		require.Equal(t, metav1.ConditionTrue, cond.Status)
+		require.Equal(t, v1alpha1.RestoreSourceAccessGrantedReason, cond.Reason)
+		require.Equal(t, sourceFolder, getSA(t, c).Annotations[pgbackrest.GCSRestoreFolderAnnotation])
+		ready = getConditionOfType(t, c, v1alpha1.BranchReadyConditionType)
+		require.Equal(t, v1alpha1.ResourcesReadyReason, ready.Reason)
+
+		// The first instance pod marks itself as primary
+		cluster.Status.CurrentPrimary = "cluster-1"
+		require.NoError(t, c.Update(t.Context(), cluster))
+		reconcile(t, r)
+		cond = getCondition(t, c)
+		require.NotNil(t, cond)
+		require.Equal(t, metav1.ConditionFalse, cond.Status)
+		require.Equal(t, v1alpha1.RestoreSourceAccessReleasedReason, cond.Reason)
+		require.NotContains(t, getSA(t, c).Annotations, pgbackrest.GCSRestoreFolderAnnotation)
+
+		// gcsfolder revokes; later reconciles never request the grant again
+		patchSA(t, c, gcsfolder.ObservedRestoreFolderAnnotation, "")
+		reconcile(t, r)
+		require.NotContains(t, getSA(t, c).Annotations, pgbackrest.GCSRestoreFolderAnnotation)
+		require.Equal(t, v1alpha1.RestoreSourceAccessReleasedReason, getCondition(t, c).Reason)
+	})
+
+	t.Run("Branch with a primary is released without a grant", func(t *testing.T) {
+		t.Parallel()
+		cluster := &apiv1.Cluster{
+			Name: "cluster", Namespace: "xata-clusters",
+			Status: apiv1.ClusterStatus{CurrentPrimary: "cluster-1"},
+		}
+		r, c := setup(t, "gcp", pool, newBranch(gcsBackup(pgbackrest.KeyTypeWebID), gcsRestore(pgbackrest.KeyTypeWebID)), cluster)
+
+		reconcile(t, r)
+		cond := getCondition(t, c)
+		require.NotNil(t, cond)
+		require.Equal(t, v1alpha1.RestoreSourceAccessReleasedReason, cond.Reason)
+		require.NotContains(t, getSA(t, c).Annotations, pgbackrest.GCSRestoreFolderAnnotation)
+	})
+
+	t.Run("release keeps a request until it is observed", func(t *testing.T) {
+		t.Parallel()
+		branch := newBranch(gcsBackup(pgbackrest.KeyTypeWebID), gcsRestore(pgbackrest.KeyTypeWebID))
+		branch.Status.Conditions = []metav1.Condition{{
+			Type: v1alpha1.RestoreSourceAccessConditionType, Status: metav1.ConditionFalse,
+			Reason: v1alpha1.RestoreSourceAccessReleasedReason,
+		}}
+		sa := &corev1.ServiceAccount{
+			Name: saKey.Name, Namespace: saKey.Namespace,
+			Annotations: map[string]string{pgbackrest.GCSRestoreFolderAnnotation: sourceFolder},
+		}
+		r, c := setup(t, "gcp", pool, branch, sa)
+
+		_, err := r.reconcilePgBackRestServiceAccount(t.Context(), branch)
+		require.NoError(t, err)
+		require.Equal(t, sourceFolder, getSA(t, c).Annotations[pgbackrest.GCSRestoreFolderAnnotation])
+
+		patchSA(t, c, gcsfolder.ObservedRestoreFolderAnnotation, sourceFolder)
+		_, err = r.reconcilePgBackRestServiceAccount(t.Context(), branch)
+		require.NoError(t, err)
+		require.NotContains(t, getSA(t, c).Annotations, pgbackrest.GCSRestoreFolderAnnotation)
+	})
+
+	unchanged := map[string]struct {
+		cloudProvider   string
+		pool            string
+		noProjectNumber bool
+		branch          *v1alpha1.Branch
+	}{
+		"GCP cell without a gcsfolder reconciler": {
+			cloudProvider: "gcp", pool: pool, noProjectNumber: true,
+			branch: newBranch(gcsBackup(pgbackrest.KeyTypeWebID), gcsRestore(pgbackrest.KeyTypeWebID)),
+		},
+		"AWS cell": {
+			cloudProvider: "aws",
+			branch:        newBranch(gcsBackup(pgbackrest.KeyTypeWebID), gcsRestore(pgbackrest.KeyTypeWebID)),
+		},
+		"GCP cell without a Workload Identity pool": {
+			cloudProvider: "gcp",
+			branch:        newBranch(gcsBackup(pgbackrest.KeyTypeWebID), gcsRestore(pgbackrest.KeyTypeWebID)),
+		},
+		"source in another bucket": {
+			cloudProvider: "gcp", pool: pool,
+			branch: newBranch(gcsBackup(pgbackrest.KeyTypeWebID), gcsRestoreFrom("other-bucket", pgbackrest.KeyTypeWebID)),
+		},
+		"source without web identity": {
+			cloudProvider: "gcp", pool: pool,
+			branch: newBranch(gcsBackup(pgbackrest.KeyTypeWebID), gcsRestore("auto")),
+		},
+		"Branch without web identity": {
+			cloudProvider: "gcp", pool: pool,
+			branch: newBranch(gcsBackup("auto"), gcsRestore(pgbackrest.KeyTypeWebID)),
+		},
+		"Branch without a restore": {
+			cloudProvider: "gcp", pool: pool,
+			branch: newBranch(gcsBackup(pgbackrest.KeyTypeWebID), nil),
+		},
+		"restore from the repository of the Branch": {
+			cloudProvider: "gcp", pool: pool,
+			branch: newBranch(gcsBackup(pgbackrest.KeyTypeWebID), &v1alpha1.RestoreSpec{
+				Type: v1alpha1.RestoreTypeObjectStore, Name: "branch-1",
+			}),
+		},
+	}
+	for name, tc := range unchanged {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			r, c := setup(t, tc.cloudProvider, tc.pool, tc.branch)
+			if tc.noProjectNumber {
+				r.PgBackRestGCSProjectNumber = ""
+			}
+
+			reconcile(t, r)
+			require.NoError(t, c.Get(t.Context(), clusterKey, &apiv1.Cluster{}))
+			require.Nil(t, getCondition(t, c))
+			sa := &corev1.ServiceAccount{}
+			if err := c.Get(t.Context(), saKey, sa); !apierrors.IsNotFound(err) {
+				require.NoError(t, err)
+				require.NotContains(t, sa.Annotations, pgbackrest.GCSRestoreFolderAnnotation)
+			}
 		})
 	}
 }

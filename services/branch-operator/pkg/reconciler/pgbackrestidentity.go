@@ -11,12 +11,15 @@ import (
 	apiv1 "github.com/xataio/xata-cnpg/api/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"xata/internal/pgbackrest"
 	"xata/services/branch-operator/api/v1alpha1"
+	"xata/services/branch-operator/pkg/gcp/gcsfolder"
 	"xata/services/branch-operator/pkg/reconciler/resources"
 )
 
@@ -151,6 +154,12 @@ func (r *BranchReconciler) reconcilePgBackRestServiceAccount(
 			sa.Annotations[pgbackrest.GCSFolderAnnotation] = pgbackrest.GCSFolderURI(
 				b.PgBackRest.GCS.Bucket, b.PgBackRest.GetRepoPath(branch.Name),
 			)
+			if folder := r.restoreSourceFolder(branch); folder != "" && !restoreSourceAccessReleased(branch) {
+				sa.Annotations[pgbackrest.GCSRestoreFolderAnnotation] = folder
+			} else if sa.Annotations[pgbackrest.GCSRestoreFolderAnnotation] == sa.Annotations[gcsfolder.ObservedRestoreFolderAnnotation] {
+				// Remove the request only once observed, or its grant leaks.
+				delete(sa.Annotations, pgbackrest.GCSRestoreFolderAnnotation)
+			}
 		}
 		// The token is only for pgBackRest, which reads it from the Secret.
 		sa.AutomountServiceAccountToken = new(false)
@@ -158,6 +167,72 @@ func (r *BranchReconciler) reconcilePgBackRestServiceAccount(
 	})
 
 	return sa, err
+}
+
+// reconcileRestoreSourceAccess requests read access to the GCS folder of the
+// restore source before the Cluster bootstraps from it, and releases it once
+// the Cluster has a primary. It returns false while the grant is not observed.
+func (r *BranchReconciler) reconcileRestoreSourceAccess(
+	ctx context.Context,
+	branch *v1alpha1.Branch,
+) (bool, error) {
+	folder := r.restoreSourceFolder(branch)
+	if folder == "" || !branch.HasClusterName() || restoreSourceAccessReleased(branch) {
+		return true, nil
+	}
+
+	cluster := &apiv1.Cluster{}
+	key := client.ObjectKey{Name: branch.ClusterName(), Namespace: r.ClustersNamespace}
+	if err := r.Get(ctx, key, cluster); client.IgnoreNotFound(err) != nil {
+		return false, fmt.Errorf("get Cluster %s: %w", key.Name, err)
+	}
+	if cluster.Status.CurrentPrimary != "" {
+		setStatusCondition(branch, v1alpha1.RestoreSourceAccessConditionType,
+			metav1.ConditionFalse, v1alpha1.RestoreSourceAccessReleasedReason)
+		return true, nil
+	}
+
+	sa, err := r.reconcilePgBackRestServiceAccount(ctx, branch)
+	if err != nil {
+		return false, fmt.Errorf("reconcile pgbackrest ServiceAccount: %w", err)
+	}
+	if sa.Annotations[gcsfolder.ObservedRestoreFolderAnnotation] != folder {
+		reason := v1alpha1.AwaitingRestoreSourceAccessReason
+		meta.SetStatusCondition(&branch.Status.Conditions, metav1.Condition{
+			Type:               v1alpha1.BranchReadyConditionType,
+			Status:             metav1.ConditionFalse,
+			Reason:             reason,
+			Message:            v1alpha1.BranchConditionMessages[reason] + " " + folder,
+			ObservedGeneration: branch.Generation,
+		})
+		return false, nil
+	}
+	setStatusCondition(branch, v1alpha1.RestoreSourceAccessConditionType,
+		metav1.ConditionTrue, v1alpha1.RestoreSourceAccessGrantedReason)
+	return true, nil
+}
+
+// restoreSourceFolder returns the GCS folder of the restore source that the
+// Branch ServiceAccount needs read access to, or "" if it needs none.
+func (r *BranchReconciler) restoreSourceFolder(branch *v1alpha1.Branch) string {
+	b := branch.Spec.BackupSpec
+	// Without a project number the operator runs no gcsfolder reconciler.
+	if r.CloudProvider != cloudProviderGCP || r.PgBackRestWorkloadIdentityPool == "" || r.PgBackRestGCSProjectNumber == "" ||
+		!usesGCS(b) || b.PgBackRest.GCS.KeyType != pgbackrest.KeyTypeWebID {
+		return ""
+	}
+	rs := branch.Spec.Restore
+	// The source must be in the backup bucket of the Branch.
+	if !rs.IsObjectStoreType() || rs.PgBackRest == nil || rs.PgBackRest.GCS == nil ||
+		rs.PgBackRest.GCS.KeyType != pgbackrest.KeyTypeWebID || rs.PgBackRest.GCS.Bucket != b.PgBackRest.GCS.Bucket {
+		return ""
+	}
+	return pgbackrest.GCSFolderURI(rs.PgBackRest.GCS.Bucket, rs.PgBackRest.RepoPath)
+}
+
+func restoreSourceAccessReleased(branch *v1alpha1.Branch) bool {
+	c := meta.FindStatusCondition(branch.Status.Conditions, v1alpha1.RestoreSourceAccessConditionType)
+	return c != nil && c.Reason == v1alpha1.RestoreSourceAccessReleasedReason
 }
 
 // reconcilePgBackRestToken writes a new token to the Secret when the Secret

@@ -59,6 +59,7 @@ type BranchReconciler struct {
 	BackupsEndpoint                      string
 	PgBackRestWebIdentityRoleARN         string
 	PgBackRestWorkloadIdentityPool       string
+	PgBackRestGCSProjectNumber           string
 	BackupsCredentialsSecretName         string
 	BackupsCredentialsAccessKeyIDKey     string
 	BackupsCredentialsSecretAccessKeyKey string
@@ -141,6 +142,18 @@ func (r *BranchReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	if err != nil {
 		log.Error(err, "reconciling pgbackrest cipher Secrets")
 		return ctrl.Result{}, err
+	}
+
+	// Grant access to the restore source before the Cluster bootstraps from it
+	var ready bool
+	ready, err = r.reconcileRestoreSourceAccess(ctx, branch)
+	if err != nil {
+		log.Error(err, "reconciling restore source access")
+		return ctrl.Result{}, err
+	}
+	if !ready {
+		// The ServiceAccount watch wakes the reconcile when the grant is observed
+		return ctrl.Result{}, nil
 	}
 
 	// Reconcile the CNPG Cluster for the branch
@@ -258,7 +271,7 @@ func (r *BranchReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manage
 		Owns(&networkingv1.NetworkPolicy{}, onGenerationChanged).
 		Owns(&v1.Service{}, onGenerationChanged).
 		Owns(&v1.Secret{}, onGenerationChanged).
-		Owns(&v1.ServiceAccount{}, onGenerationChanged).
+		Owns(&v1.ServiceAccount{}, onAnnotationOrGenerationChanged).
 		Owns(&apiv1.ScheduledBackup{}, onGenerationChanged).
 		Owns(&snapshotv1.VolumeSnapshot{}, onGenerationChanged).
 		Owns(&apiv1.Cluster{}, onRelevantClusterChanges).

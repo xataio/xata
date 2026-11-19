@@ -31,6 +31,11 @@ var ClusterPhaseOrGenerationOrAnnotationChanged = predicate.Or(
 				return true
 			}
 
+			// React to the first primary, which marks the end of a restore
+			if oldCluster.Status.CurrentPrimary != newCluster.Status.CurrentPrimary {
+				return true
+			}
+
 			// React to backup status changes, so updateBackupStatus copies
 			// them to the Branch. A backup changes no phase, generation, or
 			// annotation. The fields are marked deprecated upstream because
