@@ -608,13 +608,6 @@ func (c *ClustersService) GetPostgresClusterCredentials(ctx context.Context, req
 	}, nil
 }
 
-// GetObjectStore is the deprecated barman recovery-window RPC. The barman-cloud
-// plugin is no longer deployed, so there is no ObjectStore to read. The RPC
-// stays until it is removed from the proto; use GetRecoveryWindow instead.
-func (c *ClustersService) GetObjectStore(context.Context, *clustersv1.GetObjectStoreRequest) (*clustersv1.GetObjectStoreResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "GetObjectStore is no longer supported, use GetRecoveryWindow")
-}
-
 // GetRecoveryWindow returns the recovery window for a branch from the Branch
 // status, which the branch-operator fills from pgbackrest. All timestamps are
 // RFC3339.

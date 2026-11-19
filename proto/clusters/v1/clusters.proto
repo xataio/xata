@@ -24,13 +24,7 @@ service ClustersService {
   // Delete a postgres cluster
   rpc DeletePostgresCluster(DeletePostgresClusterRequest) returns (DeletePostgresClusterResponse) {}
 
-  // Get object store for a postgres cluster
-  // Deprecated: use GetRecoveryWindow instead.
-  rpc GetObjectStore(GetObjectStoreRequest) returns (GetObjectStoreResponse) {
-    option deprecated = true;
-  }
-
-  // Get the recovery window for a branch, independent of the backup method
+  // Get the recovery window for a branch
   rpc GetRecoveryWindow(GetRecoveryWindowRequest) returns (GetRecoveryWindowResponse) {}
 
   // Set IP filtering configuration for a branch
@@ -232,40 +226,8 @@ message BackupConfiguration {
   string backup_schedule = 1; //cron expression
   string backup_retention = 2;
   bool backups_enabled = 3; // whether backups are enabled for this cluster
-  // backup method: "barman" (default) or "pgbackrest"
+  // backup method; "pgbackrest" is the only supported value
   string backup_method = 4;
-}
-
-// Deprecated: use GetRecoveryWindowRequest instead.
-message GetObjectStoreRequest {
-  option deprecated = true;
-  // The id of the cluster
-  string id = 1;
-}
-
-// Deprecated: use GetRecoveryWindowResponse instead.
-message GetObjectStoreResponse {
-  option deprecated = true;
-  // Object store status information
-  ObjectStoreStatus status = 1;
-}
-
-// Deprecated: part of the GetObjectStore response.
-message ObjectStoreStatus {
-  option deprecated = true;
-  // Map of server names to their recovery windows
-  map<string, RecoveryWindow> server_recovery_window = 1;
-}
-
-// Deprecated: part of the GetObjectStore response.
-message RecoveryWindow {
-  option deprecated = true;
-  // The first recoverability point
-  string first_recoverability_point = 1;
-  // The last successful backup time
-  string last_successful_backup_time = 2;
-  // The last failed backup time
-  string last_failed_backup_time = 3;
 }
 
 message GetRecoveryWindowRequest {

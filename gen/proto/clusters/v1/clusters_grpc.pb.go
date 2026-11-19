@@ -25,7 +25,6 @@ const (
 	ClustersService_RotatePostgresClusterCredentials_FullMethodName = "/clusters.v1.ClustersService/RotatePostgresClusterCredentials"
 	ClustersService_UpdatePostgresCluster_FullMethodName            = "/clusters.v1.ClustersService/UpdatePostgresCluster"
 	ClustersService_DeletePostgresCluster_FullMethodName            = "/clusters.v1.ClustersService/DeletePostgresCluster"
-	ClustersService_GetObjectStore_FullMethodName                   = "/clusters.v1.ClustersService/GetObjectStore"
 	ClustersService_GetRecoveryWindow_FullMethodName                = "/clusters.v1.ClustersService/GetRecoveryWindow"
 	ClustersService_SetBranchIPFiltering_FullMethodName             = "/clusters.v1.ClustersService/SetBranchIPFiltering"
 	ClustersService_SetBranchesIPFiltering_FullMethodName           = "/clusters.v1.ClustersService/SetBranchesIPFiltering"
@@ -53,11 +52,7 @@ type ClustersServiceClient interface {
 	UpdatePostgresCluster(ctx context.Context, in *UpdatePostgresClusterRequest, opts ...grpc.CallOption) (*UpdatePostgresClusterResponse, error)
 	// Delete a postgres cluster
 	DeletePostgresCluster(ctx context.Context, in *DeletePostgresClusterRequest, opts ...grpc.CallOption) (*DeletePostgresClusterResponse, error)
-	// Deprecated: Do not use.
-	// Get object store for a postgres cluster
-	// Deprecated: use GetRecoveryWindow instead.
-	GetObjectStore(ctx context.Context, in *GetObjectStoreRequest, opts ...grpc.CallOption) (*GetObjectStoreResponse, error)
-	// Get the recovery window for a branch, independent of the backup method
+	// Get the recovery window for a branch
 	GetRecoveryWindow(ctx context.Context, in *GetRecoveryWindowRequest, opts ...grpc.CallOption) (*GetRecoveryWindowResponse, error)
 	// Set IP filtering configuration for a branch
 	SetBranchIPFiltering(ctx context.Context, in *SetBranchIPFilteringRequest, opts ...grpc.CallOption) (*SetBranchIPFilteringResponse, error)
@@ -135,17 +130,6 @@ func (c *clustersServiceClient) DeletePostgresCluster(ctx context.Context, in *D
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(DeletePostgresClusterResponse)
 	err := c.cc.Invoke(ctx, ClustersService_DeletePostgresCluster_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-// Deprecated: Do not use.
-func (c *clustersServiceClient) GetObjectStore(ctx context.Context, in *GetObjectStoreRequest, opts ...grpc.CallOption) (*GetObjectStoreResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetObjectStoreResponse)
-	err := c.cc.Invoke(ctx, ClustersService_GetObjectStore_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -240,11 +224,7 @@ type ClustersServiceServer interface {
 	UpdatePostgresCluster(context.Context, *UpdatePostgresClusterRequest) (*UpdatePostgresClusterResponse, error)
 	// Delete a postgres cluster
 	DeletePostgresCluster(context.Context, *DeletePostgresClusterRequest) (*DeletePostgresClusterResponse, error)
-	// Deprecated: Do not use.
-	// Get object store for a postgres cluster
-	// Deprecated: use GetRecoveryWindow instead.
-	GetObjectStore(context.Context, *GetObjectStoreRequest) (*GetObjectStoreResponse, error)
-	// Get the recovery window for a branch, independent of the backup method
+	// Get the recovery window for a branch
 	GetRecoveryWindow(context.Context, *GetRecoveryWindowRequest) (*GetRecoveryWindowResponse, error)
 	// Set IP filtering configuration for a branch
 	SetBranchIPFiltering(context.Context, *SetBranchIPFilteringRequest) (*SetBranchIPFilteringResponse, error)
@@ -285,9 +265,6 @@ func (UnimplementedClustersServiceServer) UpdatePostgresCluster(context.Context,
 }
 func (UnimplementedClustersServiceServer) DeletePostgresCluster(context.Context, *DeletePostgresClusterRequest) (*DeletePostgresClusterResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeletePostgresCluster not implemented")
-}
-func (UnimplementedClustersServiceServer) GetObjectStore(context.Context, *GetObjectStoreRequest) (*GetObjectStoreResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetObjectStore not implemented")
 }
 func (UnimplementedClustersServiceServer) GetRecoveryWindow(context.Context, *GetRecoveryWindowRequest) (*GetRecoveryWindowResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetRecoveryWindow not implemented")
@@ -435,24 +412,6 @@ func _ClustersService_DeletePostgresCluster_Handler(srv interface{}, ctx context
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ClustersServiceServer).DeletePostgresCluster(ctx, req.(*DeletePostgresClusterRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ClustersService_GetObjectStore_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetObjectStoreRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ClustersServiceServer).GetObjectStore(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ClustersService_GetObjectStore_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ClustersServiceServer).GetObjectStore(ctx, req.(*GetObjectStoreRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -613,10 +572,6 @@ var ClustersService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeletePostgresCluster",
 			Handler:    _ClustersService_DeletePostgresCluster_Handler,
-		},
-		{
-			MethodName: "GetObjectStore",
-			Handler:    _ClustersService_GetObjectStore_Handler,
 		},
 		{
 			MethodName: "GetRecoveryWindow",
