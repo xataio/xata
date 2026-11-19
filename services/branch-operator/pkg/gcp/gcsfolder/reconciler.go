@@ -34,6 +34,14 @@ const (
 
 	// Role is the role of the ServiceAccount on its managed folder.
 	Role = "roles/storage.objectUser"
+
+	// ObservedRestoreFolderAnnotation records the gs://bucket/folder/ where
+	// RestoreRole was last granted.
+	ObservedRestoreFolderAnnotation = "xata.io/restore-gcs-managed-folder-observed"
+
+	// RestoreRole is the role of the ServiceAccount on the managed folder it
+	// restores from.
+	RestoreRole = "roles/storage.objectViewer"
 )
 
 type Reconciler struct {
@@ -94,12 +102,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 	location := pgbackrest.GCSFolderURI(bucket, folder)
 	if sa.Annotations[ObservedFolderAnnotation] == location {
-		return ctrl.Result{}, nil
+		return ctrl.Result{}, r.reconcileRestore(ctx, sa)
 	}
 	if err := r.createFolder(ctx, bucket, folder); err != nil {
 		return ctrl.Result{}, err
 	}
-	if err := r.grant(ctx, bucket, folder, r.Principal(sa.Namespace, sa.Name)); err != nil {
+	if err := r.grant(ctx, bucket, folder, Role, r.Principal(sa.Namespace, sa.Name)); err != nil {
 		return ctrl.Result{}, err
 	}
 	if previousFolder != "" && (previousBucket != bucket || previousFolder != folder) {
@@ -116,13 +124,80 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	if err := r.Client.Patch(ctx, sa, patch); err != nil {
 		return ctrl.Result{}, fmt.Errorf("record observed folder: %w", err)
 	}
-	return ctrl.Result{}, nil
+	return ctrl.Result{}, r.reconcileRestore(ctx, sa)
+}
+
+// reconcileRestore grants RestoreRole on the requested restore folder and
+// revokes it from the previous one. The folder belongs to another branch, so
+// it is never created or deleted here. Callers must not change or remove the
+// request until it is observed, or the unobserved grant leaks.
+func (r *Reconciler) reconcileRestore(ctx context.Context, sa *corev1.ServiceAccount) error {
+	requested, observed, err := restoreLocations(sa)
+	if err != nil {
+		return err
+	}
+	if requested == observed {
+		return nil
+	}
+	member := r.Principal(sa.Namespace, sa.Name)
+	if requested != "" {
+		bucket, folder, _ := pgbackrest.ParseGCSFolderURI(requested)
+		if err := r.grant(ctx, bucket, folder, RestoreRole, member); err != nil {
+			return err
+		}
+	}
+	if err := r.revoke(ctx, observed, member); err != nil {
+		return err
+	}
+
+	patch := client.MergeFromWithOptions(sa.DeepCopy(), client.MergeFromWithOptimisticLock{})
+	if requested == "" {
+		delete(sa.Annotations, ObservedRestoreFolderAnnotation)
+	} else {
+		if sa.Annotations == nil {
+			sa.Annotations = map[string]string{}
+		}
+		sa.Annotations[ObservedRestoreFolderAnnotation] = requested
+	}
+	if err := r.Client.Patch(ctx, sa, patch); err != nil {
+		return fmt.Errorf("record observed restore folder: %w", err)
+	}
+	return nil
+}
+
+// restoreLocations returns the normalized requested and observed restore
+// folder URIs.
+func restoreLocations(sa *corev1.ServiceAccount) (string, string, error) {
+	var locations [2]string
+	for i, key := range []string{pgbackrest.GCSRestoreFolderAnnotation, ObservedRestoreFolderAnnotation} {
+		if location := sa.Annotations[key]; location != "" {
+			bucket, folder, err := pgbackrest.ParseGCSFolderURI(location)
+			if err != nil {
+				return "", "", err
+			}
+			locations[i] = pgbackrest.GCSFolderURI(bucket, folder)
+		}
+	}
+	return locations[0], locations[1], nil
 }
 
 // delete removes managed folders and grants while keeping backup objects.
 func (r *Reconciler) delete(ctx context.Context, sa *corev1.ServiceAccount, bucket, folder, previousBucket, previousFolder string) error {
 	if !controllerutil.ContainsFinalizer(sa, Finalizer) {
 		return nil
+	}
+	requestedRestore, observedRestore, err := restoreLocations(sa)
+	if err != nil {
+		return err
+	}
+	member := r.Principal(sa.Namespace, sa.Name)
+	if err := r.revoke(ctx, observedRestore, member); err != nil {
+		return err
+	}
+	if requestedRestore != observedRestore {
+		if err := r.revoke(ctx, requestedRestore, member); err != nil {
+			return err
+		}
 	}
 	if previousFolder != "" && (previousBucket != bucket || previousFolder != folder) {
 		if err := r.deleteFolder(ctx, previousBucket, previousFolder); err != nil {
@@ -137,6 +212,7 @@ func (r *Reconciler) delete(ctx context.Context, sa *corev1.ServiceAccount, buck
 	patch := client.MergeFromWithOptions(sa.DeepCopy(), client.MergeFromWithOptimisticLock{})
 	controllerutil.RemoveFinalizer(sa, Finalizer)
 	delete(sa.Annotations, ObservedFolderAnnotation)
+	delete(sa.Annotations, ObservedRestoreFolderAnnotation)
 	if err := r.Client.Patch(ctx, sa, patch); err != nil {
 		return fmt.Errorf("remove finalizer: %w", err)
 	}
@@ -159,22 +235,69 @@ func (r *Reconciler) createFolder(ctx context.Context, bucket, folder string) er
 	return nil
 }
 
-// grant adds member to Role on folder. GCS rejects the update with 412 when
+// grant adds member to role on folder. GCS rejects the update with 412 when
 // the policy changed after it was read, and the reconciler tries again.
-func (r *Reconciler) grant(ctx context.Context, bucket, folder, member string) error {
+func (r *Reconciler) grant(ctx context.Context, bucket, folder, role, member string) error {
 	policy, err := r.Storage.ManagedFolders.GetIamPolicy(bucket, folder).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("get IAM policy of managed folder %s: %w", folder, err)
 	}
 
+	var binding *storage.PolicyBindings
 	for _, b := range policy.Bindings {
-		if b.Role == Role && b.Condition == nil && slices.Contains(b.Members, member) {
+		if b.Role != role || b.Condition != nil {
+			continue
+		}
+		if slices.Contains(b.Members, member) {
 			return nil
 		}
+		binding = b
 	}
-	policy.Bindings = append(policy.Bindings, &storage.PolicyBindings{Role: Role, Members: []string{member}})
+	if binding != nil {
+		binding.Members = append(binding.Members, member)
+	} else {
+		policy.Bindings = append(policy.Bindings, &storage.PolicyBindings{Role: role, Members: []string{member}})
+	}
 
 	if _, err := r.Storage.ManagedFolders.SetIamPolicy(bucket, folder, policy).Context(ctx).Do(); err != nil {
+		return fmt.Errorf("set IAM policy of managed folder %s: %w", folder, err)
+	}
+	return nil
+}
+
+// revoke removes member from RestoreRole on the folder at location. A missing
+// folder has no grant left to remove.
+func (r *Reconciler) revoke(ctx context.Context, location, member string) error {
+	if location == "" {
+		return nil
+	}
+	bucket, folder, err := pgbackrest.ParseGCSFolderURI(location)
+	if err != nil {
+		return err
+	}
+	policy, err := r.Storage.ManagedFolders.GetIamPolicy(bucket, folder).Context(ctx).Do()
+	if isStatus(err, http.StatusNotFound) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("get IAM policy of managed folder %s: %w", folder, err)
+	}
+
+	changed := false
+	policy.Bindings = slices.DeleteFunc(policy.Bindings, func(b *storage.PolicyBindings) bool {
+		if b.Role != RestoreRole || b.Condition != nil || !slices.Contains(b.Members, member) {
+			return false
+		}
+		changed = true
+		b.Members = slices.DeleteFunc(b.Members, func(m string) bool { return m == member })
+		return len(b.Members) == 0
+	})
+	if !changed {
+		return nil
+	}
+
+	_, err = r.Storage.ManagedFolders.SetIamPolicy(bucket, folder, policy).Context(ctx).Do()
+	if err != nil && !isStatus(err, http.StatusNotFound) {
 		return fmt.Errorf("set IAM policy of managed folder %s: %w", folder, err)
 	}
 	return nil

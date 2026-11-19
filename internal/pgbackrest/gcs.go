@@ -9,6 +9,10 @@ import (
 // GCSFolderAnnotation requests access to a gs://bucket/folder/ location.
 const GCSFolderAnnotation = "xata.io/gcs-managed-folder-uri"
 
+// GCSRestoreFolderAnnotation requests read access to the gs://bucket/folder/
+// location of another branch for a restore.
+const GCSRestoreFolderAnnotation = "xata.io/restore-gcs-managed-folder-uri"
+
 // GCSFolderURI is the Cloud Storage URI of a repository folder.
 func GCSFolderURI(bucket, folder string) string {
 	return (&url.URL{Scheme: "gs", Host: bucket, Path: "/" + strings.Trim(folder, "/") + "/"}).String()

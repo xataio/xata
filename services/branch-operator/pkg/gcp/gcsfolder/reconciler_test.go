@@ -154,6 +154,7 @@ func TestReconcile(t *testing.T) {
 		require.NoError(t, r.Client.Get(ctx, client.ObjectKeyFromObject(serviceAccount("b123-pgbackrest")), got))
 		require.Contains(t, got.Finalizers, gcsfolder.Finalizer)
 		require.Equal(t, "gs://"+bucket+"/"+folder, got.Annotations[gcsfolder.ObservedFolderAnnotation])
+		require.NotContains(t, got.Annotations, gcsfolder.ObservedRestoreFolderAnnotation)
 
 		calls := len(gcs.calls)
 		reconcile(t, r, "b123-pgbackrest")
@@ -372,4 +373,173 @@ func TestReconcileRemovedFolderRequest(t *testing.T) {
 	require.NoError(t, r.Client.Get(t.Context(), client.ObjectKeyFromObject(sa), sa))
 	require.NotContains(t, sa.Finalizers, gcsfolder.Finalizer)
 	require.NotContains(t, sa.Annotations, gcsfolder.ObservedFolderAnnotation)
+}
+
+const (
+	sourceFolder = bucket + "/a123/"
+	otherViewer  = "principal://other-restore"
+)
+
+// restoreSetup returns a reconciled b123 ServiceAccount that restores from
+// the folder of a123, which another branch also restores from.
+func restoreSetup(t *testing.T) (*gcsfolder.Reconciler, *fakeGCS, *corev1.ServiceAccount) {
+	t.Helper()
+	sa := branchServiceAccount("b123")
+	sa.Annotations[pgbackrest.GCSRestoreFolderAnnotation] = "gs://" + sourceFolder
+	r, gcs := setup(t, sa)
+	gcs.policies[sourceFolder] = &storage.Policy{Etag: "0", Bindings: []*storage.PolicyBindings{
+		{Role: gcsfolder.Role, Members: []string{r.Principal(namespace, "a123-pgbackrest")}},
+		{Role: gcsfolder.RestoreRole, Members: []string{otherViewer}},
+	}}
+	reconcile(t, r, sa.Name)
+	require.NoError(t, r.Client.Get(t.Context(), client.ObjectKeyFromObject(sa), sa))
+	return r, gcs, sa
+}
+
+func requireSourceGrants(t *testing.T, r *gcsfolder.Reconciler, gcs *fakeGCS, viewers ...string) {
+	t.Helper()
+	want := []*storage.PolicyBindings{
+		{Role: gcsfolder.Role, Members: []string{r.Principal(namespace, "a123-pgbackrest")}},
+		{Role: gcsfolder.RestoreRole, Members: viewers},
+	}
+	require.Equal(t, want, gcs.policies[sourceFolder].Bindings)
+}
+
+func TestReconcileRestoreFolder(t *testing.T) {
+	t.Parallel()
+	r, gcs, sa := restoreSetup(t)
+	member := r.Principal(namespace, sa.Name)
+
+	requireSourceGrants(t, r, gcs, otherViewer, member)
+	require.Len(t, gcs.policies[bucket+"/b123/"].Bindings, 1)
+	require.Equal(t, "gs://"+sourceFolder, sa.Annotations[gcsfolder.ObservedRestoreFolderAnnotation])
+
+	calls := len(gcs.calls)
+	reconcile(t, r, sa.Name)
+	require.Len(t, gcs.calls, calls)
+
+	delete(sa.Annotations, pgbackrest.GCSRestoreFolderAnnotation)
+	require.NoError(t, r.Client.Update(t.Context(), sa))
+	reconcile(t, r, sa.Name)
+	requireSourceGrants(t, r, gcs, otherViewer)
+	require.Len(t, gcs.policies[bucket+"/b123/"].Bindings, 1)
+	require.NoError(t, r.Client.Get(t.Context(), client.ObjectKeyFromObject(sa), sa))
+	require.NotContains(t, sa.Annotations, gcsfolder.ObservedRestoreFolderAnnotation)
+	require.Contains(t, sa.Finalizers, gcsfolder.Finalizer)
+}
+
+func TestReconcileRestoreFolderChange(t *testing.T) {
+	t.Parallel()
+	r, gcs, sa := restoreSetup(t)
+	member := r.Principal(namespace, sa.Name)
+	gcs.policies[bucket+"/c123/"] = &storage.Policy{Etag: "0"}
+
+	sa.Annotations[pgbackrest.GCSRestoreFolderAnnotation] = "gs://" + bucket + "/c123/"
+	require.NoError(t, r.Client.Update(t.Context(), sa))
+	reconcile(t, r, sa.Name)
+	requireSourceGrants(t, r, gcs, otherViewer)
+	require.Equal(t, []*storage.PolicyBindings{{Role: gcsfolder.RestoreRole, Members: []string{member}}}, gcs.policies[bucket+"/c123/"].Bindings)
+	require.NoError(t, r.Client.Get(t.Context(), client.ObjectKeyFromObject(sa), sa))
+	require.Equal(t, "gs://"+bucket+"/c123/", sa.Annotations[gcsfolder.ObservedRestoreFolderAnnotation])
+}
+
+func TestReconcileRestoreFolderDeletion(t *testing.T) {
+	t.Parallel()
+	r, gcs, sa := restoreSetup(t)
+
+	require.NoError(t, r.Client.Delete(t.Context(), sa))
+	reconcile(t, r, sa.Name)
+	requireSourceGrants(t, r, gcs, otherViewer)
+	require.NotContains(t, gcs.policies, bucket+"/b123/")
+	require.True(t, apierrors.IsNotFound(r.Client.Get(t.Context(), client.ObjectKeyFromObject(sa), sa)))
+}
+
+func TestReconcileRestoreFolderSourceDeleted(t *testing.T) {
+	t.Parallel()
+	for name, deleteAccount := range map[string]bool{"annotation removed": false, "ServiceAccount deleted": true} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			r, gcs, sa := restoreSetup(t)
+			delete(gcs.policies, sourceFolder)
+
+			if deleteAccount {
+				require.NoError(t, r.Client.Delete(t.Context(), sa))
+				reconcile(t, r, sa.Name)
+				require.True(t, apierrors.IsNotFound(r.Client.Get(t.Context(), client.ObjectKeyFromObject(sa), sa)))
+				require.Empty(t, gcs.policies)
+				return
+			}
+			delete(sa.Annotations, pgbackrest.GCSRestoreFolderAnnotation)
+			require.NoError(t, r.Client.Update(t.Context(), sa))
+			reconcile(t, r, sa.Name)
+			require.NoError(t, r.Client.Get(t.Context(), client.ObjectKeyFromObject(sa), sa))
+			require.NotContains(t, sa.Annotations, gcsfolder.ObservedRestoreFolderAnnotation)
+		})
+	}
+}
+
+func TestReconcileRestoreFolderMissing(t *testing.T) {
+	t.Parallel()
+	sa := branchServiceAccount("b123")
+	sa.Annotations[pgbackrest.GCSRestoreFolderAnnotation] = "gs://" + sourceFolder
+	r, gcs := setup(t, sa)
+
+	_, err := r.Reconcile(t.Context(), ctrl.Request{Namespace: namespace, Name: sa.Name})
+	require.Error(t, err)
+	require.NotContains(t, gcs.policies, sourceFolder)
+	require.NoError(t, r.Client.Get(t.Context(), client.ObjectKeyFromObject(sa), sa))
+	require.NotContains(t, sa.Annotations, gcsfolder.ObservedRestoreFolderAnnotation)
+	require.Equal(t, "gs://"+bucket+"/b123/", sa.Annotations[gcsfolder.ObservedFolderAnnotation])
+
+	gcs.policies[sourceFolder] = &storage.Policy{Etag: "0"}
+	reconcile(t, r, sa.Name)
+	require.NoError(t, r.Client.Get(t.Context(), client.ObjectKeyFromObject(sa), sa))
+	require.Equal(t, "gs://"+sourceFolder, sa.Annotations[gcsfolder.ObservedRestoreFolderAnnotation])
+}
+
+func TestReconcileRestoreObservedWriteRetry(t *testing.T) {
+	t.Parallel()
+	for name, deleteAccount := range map[string]bool{"retry": false, "delete before retry": true} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			sa := branchServiceAccount("b123")
+			r, gcs := setup(t, sa)
+			reconcile(t, r, sa.Name)
+			gcs.policies[sourceFolder] = &storage.Policy{Etag: "0", Bindings: []*storage.PolicyBindings{
+				{Role: gcsfolder.Role, Members: []string{r.Principal(namespace, "a123-pgbackrest")}},
+				{Role: gcsfolder.RestoreRole, Members: []string{otherViewer}},
+			}}
+			require.NoError(t, r.Client.Get(t.Context(), client.ObjectKeyFromObject(sa), sa))
+			sa.Annotations[pgbackrest.GCSRestoreFolderAnnotation] = "gs://" + sourceFolder
+			require.NoError(t, r.Client.Update(t.Context(), sa))
+			watchClient, ok := r.Client.(client.WithWatch)
+			require.True(t, ok)
+			r.Client = interceptor.NewClient(watchClient, interceptor.Funcs{
+				Patch: func(ctx context.Context, c client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+					if obj.GetAnnotations()[gcsfolder.ObservedRestoreFolderAnnotation] != "" {
+						return apierrors.NewConflict(schema.GroupResource{Resource: "serviceaccounts"}, obj.GetName(), nil)
+					}
+					return c.Patch(ctx, obj, patch, opts...)
+				},
+			})
+			_, err := r.Reconcile(t.Context(), ctrl.Request{Namespace: namespace, Name: sa.Name})
+			require.Error(t, err)
+			requireSourceGrants(t, r, gcs, otherViewer, r.Principal(namespace, sa.Name))
+			require.NoError(t, r.Client.Get(t.Context(), client.ObjectKeyFromObject(sa), sa))
+			require.NotContains(t, sa.Annotations, gcsfolder.ObservedRestoreFolderAnnotation)
+			r.Client = watchClient
+			if deleteAccount {
+				require.NoError(t, r.Client.Delete(t.Context(), sa))
+			}
+			reconcile(t, r, sa.Name)
+			if deleteAccount {
+				requireSourceGrants(t, r, gcs, otherViewer)
+				require.True(t, apierrors.IsNotFound(r.Client.Get(t.Context(), client.ObjectKeyFromObject(sa), sa)))
+				return
+			}
+			requireSourceGrants(t, r, gcs, otherViewer, r.Principal(namespace, sa.Name))
+			require.NoError(t, r.Client.Get(t.Context(), client.ObjectKeyFromObject(sa), sa))
+			require.Equal(t, "gs://"+sourceFolder, sa.Annotations[gcsfolder.ObservedRestoreFolderAnnotation])
+		})
+	}
 }
