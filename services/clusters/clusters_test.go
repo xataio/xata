@@ -25,6 +25,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	clustersv1 "xata/gen/proto/clusters/v1"
+	"xata/internal/pgbackrest"
 	"xata/internal/storageqos"
 	cpv1alpha1 "xata/proto/clusterpool-operator/api/v1alpha1"
 	"xata/services/branch-operator/api/v1alpha1"
@@ -245,6 +246,11 @@ func TestCreatePostgresCluster(t *testing.T) {
 					Type:      v1alpha1.RestoreTypeObjectStore,
 					Name:      "gmnfj6042d3qd09dcc8a7le0eo",
 					Timestamp: &metav1.Time{Time: pitrTimestamp},
+					PgBackRest: &v1alpha1.RestorePgBackRestSpec{
+						RepoPath:   "gmnfj6042d3qd09dcc8a7le0eo",
+						StanzaName: "gmnfj6042d3qd09dcc8a7le0eo",
+						S3:         &v1alpha1.PgBackRestS3Spec{Bucket: "test-pgbackrest-bucket", Region: "us-east-1", KeyType: webIdentityKeyType},
+					},
 				}
 			},
 		},
@@ -348,6 +354,135 @@ func TestCreatePostgresCluster(t *testing.T) {
 					Type:      v1alpha1.RestoreTypeObjectStore,
 					Name:      "source-cluster-for-pitr",
 					Timestamp: &metav1.Time{Time: pitrTimestamp},
+				}
+			},
+		},
+		{
+			name: "restore from pgbackrest AWS web-id source reads the source repository",
+			extraObjects: []client.Object{pgBackRestRestoreSource(&v1alpha1.PgBackRestSpec{
+				S3:       &v1alpha1.PgBackRestS3Spec{Bucket: "source-bucket", Region: "us-east-1", KeyType: webIdentityKeyType},
+				RepoPath: webIdentityRepoPath("restore-source"),
+			})},
+			requestFn: pgBackRestRestoreRequest,
+			expectedBranchFn: func(b *v1alpha1.Branch) {
+				expectPgBackRestBackupSpec(b)
+				b.Spec.Restore = &v1alpha1.RestoreSpec{
+					Type: v1alpha1.RestoreTypeObjectStore,
+					Name: "restore-source",
+					PgBackRest: &v1alpha1.RestorePgBackRestSpec{
+						RepoPath:   webIdentityRepoPath("restore-source"),
+						StanzaName: "restore-source",
+						S3:         &v1alpha1.PgBackRestS3Spec{Bucket: "source-bucket", Region: "us-east-1", KeyType: webIdentityKeyType},
+					},
+				}
+			},
+		},
+		{
+			name: "restore from pgbackrest GCS web-id source reads the source repository",
+			extraObjects: []client.Object{pgBackRestRestoreSource(&v1alpha1.PgBackRestSpec{
+				GCS:      &v1alpha1.PgBackRestGCSSpec{Bucket: "source-bucket", KeyType: webIdentityKeyType},
+				RepoPath: "restore-source",
+			})},
+			requestFn: pgBackRestRestoreRequest,
+			expectedBranchFn: func(b *v1alpha1.Branch) {
+				expectPgBackRestBackupSpec(b)
+				b.Spec.Restore = &v1alpha1.RestoreSpec{
+					Type: v1alpha1.RestoreTypeObjectStore,
+					Name: "restore-source",
+					PgBackRest: &v1alpha1.RestorePgBackRestSpec{
+						RepoPath:   "restore-source",
+						StanzaName: "restore-source",
+						GCS:        &v1alpha1.PgBackRestGCSSpec{Bucket: "source-bucket", KeyType: webIdentityKeyType},
+					},
+				}
+			},
+		},
+		{
+			name: "restore from pgbackrest static-key S3 source reads the source stanza",
+			extraObjects: []client.Object{pgBackRestRestoreSource(&v1alpha1.PgBackRestSpec{
+				S3:         &v1alpha1.PgBackRestS3Spec{Bucket: "source-bucket", Region: "us-east-1", Endpoint: "http://rustfs:9000", CredentialsSecretName: "source-creds"},
+				StanzaName: "restore-source-1",
+			})},
+			requestFn: pgBackRestRestoreRequest,
+			expectedBranchFn: func(b *v1alpha1.Branch) {
+				expectPgBackRestBackupSpec(b)
+				b.Spec.Restore = &v1alpha1.RestoreSpec{
+					Type: v1alpha1.RestoreTypeObjectStore,
+					Name: "restore-source",
+					PgBackRest: &v1alpha1.RestorePgBackRestSpec{
+						RepoPath:   "restore-source-1",
+						StanzaName: "restore-source-1",
+						S3:         &v1alpha1.PgBackRestS3Spec{Bucket: "source-bucket", Region: "us-east-1", Endpoint: "http://rustfs:9000", CredentialsSecretName: "source-creds"},
+					},
+				}
+			},
+		},
+		{
+			name: "restore from pgbackrest Azure source reads the source repository",
+			extraObjects: []client.Object{pgBackRestRestoreSource(&v1alpha1.PgBackRestSpec{
+				Azure: &v1alpha1.PgBackRestAzureSpec{Account: "account", Container: "backups"},
+			})},
+			requestFn: pgBackRestRestoreRequest,
+			expectedBranchFn: func(b *v1alpha1.Branch) {
+				expectPgBackRestBackupSpec(b)
+				b.Spec.Restore = &v1alpha1.RestoreSpec{
+					Type: v1alpha1.RestoreTypeObjectStore,
+					Name: "restore-source",
+					PgBackRest: &v1alpha1.RestorePgBackRestSpec{
+						RepoPath:   "restore-source",
+						StanzaName: "restore-source",
+						Azure:      &v1alpha1.PgBackRestAzureSpec{Account: "account", Container: "backups"},
+					},
+				}
+			},
+		},
+		{
+			name: "restore from encrypted pgbackrest source sets the restore cipher and the source repository",
+			extraObjects: []client.Object{pgBackRestRestoreSource(&v1alpha1.PgBackRestSpec{
+				S3:                        &v1alpha1.PgBackRestS3Spec{Bucket: "source-bucket", Region: "us-east-1", KeyType: webIdentityKeyType},
+				RepoPath:                  webIdentityRepoPath("restore-source"),
+				CipherPassphraseSecretRef: &corev1.SecretKeySelector{Name: "restore-source-pgbackrest", Key: pgbackrest.CipherPassphraseKey},
+			})},
+			requestFn: pgBackRestRestoreRequest,
+			expectedBranchFn: func(b *v1alpha1.Branch) {
+				expectPgBackRestBackupSpec(b)
+				b.Spec.Restore = &v1alpha1.RestoreSpec{
+					Type: v1alpha1.RestoreTypeObjectStore,
+					Name: "restore-source",
+					PgBackRestCipherPassphraseSecretRef: &corev1.SecretKeySelector{
+						Name: pgbackrest.CipherSecretName(b.Name),
+						Key:  pgbackrest.RestoreCipherPassphraseKey,
+					},
+					PgBackRest: &v1alpha1.RestorePgBackRestSpec{
+						RepoPath:   webIdentityRepoPath("restore-source"),
+						StanzaName: "restore-source",
+						S3:         &v1alpha1.PgBackRestS3Spec{Bucket: "source-bucket", Region: "us-east-1", KeyType: webIdentityKeyType},
+					},
+				}
+			},
+		},
+		{
+			name:               "error - restore from pgbackrest source without a backend",
+			extraObjects:       []client.Object{pgBackRestRestoreSource(&v1alpha1.PgBackRestSpec{})},
+			requestFn:          pgBackRestRestoreRequest,
+			expectedStatusCode: codes.FailedPrecondition,
+		},
+		{
+			name: "restore from legacy pgbackrest AWS source keeps its key type and path",
+			extraObjects: []client.Object{pgBackRestRestoreSource(&v1alpha1.PgBackRestSpec{
+				S3: &v1alpha1.PgBackRestS3Spec{Bucket: "source-bucket", Region: "us-east-1", KeyType: "auto"},
+			})},
+			requestFn: pgBackRestRestoreRequest,
+			expectedBranchFn: func(b *v1alpha1.Branch) {
+				expectPgBackRestBackupSpec(b)
+				b.Spec.Restore = &v1alpha1.RestoreSpec{
+					Type: v1alpha1.RestoreTypeObjectStore,
+					Name: "restore-source",
+					PgBackRest: &v1alpha1.RestorePgBackRestSpec{
+						RepoPath:   "restore-source",
+						StanzaName: "restore-source",
+						S3:         &v1alpha1.PgBackRestS3Spec{Bucket: "source-bucket", Region: "us-east-1", KeyType: "auto"},
+					},
 				}
 			},
 		},
@@ -2552,7 +2687,8 @@ func exampleRequestsAndBranches() (*clustersv1.CreatePostgresClusterRequest, *v1
 
 func parentBranch(opts ...parentBranchOption) *v1alpha1.Branch {
 	b := &v1alpha1.Branch{
-		Name: "gmnfj6042d3qd09dcc8a7le0eo",
+		Name:   "gmnfj6042d3qd09dcc8a7le0eo",
+		Labels: testProjectLabels(),
 		Spec: v1alpha1.BranchSpec{
 			ClusterSpec: v1alpha1.ClusterSpec{
 				Image: "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:16.3",
@@ -2629,9 +2765,11 @@ func withSharedPreloadLibraries(libs []string) parentBranchOption {
 func withPgBackRestBackups() parentBranchOption {
 	return func(b *v1alpha1.Branch) {
 		b.Spec.BackupSpec = &v1alpha1.BackupSpec{
-			Retention:  "2d",
-			Method:     v1alpha1.BackupMethodPgBackRest,
-			PgBackRest: &v1alpha1.PgBackRestSpec{},
+			Retention: "2d",
+			Method:    v1alpha1.BackupMethodPgBackRest,
+			PgBackRest: &v1alpha1.PgBackRestSpec{
+				S3: &v1alpha1.PgBackRestS3Spec{Bucket: "test-pgbackrest-bucket", Region: "us-east-1", KeyType: webIdentityKeyType},
+			},
 		}
 	}
 }
@@ -2663,7 +2801,42 @@ func sourceClusterForPITR() *apiv1.Cluster {
 // needs the source's repository cipher.
 func sourceBranchForPITR() *v1alpha1.Branch {
 	return &v1alpha1.Branch{
-		Name: "source-cluster-for-pitr",
+		Name:   "source-cluster-for-pitr",
+		Labels: testProjectLabels(),
+	}
+}
+
+// testProjectLabels returns the organization and project labels of the
+// branches that exampleRequestsAndBranches creates.
+func testProjectLabels() map[string]string {
+	return map[string]string{
+		LabelOrgID:     "jf1tpn",
+		LabelProjectID: "prj_9tmrorf02l0gv9ioptqat1uc6k",
+	}
+}
+
+// pgBackRestRestoreSource returns a source Branch named restore-source that
+// backs up to pgb.
+func pgBackRestRestoreSource(pgb *v1alpha1.PgBackRestSpec) *v1alpha1.Branch {
+	return &v1alpha1.Branch{
+		Name:   "restore-source",
+		Labels: testProjectLabels(),
+		Spec: v1alpha1.BranchSpec{
+			BackupSpec: &v1alpha1.BackupSpec{
+				Method:     v1alpha1.BackupMethodPgBackRest,
+				PgBackRest: pgb,
+			},
+		},
+	}
+}
+
+// pgBackRestRestoreRequest restores a pgbackrest branch from restore-source.
+func pgBackRestRestoreRequest(r *clustersv1.CreatePostgresClusterRequest) {
+	r.BackupConfiguration.BackupMethod = string(v1alpha1.BackupMethodPgBackRest)
+	r.DataSource = &clustersv1.CreatePostgresClusterRequest_ContinuousBackup{
+		ContinuousBackup: &clustersv1.ContinuousBackup{
+			ClusterId: "restore-source",
+		},
 	}
 }
 

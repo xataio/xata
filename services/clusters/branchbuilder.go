@@ -394,6 +394,25 @@ func (b *BranchBuilder) WithPgBackRestRestoreCipher(source *v1alpha1.Branch) *Br
 	return b
 }
 
+// WithPgBackRestRestoreSource points an object store restore at the pgBackRest
+// repository of source. Only applies when the Branch and source both use
+// pgbackrest.
+func (b *BranchBuilder) WithPgBackRestRestoreSource(source *v1alpha1.Branch) *BranchBuilder {
+	if source == nil || !b.branch.Spec.Restore.IsObjectStoreType() || !b.branch.Spec.BackupSpec.IsPgBackRest() || !source.Spec.BackupSpec.IsPgBackRest() {
+		return b
+	}
+
+	pgb := source.Spec.BackupSpec.PgBackRest.DeepCopy()
+	b.branch.Spec.Restore.PgBackRest = &v1alpha1.RestorePgBackRestSpec{
+		RepoPath:   pgb.GetRepoPath(source.Name),
+		StanzaName: pgb.GetStanzaName(source.Name),
+		S3:         pgb.S3,
+		GCS:        pgb.GCS,
+		Azure:      pgb.Azure,
+	}
+	return b
+}
+
 // pgBackRestS3Spec returns the S3 backend of a new branch.
 func pgBackRestS3Spec(bucket, region, endpoint, credentialsSecretName string) *v1alpha1.PgBackRestS3Spec {
 	return &v1alpha1.PgBackRestS3Spec{

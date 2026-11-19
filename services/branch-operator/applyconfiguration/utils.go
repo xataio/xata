@@ -45,6 +45,8 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &apiv1alpha1.PostgresConfigurationApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("PostgresParameter"):
 		return &apiv1alpha1.PostgresParameterApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("RestorePgBackRestSpec"):
+		return &apiv1alpha1.RestorePgBackRestSpecApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("RestoreSpec"):
 		return &apiv1alpha1.RestoreSpecApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("ScaleToZeroConfiguration"):

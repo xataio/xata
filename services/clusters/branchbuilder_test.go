@@ -185,3 +185,61 @@ func TestWithPgBackRestRestoreCipher(t *testing.T) {
 		})
 	}
 }
+
+func TestWithPgBackRestRestoreSource(t *testing.T) {
+	t.Parallel()
+
+	source := &v1alpha1.Branch{
+		Name: "source",
+		Spec: v1alpha1.BranchSpec{
+			BackupSpec: &v1alpha1.BackupSpec{
+				Method: v1alpha1.BackupMethodPgBackRest,
+				PgBackRest: &v1alpha1.PgBackRestSpec{
+					GCS: &v1alpha1.PgBackRestGCSSpec{Bucket: "source-bucket", KeyType: pgbackrest.KeyTypeWebID},
+				},
+			},
+		},
+	}
+
+	testcases := map[string]struct {
+		backup *v1alpha1.BackupSpec
+		want   *v1alpha1.RestorePgBackRestSpec
+	}{
+		"pgbackrest branch reads the source repository": {
+			backup: &v1alpha1.BackupSpec{
+				Method:     v1alpha1.BackupMethodPgBackRest,
+				PgBackRest: &v1alpha1.PgBackRestSpec{},
+			},
+			want: &v1alpha1.RestorePgBackRestSpec{
+				RepoPath:   "source",
+				StanzaName: "source",
+				GCS:        &v1alpha1.PgBackRestGCSSpec{Bucket: "source-bucket", KeyType: pgbackrest.KeyTypeWebID},
+			},
+		},
+		"branch without backups keeps the restore name": {
+			backup: nil,
+			want:   nil,
+		},
+	}
+
+	for name, tc := range testcases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			b := &BranchBuilder{branch: &v1alpha1.Branch{
+				Name: "branch-id",
+				Spec: v1alpha1.BranchSpec{
+					BackupSpec: tc.backup,
+					Restore: &v1alpha1.RestoreSpec{
+						Type: v1alpha1.RestoreTypeObjectStore,
+						Name: "source",
+					},
+				},
+			}}
+
+			got := b.WithPgBackRestRestoreSource(source).Build().Spec.Restore
+
+			require.Equal(t, tc.want, got.PgBackRest)
+		})
+	}
+}

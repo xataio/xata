@@ -36,6 +36,7 @@ type BranchSpec struct {
 }
 
 // RestoreSpec defines how to restore the branch from a backup source
+// +kubebuilder:validation:XValidation:rule="has(oldSelf.pgbackrest) == has(self.pgbackrest)",message="restore.pgbackrest is immutable"
 type RestoreSpec struct {
 	// Type specifies the type of restore source
 	// +kubebuilder:validation:Required
@@ -60,6 +61,39 @@ type RestoreSpec struct {
 	// +optional
 	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="restore.pgbackrestCipherPassphraseSecretRef is immutable"
 	PgBackRestCipherPassphraseSecretRef *corev1.SecretKeySelector `json:"pgbackrestCipherPassphraseSecretRef,omitempty"`
+
+	// PgBackRest is the pgbackrest repository of the restore source. Only
+	// applicable when Type is ObjectStore. When nil, the restore reads the
+	// repository of this branch at stanza Name.
+	// +optional
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="restore.pgbackrest is immutable"
+	PgBackRest *RestorePgBackRestSpec `json:"pgbackrest,omitempty"`
+}
+
+// RestorePgBackRestSpec locates the pgbackrest repository of a restore source.
+// +kubebuilder:validation:XValidation:rule="(has(self.s3) ? 1 : 0) + (has(self.gcs) ? 1 : 0) + (has(self.azure) ? 1 : 0) == 1",message="exactly one of s3, gcs, or azure is required"
+type RestorePgBackRestSpec struct {
+	// RepoPath is the repository path of the source.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
+	RepoPath string `json:"repoPath"`
+
+	// StanzaName is the stanza of the source.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Pattern=`^[A-Za-z0-9._-]+$`
+	StanzaName string `json:"stanzaName"`
+
+	// S3 is the S3 backend of the source.
+	// +optional
+	S3 *PgBackRestS3Spec `json:"s3,omitempty"`
+
+	// GCS is the GCS backend of the source.
+	// +optional
+	GCS *PgBackRestGCSSpec `json:"gcs,omitempty"`
+
+	// Azure is the Azure backend of the source.
+	// +optional
+	Azure *PgBackRestAzureSpec `json:"azure,omitempty"`
 }
 
 // RestoreType defines the type of restore source
@@ -489,7 +523,7 @@ type PgBackRestSpec struct {
 	// +kubebuilder:default:="2GiB"
 	ArchiveGetQueueMax string `json:"archiveGetQueueMax,omitempty"`
 
-	// RepoPath overrides the storage path prefix. Defaults to /<clusterName>.
+	// RepoPath overrides the storage path prefix. Defaults to the stanza name.
 	// +optional
 	RepoPath string `json:"repoPath,omitempty"`
 

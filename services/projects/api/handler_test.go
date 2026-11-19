@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
+
 	"xata/gen/protomocks"
 	"xata/internal/analytics/events"
 	"xata/internal/api"
@@ -2066,6 +2068,10 @@ func TestCreateBranchDisabled(t *testing.T) {
 
 func TestRestoreFromBackup(t *testing.T) {
 	sourceBranchID := "source_branch_123"
+	refusedStatus, err := status.New(codes.FailedPrecondition, "restore source refused").
+		WithDetails(&errdetails.ErrorInfo{Reason: clusters.RestoreSourceUnsupportedReason, Domain: "xata"})
+	require.NoError(t, err)
+	restoreSourceUnsupportedErr := refusedStatus.Err()
 	restoredBranch := store.Branch{
 		ID:             "restored_branch_id",
 		Name:           "restored",
@@ -2330,6 +2336,60 @@ func TestRestoreFromBackup(t *testing.T) {
 					assert.Error(t, err)
 				}).Return(nil, invalidArgErr).Once()
 				mockClusters.EXPECT().CreatePostgresCluster(mock.Anything, mock.Anything).Return(nil, invalidArgErr).Once()
+			},
+		},
+		{
+			name:          "CreatePostgresCluster refuses the restore source",
+			mode:          "custom",
+			clusterError:  restoreSourceUnsupportedErr,
+			expectedError: ErrorRestoreSourceUnsupported{BranchID: sourceBranchID},
+			setupMocks: func(mockStore *mocks.ProjectsStore, mockClusters *protomocks.ClustersServiceClient, mockPostgresConfig *postgrescfgmocks.PostgresConfigProvider, mockImageProvider *postgresversionsmocks.ImageProvider) {
+				mockStore.EXPECT().DescribeBranch(mock.Anything, apitest.TestOrganization, "project_id", sourceBranchID).Return(&sourceBranch, nil).Once()
+				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{testImage}).Once()
+				mockImageProvider.EXPECT().BuildImageURL(testImage).Return(testImageURL).Once()
+				mockStore.EXPECT().ListCells(mock.Anything, apitest.TestOrganization, "region-id-1").Return([]store.Cell{{ID: "cell_id", RegionID: "region-id-1"}}, nil).Once()
+				mockStore.EXPECT().ListInstanceTypes(mock.Anything, apitest.TestOrganization, "region-id-1").Return([]store.InstanceType{{Name: "xata.micro", VCPUsRequest: 250, VCPUsLimit: 2000, RAM: 1}}, nil).Once()
+				mockPostgresConfig.EXPECT().GetDefaultPostgresParameters("xata.micro", mock.AnythingOfType("int"), mock.AnythingOfType("string"), mock.Anything).Return(map[string]string{
+					"max_connections": "50",
+					"shared_buffers":  "256MB",
+					"work_mem":        "2259kB",
+				}, nil).Once()
+				mockPostgresConfig.EXPECT().GetDefaultPreloadLibraries(mock.AnythingOfType("string")).Return([]string{"pg_stat_statements", "auto_explain"}, nil).Once()
+				mockStore.EXPECT().GetRegion(mock.Anything, apitest.TestOrganization, "region-id-1").Return(&store.Region{ID: configuration.Region, GatewayHostPort: "", BackupsEnabled: true}, nil).Once()
+				mockStore.EXPECT().GetProject(mock.Anything, apitest.TestOrganization, "project_id").Return(&project, nil).Once()
+				refusedErr := restoreSourceUnsupportedErr
+				mockStore.EXPECT().CreateBranch(mock.Anything, apitest.TestOrganization, "project_id", "cell_id", createBranchConfig(restoredBranch.Name, &sourceBranchID, nil), mock.Anything).Run(func(ctx context.Context, organizationID, projectID, cellID string, cfg *store.CreateBranchConfiguration, provisionFn func(*store.Branch, *store.Project) error) {
+					err := provisionFn(&restoredBranch, &project)
+					assert.Error(t, err)
+				}).Return(nil, refusedErr).Once()
+				mockClusters.EXPECT().CreatePostgresCluster(mock.Anything, mock.Anything).Return(nil, refusedErr).Once()
+			},
+		},
+		{
+			name:          "CreatePostgresCluster returns another FailedPrecondition",
+			mode:          "custom",
+			clusterError:  status.Error(codes.FailedPrecondition, "cell not configured"),
+			expectedError: status.Error(codes.FailedPrecondition, "cell not configured"),
+			setupMocks: func(mockStore *mocks.ProjectsStore, mockClusters *protomocks.ClustersServiceClient, mockPostgresConfig *postgrescfgmocks.PostgresConfigProvider, mockImageProvider *postgresversionsmocks.ImageProvider) {
+				mockStore.EXPECT().DescribeBranch(mock.Anything, apitest.TestOrganization, "project_id", sourceBranchID).Return(&sourceBranch, nil).Once()
+				mockImageProvider.EXPECT().GetAllImageNames().Return([]string{testImage}).Once()
+				mockImageProvider.EXPECT().BuildImageURL(testImage).Return(testImageURL).Once()
+				mockStore.EXPECT().ListCells(mock.Anything, apitest.TestOrganization, "region-id-1").Return([]store.Cell{{ID: "cell_id", RegionID: "region-id-1"}}, nil).Once()
+				mockStore.EXPECT().ListInstanceTypes(mock.Anything, apitest.TestOrganization, "region-id-1").Return([]store.InstanceType{{Name: "xata.micro", VCPUsRequest: 250, VCPUsLimit: 2000, RAM: 1}}, nil).Once()
+				mockPostgresConfig.EXPECT().GetDefaultPostgresParameters("xata.micro", mock.AnythingOfType("int"), mock.AnythingOfType("string"), mock.Anything).Return(map[string]string{
+					"max_connections": "50",
+					"shared_buffers":  "256MB",
+					"work_mem":        "2259kB",
+				}, nil).Once()
+				mockPostgresConfig.EXPECT().GetDefaultPreloadLibraries(mock.AnythingOfType("string")).Return([]string{"pg_stat_statements", "auto_explain"}, nil).Once()
+				mockStore.EXPECT().GetRegion(mock.Anything, apitest.TestOrganization, "region-id-1").Return(&store.Region{ID: configuration.Region, GatewayHostPort: "", BackupsEnabled: true}, nil).Once()
+				mockStore.EXPECT().GetProject(mock.Anything, apitest.TestOrganization, "project_id").Return(&project, nil).Once()
+				failedPreconditionErr := status.Error(codes.FailedPrecondition, "cell not configured")
+				mockStore.EXPECT().CreateBranch(mock.Anything, apitest.TestOrganization, "project_id", "cell_id", createBranchConfig(restoredBranch.Name, &sourceBranchID, nil), mock.Anything).Run(func(ctx context.Context, organizationID, projectID, cellID string, cfg *store.CreateBranchConfiguration, provisionFn func(*store.Branch, *store.Project) error) {
+					err := provisionFn(&restoredBranch, &project)
+					assert.Error(t, err)
+				}).Return(nil, failedPreconditionErr).Once()
+				mockClusters.EXPECT().CreatePostgresCluster(mock.Anything, mock.Anything).Return(nil, failedPreconditionErr).Once()
 			},
 		},
 		{

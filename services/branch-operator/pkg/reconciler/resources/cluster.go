@@ -301,7 +301,7 @@ func ObjectStoreBootstrapRecovery(branchName string, restoreSpec *v1alpha1.Resto
 		WithDatabase("xata").
 		WithSecret(corev1ac.LocalObjectReference().
 			WithName(branchName + "-app")).
-		WithSource(restoreSpec.Name)
+		WithSource(externalClusterName(restoreSpec))
 
 	if restoreSpec.Timestamp != nil {
 		recovery = recovery.WithRecoveryTarget(apiv1ac.RecoveryTarget().
@@ -314,9 +314,31 @@ func ObjectStoreBootstrapRecovery(branchName string, restoreSpec *v1alpha1.Resto
 // ExternalClusters creates the ExternalClusters apply configuration for
 // point-in-time recovery from object storage. It points at the source branch's
 // pgbackrest repository (S3, GCS, or Azure). Returns nil if the restore spec is
-// not for ObjectStore type or the branch has no pgbackrest spec.
+// not for ObjectStore type, or if it has no source repository and the branch
+// has no pgbackrest spec.
 func ExternalClusters(cfg ClusterConfig) []*apiv1ac.ExternalClusterApplyConfiguration {
-	if !cfg.RestoreSpec.IsObjectStoreType() || !cfg.IsPgBackRest() {
+	if !cfg.RestoreSpec.IsObjectStoreType() {
+		return nil
+	}
+
+	// pgbackrest with the source repository set on the restore. The external
+	// cluster name is the stanza that pgbackrest reads.
+	if src := cfg.RestoreSpec.PgBackRest; src != nil {
+		return []*apiv1ac.ExternalClusterApplyConfiguration{
+			apiv1ac.ExternalCluster().
+				WithName(externalClusterName(cfg.RestoreSpec)).
+				WithPgBackRest(apiv1ac.PgBackRestExternalCluster().
+					WithRepository(pgbackrestRepository(
+						&v1alpha1.PgBackRestSpec{S3: src.S3, GCS: src.GCS, Azure: src.Azure},
+						cfg.BackupCredentials,
+						cfg.RestoreSpec.PgBackRestCipherPassphraseSecretRef,
+					)).
+					WithOptions(apiv1ac.PgBackRestOptions().
+						WithRepoPath(src.RepoPath))),
+		}
+	}
+
+	if !cfg.IsPgBackRest() {
 		return nil
 	}
 
@@ -341,6 +363,15 @@ func ExternalClusters(cfg ClusterConfig) []*apiv1ac.ExternalClusterApplyConfigur
 				)).
 				WithOptions(options)),
 	}
+}
+
+// externalClusterName returns the source stanza when the restore carries the
+// source repository, else the restore name.
+func externalClusterName(restoreSpec *v1alpha1.RestoreSpec) string {
+	if restoreSpec.PgBackRest != nil {
+		return restoreSpec.PgBackRest.StanzaName
+	}
+	return restoreSpec.Name
 }
 
 // BootstrapInitDB returns a BootstrapInitDB apply configuration with version-specific SQL

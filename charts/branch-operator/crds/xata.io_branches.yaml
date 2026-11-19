@@ -176,7 +176,7 @@ spec:
                         type: object
                       repoPath:
                         description: RepoPath overrides the storage path prefix. Defaults
-                          to /<clusterName>.
+                          to the stanza name.
                         type: string
                       retentionFullDays:
                         default: 7
@@ -520,6 +520,107 @@ spec:
                     x-kubernetes-validations:
                     - message: restore.name is immutable
                       rule: self == oldSelf
+                  pgbackrest:
+                    description: |-
+                      PgBackRest is the pgbackrest repository of the restore source. Only
+                      applicable when Type is ObjectStore. When nil, the restore reads the
+                      repository of this branch at stanza Name.
+                    properties:
+                      azure:
+                        description: Azure is the Azure backend of the source.
+                        properties:
+                          account:
+                            description: Account is the Azure storage account for
+                              backups and WAL archives.
+                            type: string
+                          container:
+                            description: Container is the Azure Blob Storage container
+                              within Account.
+                            type: string
+                        required:
+                        - account
+                        - container
+                        type: object
+                      gcs:
+                        description: GCS is the GCS backend of the source.
+                        properties:
+                          bucket:
+                            description: Bucket is the GCS bucket for backups and
+                              WAL archives.
+                            type: string
+                          keyType:
+                            default: auto
+                            description: KeyType is the cnpg gcs.keyType of the repository.
+                            enum:
+                            - auto
+                            - web-id
+                            type: string
+                          serviceAccountEmail:
+                            description: |-
+                              ServiceAccountEmail is the GCP service account that the pods of the
+                              cluster impersonate with keyType=auto. The operator sets it as the
+                              iam.gke.io/gcp-service-account annotation on the ServiceAccount of the
+                              cluster. If empty, the pods use the ServiceAccount of the cluster.
+                            type: string
+                        required:
+                        - bucket
+                        type: object
+                      repoPath:
+                        description: RepoPath is the repository path of the source.
+                        minLength: 1
+                        type: string
+                      s3:
+                        description: S3 is the S3 backend of the source.
+                        properties:
+                          bucket:
+                            description: Bucket is the S3 bucket for backups and WAL
+                              archives.
+                            type: string
+                          credentialsSecretName:
+                            description: |-
+                              CredentialsSecretName is the Secret (in the clusters namespace) holding
+                              the static credentials for this backend. When empty, the
+                              operator-configured credentials Secret is used. Stamped at branch
+                              creation so existing branches keep their store's credentials when the
+                              cell-wide default changes.
+                            type: string
+                          endpoint:
+                            description: |-
+                              Endpoint overrides S3 endpoint discovery. Required for non-AWS
+                              S3-compatible storage (e.g. Cloudflare R2, or RustFS for local dev). When
+                              set, static credentials from the operator-configured credentials Secret
+                              are used instead of an IAM role.
+                            type: string
+                          keyType:
+                            default: auto
+                            description: |-
+                              KeyType is the cnpg s3.keyType of the repository. The operator ignores
+                              it when Endpoint is set.
+                            enum:
+                            - auto
+                            - web-id
+                            type: string
+                          region:
+                            description: Region is the S3 region.
+                            type: string
+                        required:
+                        - bucket
+                        - region
+                        type: object
+                      stanzaName:
+                        description: StanzaName is the stanza of the source.
+                        pattern: ^[A-Za-z0-9._-]+$
+                        type: string
+                    required:
+                    - repoPath
+                    - stanzaName
+                    type: object
+                    x-kubernetes-validations:
+                    - message: restore.pgbackrest is immutable
+                      rule: self == oldSelf
+                    - message: exactly one of s3, gcs, or azure is required
+                      rule: '(has(self.s3) ? 1 : 0) + (has(self.gcs) ? 1 : 0) + (has(self.azure)
+                        ? 1 : 0) == 1'
                   pgbackrestCipherPassphraseSecretRef:
                     description: |-
                       PgBackRestCipherPassphraseSecretRef references the passphrase for the
@@ -573,6 +674,9 @@ spec:
                 - name
                 - type
                 type: object
+                x-kubernetes-validations:
+                - message: restore.pgbackrest is immutable
+                  rule: has(oldSelf.pgbackrest) == has(self.pgbackrest)
             required:
             - cluster
             type: object

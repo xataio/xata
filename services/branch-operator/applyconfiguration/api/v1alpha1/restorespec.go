@@ -24,6 +24,10 @@ type RestoreSpecApplyConfiguration struct {
 	// PgBackRestCipherPassphraseSecretRef references the passphrase for the
 	// pgbackrest repository used as the restore source.
 	PgBackRestCipherPassphraseSecretRef *corev1.SecretKeySelector `json:"pgbackrestCipherPassphraseSecretRef,omitempty"`
+	// PgBackRest is the pgbackrest repository of the restore source. Only
+	// applicable when Type is ObjectStore. When nil, the restore reads the
+	// repository of this branch at stanza Name.
+	PgBackRest *RestorePgBackRestSpecApplyConfiguration `json:"pgbackrest,omitempty"`
 }
 
 // RestoreSpecApplyConfiguration constructs a declarative configuration of the RestoreSpec type for use with
@@ -61,5 +65,13 @@ func (b *RestoreSpecApplyConfiguration) WithTimestamp(value v1.Time) *RestoreSpe
 // If called multiple times, the PgBackRestCipherPassphraseSecretRef field is set to the value of the last call.
 func (b *RestoreSpecApplyConfiguration) WithPgBackRestCipherPassphraseSecretRef(value corev1.SecretKeySelector) *RestoreSpecApplyConfiguration {
 	b.PgBackRestCipherPassphraseSecretRef = &value
+	return b
+}
+
+// WithPgBackRest sets the PgBackRest field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the PgBackRest field is set to the value of the last call.
+func (b *RestoreSpecApplyConfiguration) WithPgBackRest(value *RestorePgBackRestSpecApplyConfiguration) *RestoreSpecApplyConfiguration {
+	b.PgBackRest = value
 	return b
 }

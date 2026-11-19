@@ -50,7 +50,7 @@ type PgBackRestSpecApplyConfiguration struct {
 	// ArchiveGetQueueMax is the max WAL restore queue size when async is enabled.
 	// Uses pgbackrest size format (e.g. "2GiB", "256MiB").
 	ArchiveGetQueueMax *string `json:"archiveGetQueueMax,omitempty"`
-	// RepoPath overrides the storage path prefix. Defaults to /<clusterName>.
+	// RepoPath overrides the storage path prefix. Defaults to the stanza name.
 	RepoPath *string `json:"repoPath,omitempty"`
 	// StanzaName overrides the pgbackrest stanza this branch archives to.
 	// When empty it defaults to the branch name.

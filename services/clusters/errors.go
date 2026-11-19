@@ -2,7 +2,9 @@ package clusters
 
 import (
 	stderrors "errors"
+	"fmt"
 
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -20,6 +22,37 @@ func ClusterNotFoundError(clusterID string) error {
 // SecretNotFoundForIDError is returned when trying to retrieve/update/delete a secret that does not exist
 func SecretNotFoundForIDError(id string) error {
 	return status.Errorf(codes.NotFound, "secret not found for ID: [%s]", id)
+}
+
+// RestoreSourceUnsupportedReason is the ErrorInfo reason of the error that
+// refuses a restore source.
+const RestoreSourceUnsupportedReason = "RESTORE_SOURCE_UNSUPPORTED"
+
+// restoreSourceUnsupportedError refuses a restore from the backups of source.
+func restoreSourceUnsupportedError(source, reason string) error {
+	st := status.New(codes.FailedPrecondition, fmt.Sprintf("restore source %s: %s", source, reason))
+	withDetails, err := st.WithDetails(&errdetails.ErrorInfo{
+		Reason: RestoreSourceUnsupportedReason,
+		Domain: "xata",
+	})
+	if err != nil {
+		return st.Err()
+	}
+	return withDetails.Err()
+}
+
+// IsRestoreSourceUnsupportedError reports whether err refuses a restore source.
+func IsRestoreSourceUnsupportedError(err error) bool {
+	st, ok := status.FromError(err)
+	if !ok || st.Code() != codes.FailedPrecondition {
+		return false
+	}
+	for _, d := range st.Details() {
+		if info, ok := d.(*errdetails.ErrorInfo); ok && info.GetReason() == RestoreSourceUnsupportedReason {
+			return true
+		}
+	}
+	return false
 }
 
 // k8sErrorToGRPCError maps Kubernetes API errors to gRPC errors

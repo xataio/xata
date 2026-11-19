@@ -271,6 +271,20 @@ func (e ErrorNoRecoveryPoint) StatusCode() int {
 	return http.StatusPreconditionFailed
 }
 
+// ErrorRestoreSourceUnsupported is returned when the cell refuses to restore
+// from the backups of the source branch.
+type ErrorRestoreSourceUnsupported struct {
+	BranchID string
+}
+
+func (e ErrorRestoreSourceUnsupported) Error() string {
+	return fmt.Sprintf("The backups of branch with ID [%s] cannot be restored to a new branch", e.BranchID)
+}
+
+func (e ErrorRestoreSourceUnsupported) StatusCode() int {
+	return http.StatusPreconditionFailed
+}
+
 type ErrorBranchConflict struct {
 	BranchID string
 }

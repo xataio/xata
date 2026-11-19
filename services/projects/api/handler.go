@@ -1761,6 +1761,10 @@ func (s *handler) RestoreFromBackup(c echo.Context, organizationID spec.Organiza
 				if st.Code() == codes.InvalidArgument {
 					return ErrorInvalidParam{BranchName: body.Name, Param: "configuration", Message: st.Message()}
 				}
+				if clusters.IsRestoreSourceUnsupportedError(err) {
+					log.Ctx(ctx).Warn().Err(err).Msg("restore source refused")
+					return ErrorRestoreSourceUnsupported{BranchID: branchID}
+				}
 				return err
 			}
 

@@ -1016,6 +1016,134 @@ func TestClusterSpecPgBackRestCipherReferences(t *testing.T) {
 	require.Equal(t, "restore-cipher-passphrase", restoreCipher.Passphrase.Key)
 }
 
+func TestClusterSpecPgBackRestRestoreSource(t *testing.T) {
+	t.Parallel()
+
+	ownBackup := &v1alpha1.BackupSpec{
+		Method: v1alpha1.BackupMethodPgBackRest,
+		PgBackRest: &v1alpha1.PgBackRestSpec{
+			S3: &v1alpha1.PgBackRestS3Spec{
+				Bucket:  "own-bucket",
+				Region:  "us-east-1",
+				KeyType: pgbackrest.KeyTypeWebID,
+			},
+			RepoPath: "own-repo-path",
+		},
+	}
+
+	tests := map[string]struct {
+		backup *v1alpha1.BackupSpec
+		cipher *corev1.SecretKeySelector
+		source *v1alpha1.RestorePgBackRestSpec
+		want   *apiv1ac.PgBackRestRepositoryApplyConfiguration
+	}{
+		"aws web-id source": {
+			backup: ownBackup,
+			cipher: &corev1.SecretKeySelector{Name: "branch-pgbackrest", Key: pgbackrest.RestoreCipherPassphraseKey},
+			source: &v1alpha1.RestorePgBackRestSpec{
+				RepoPath:   "source-repo-path",
+				StanzaName: "source-branch-1",
+				S3: &v1alpha1.PgBackRestS3Spec{
+					Bucket:  "source-bucket",
+					Region:  "us-west-2",
+					KeyType: pgbackrest.KeyTypeWebID,
+				},
+			},
+			want: apiv1ac.PgBackRestRepository().
+				WithS3(apiv1ac.PgBackRestS3().
+					WithBucket("source-bucket").
+					WithRegion("us-west-2").
+					WithKeyType(pgbackrest.KeyTypeWebID)).
+				WithCipher(apiv1ac.PgBackRestCipher().
+					WithType("aes-256-cbc").
+					WithPassphrase(machineryapi.SecretKeySelector{Name: "branch-pgbackrest", Key: pgbackrest.RestoreCipherPassphraseKey})),
+		},
+		"gcs web-id source": {
+			backup: ownBackup,
+			source: &v1alpha1.RestorePgBackRestSpec{
+				RepoPath:   "source-repo-path",
+				StanzaName: "source-branch-1",
+				GCS: &v1alpha1.PgBackRestGCSSpec{
+					Bucket:  "source-bucket",
+					KeyType: pgbackrest.KeyTypeWebID,
+				},
+			},
+			want: apiv1ac.PgBackRestRepository().
+				WithGCS(apiv1ac.PgBackRestGCS().
+					WithBucket("source-bucket").
+					WithKeyType(pgbackrest.KeyTypeWebID)),
+		},
+		"static-key s3 source without own backup": {
+			source: &v1alpha1.RestorePgBackRestSpec{
+				RepoPath:   "source-repo-path",
+				StanzaName: "source-branch-1",
+				S3: &v1alpha1.PgBackRestS3Spec{
+					Bucket:                "source-bucket",
+					Region:                "us-east-1",
+					Endpoint:              "http://rustfs:9000",
+					CredentialsSecretName: "source-creds",
+				},
+			},
+			want: apiv1ac.PgBackRestRepository().
+				WithS3(apiv1ac.PgBackRestS3().
+					WithBucket("source-bucket").
+					WithRegion("us-east-1").
+					WithEndpoint("http://rustfs:9000").
+					WithAccessKeyID(machineryapi.SecretKeySelector{Name: "source-creds", Key: "accessKey"}).
+					WithSecretAccessKey(machineryapi.SecretKeySelector{Name: "source-creds", Key: "secretKey"})),
+		},
+		"azure source": {
+			backup: ownBackup,
+			source: &v1alpha1.RestorePgBackRestSpec{
+				RepoPath:   "source-repo-path",
+				StanzaName: "source-branch-1",
+				Azure:      &v1alpha1.PgBackRestAzureSpec{Account: "account", Container: "backups"},
+			},
+			want: apiv1ac.PgBackRestRepository().
+				WithAzure(apiv1ac.PgBackRestAzure().
+					WithAccount("account").
+					WithContainer("backups").
+					WithKeyType("auto")),
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := baseClusterConfig()
+			cfg.BackupSpec = tc.backup
+			cfg.RestoreSpec = &v1alpha1.RestoreSpec{
+				Type:                                v1alpha1.RestoreTypeObjectStore,
+				Name:                                "source-branch",
+				PgBackRestCipherPassphraseSecretRef: tc.cipher,
+				PgBackRest:                          tc.source,
+			}
+
+			got := resources.ClusterSpec(testBranchName, testBranchName, cfg)
+
+			want := apiv1ac.ClusterSpec().WithExternalClusters(
+				apiv1ac.ExternalCluster().
+					WithName("source-branch-1").
+					WithPgBackRest(apiv1ac.PgBackRestExternalCluster().
+						WithRepository(tc.want).
+						WithOptions(apiv1ac.PgBackRestOptions().
+							WithRepoPath("source-repo-path"))),
+			)
+			require.Equal(t, want.ExternalClusters, got.ExternalClusters)
+			require.Equal(t, new("source-branch-1"), got.Bootstrap.Recovery.Source)
+
+			if tc.backup == nil {
+				require.Nil(t, got.Backup.PgBackRest)
+				return
+			}
+			require.Equal(t, new(testBranchName), got.Backup.PgBackRest.StanzaName)
+			require.Equal(t, new("own-bucket"), got.Backup.PgBackRest.Repository.S3.Bucket)
+			require.Equal(t, new("own-repo-path"), got.Backup.PgBackRest.Options.RepoPath)
+		})
+	}
+}
+
 func TestClusterSpecAWSS3DoesNotAnnotateClusterServiceAccount(t *testing.T) {
 	t.Parallel()
 

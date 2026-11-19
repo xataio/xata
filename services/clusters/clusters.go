@@ -246,6 +246,9 @@ func (c *ClustersService) CreatePostgresCluster(ctx context.Context, req *cluste
 		if err != nil {
 			return nil, k8sErrorToGRPCError(err)
 		}
+		if err := validatePgBackRestRestoreSource(restoreSource); err != nil {
+			return nil, err
+		}
 	}
 
 	// Pick the default storage class. If the org has the UseXatastor flag set
@@ -273,6 +276,7 @@ func (c *ClustersService) CreatePostgresCluster(ctx context.Context, req *cluste
 		WithPgBackRest(c.config.CloudProvider, c.config.PgBackRestBucket, c.config.PgBackRestRegion, c.config.PgBackRestEndpoint, c.config.PgBackRestGCSServiceAccount, c.config.PgBackRestCredentialsSecret, c.config.PgBackRestAzureAccount, c.config.PgBackRestAzureContainer, c.config.ClustersNamespace).
 		WithPgBackRestCipher(c.config.PgBackRestEncryptionEnabled).
 		WithPgBackRestRestoreCipher(restoreSource).
+		WithPgBackRestRestoreSource(restoreSource).
 		WithXataUtilsPreloadLibrary().
 		WithMandatoryPostgresParameters()
 
@@ -394,6 +398,18 @@ func validatePgBackRestConfigured(pgb *branchv1alpha1.PgBackRestSpec) error {
 		if pgb.S3.Bucket == "" || pgb.S3.Region == "" {
 			return status.Errorf(codes.FailedPrecondition, "pgbackrest backup method requested but the S3 bucket or region is not configured in this cell")
 		}
+	}
+	return nil
+}
+
+// validatePgBackRestRestoreSource refuses a pgbackrest source that has no
+// backend. A restored branch cannot read it.
+func validatePgBackRestRestoreSource(source *branchv1alpha1.Branch) error {
+	if !source.Spec.BackupSpec.IsPgBackRest() {
+		return nil
+	}
+	if pgb := source.Spec.BackupSpec.PgBackRest; pgb.S3 == nil && pgb.GCS == nil && pgb.Azure == nil {
+		return restoreSourceUnsupportedError(source.Name, "no pgbackrest backend")
 	}
 	return nil
 }
