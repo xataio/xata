@@ -51,6 +51,14 @@ var (
 		Name:           "enterpriseSSO",
 		DefaultEnabled: false,
 	}
+
+	// SkipChildBranchBackups creates child branches (mode=inherit) without
+	// backups. Evaluate it under openfeature.WithBranchScope so it can target
+	// the organizationId and projectId properties.
+	SkipChildBranchBackups = openfeature.FeatureFlag{
+		Name:           "skipChildBranchBackups",
+		DefaultEnabled: false,
+	}
 	// WARNING: Feature Flags should have positive names. Avoid disabled suffix in future
 )
 

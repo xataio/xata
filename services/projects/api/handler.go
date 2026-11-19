@@ -810,7 +810,7 @@ func (s *handler) CreateBranch(c echo.Context, organizationID spec.OrganizationI
 		}
 		s.analytics.Track(c.Request().Context(), analyticsEvent)
 
-		return c.JSON(http.StatusCreated, storeToAPIBranchShortMetadata(br, connString))
+		return c.JSON(http.StatusCreated, storeToAPIBranchShortMetadata(br, connString, &payload.BackupsEnabled))
 	})
 }
 
@@ -1400,7 +1400,7 @@ func (s *handler) UpdateBranch(c echo.Context, organizationID spec.OrganizationI
 				Str("grpc.message", st.Message()).
 				Msg("connection string not found")
 		}
-		return c.JSON(http.StatusOK, storeToAPIBranchShortMetadata(branch, connString))
+		return c.JSON(http.StatusOK, storeToAPIBranchShortMetadata(branch, connString, nil))
 	})
 }
 
@@ -1768,7 +1768,7 @@ func (s *handler) RestoreFromBackup(c echo.Context, organizationID spec.Organiza
 
 			// swallow the error, the resource got created and the connection string will be eventually available
 			connString, _ := s.branches.ConnectionString(c.Request().Context(), organizationID, branch)
-			return c.JSON(http.StatusCreated, storeToAPIBranchShortMetadata(branch, connString))
+			return c.JSON(http.StatusCreated, storeToAPIBranchShortMetadata(branch, connString, &createClusterPayload.BackupsEnabled))
 		})
 	})
 }

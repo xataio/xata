@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"xata/internal/flags"
+	"xata/internal/openfeature"
 	"xata/internal/postgresversions"
 	"xata/services/projects/provisioner"
 	"xata/services/projects/store"
@@ -47,6 +48,12 @@ func (s *Service) BuildPayload(ctx context.Context, in CreateInput) (*provisione
 		if err != nil {
 			return nil, err
 		}
+		// Targeted orgs/projects get child branches without backups. Only the
+		// create path applies this: restores build their payload from the parent
+		// too, but keep the parent's backups setting.
+		if payload.BackupsEnabled && s.feat.BoolValue(openfeature.WithBranchScope(ctx, in.OrganizationID, in.ProjectID), flags.SkipChildBranchBackups) {
+			payload.BackupsEnabled = false
+		}
 		if err := s.ValidateMarketplaceRegion(ctx, MarketplaceRegionParams{
 			OrganizationID: in.OrganizationID,
 			Marketplace:    in.Marketplace,
@@ -82,10 +89,10 @@ func (s *Service) BuildPayload(ctx context.Context, in CreateInput) (*provisione
 // call (one per branch) and never reuse a payload across two Provision calls.
 func (s *Service) Provision(ctx context.Context, in CreateInput, payload *provisioner.ClusterServicePayload) (*store.Branch, string, error) {
 	// Input validation (name, backup format/range) happened in BuildPayload; this
-	// backups-disabled check stays here because it needs the region's
-	// BackupsEnabled from the built payload.
+	// backups-disabled check stays here because it needs BackupsEnabled from the
+	// built payload (off for regions without backups and for flagged children).
 	if !payload.BackupsEnabled && in.Backup != nil {
-		return nil, "", ErrInvalidParam{BranchName: in.Name, Param: "backupConfiguration", Message: "backup configuration cannot be specified when backups are disabled in the selected region"}
+		return nil, "", ErrInvalidParam{BranchName: in.Name, Param: "backupConfiguration", Message: "backup configuration cannot be specified when backups are disabled for this branch"}
 	}
 
 	// Populate remaining payload fields for the provisioner

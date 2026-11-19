@@ -14,6 +14,7 @@ import (
 	"xata/services/projects/store"
 	storemocks "xata/services/projects/store/mocks"
 
+	ofsdk "github.com/open-feature/go-sdk/openfeature"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
@@ -95,6 +96,29 @@ func TestBuildPayload(t *testing.T) {
 				require.Equal(t, testParent, *p.ParentID)
 			},
 		},
+		"skip child branch backups disables backups": {
+			mode:  FromParent{ParentID: testParent},
+			flags: map[openfeature.FeatureFlag]bool{flags.SkipChildBranchBackups: true},
+			setup: func(st *storemocks.ProjectsStore) {
+				st.EXPECT().DescribeBranch(mock.Anything, testOrg, testProject, testParent).
+					Return(&store.Branch{ID: testParent, CellID: "cell-1", Region: "region-1", BackupsEnabled: true}, nil).Once()
+			},
+			check: func(t *testing.T, p *provisioner.ClusterServicePayload) {
+				require.False(t, p.BackupsEnabled)
+				require.Equal(t, "cell-1", p.CellID)
+			},
+		},
+		"skip child branch backups keeps a region without backups disabled": {
+			mode:  FromParent{ParentID: testParent},
+			flags: map[openfeature.FeatureFlag]bool{flags.SkipChildBranchBackups: true},
+			setup: func(st *storemocks.ProjectsStore) {
+				st.EXPECT().DescribeBranch(mock.Anything, testOrg, testProject, testParent).
+					Return(&store.Branch{ID: testParent, CellID: "cell-1", Region: "region-1", BackupsEnabled: false}, nil).Once()
+			},
+			check: func(t *testing.T, p *provisioner.ClusterServicePayload) {
+				require.False(t, p.BackupsEnabled)
+			},
+		},
 		"custom mode requires a configuration": {
 			mode:    FromConfiguration{Config: Configuration{}},
 			wantErr: ErrInvalidParam{BranchName: testBranch, Param: "configuration", Message: "configuration is required for 'custom' mode"},
@@ -145,6 +169,42 @@ func TestBuildPayload(t *testing.T) {
 	}
 }
 
+// scopeRecordingFlags records the evaluation context each flag is evaluated
+// with, and reports every flag as enabled except ChildBranchCreationDisabled.
+type scopeRecordingFlags struct {
+	contexts map[string]ofsdk.EvaluationContext
+}
+
+func (f *scopeRecordingFlags) BoolValue(ctx context.Context, key openfeature.FeatureFlag) bool {
+	f.contexts[key.Name] = ofsdk.TransactionContext(ctx)
+	return key != flags.ChildBranchCreationDisabled
+}
+
+func (f *scopeRecordingFlags) Track(context.Context, string, ofsdk.TrackingEventDetails) {}
+
+// TestBuildPayloadSkipChildBranchBackupsScope checks the flag is evaluated with
+// the organization and project, so it can target either.
+func TestBuildPayloadSkipChildBranchBackupsScope(t *testing.T) {
+	st := storemocks.NewProjectsStore(t)
+	st.EXPECT().DescribeBranch(mock.Anything, testOrg, testProject, testParent).
+		Return(&store.Branch{ID: testParent, CellID: "cell-1", Region: "region-1", BackupsEnabled: true}, nil).Once()
+	feat := &scopeRecordingFlags{contexts: map[string]ofsdk.EvaluationContext{}}
+	s := New(st, nil, feat, nil, "", nil, nil, nil)
+
+	payload, err := s.BuildPayload(context.Background(), CreateInput{
+		OrganizationID: testOrg,
+		ProjectID:      testProject,
+		Name:           testBranch,
+		Mode:           FromParent{ParentID: testParent},
+	})
+	require.NoError(t, err)
+	require.False(t, payload.BackupsEnabled)
+
+	got := feat.contexts[flags.SkipChildBranchBackups.Name]
+	require.Equal(t, testOrg, got.Attribute("organizationId"))
+	require.Equal(t, testProject, got.Attribute("projectId"))
+}
+
 func TestProvision(t *testing.T) {
 	tests := map[string]struct {
 		payload  *provisioner.ClusterServicePayload
@@ -157,7 +217,7 @@ func TestProvision(t *testing.T) {
 		"backup config rejected when backups are disabled": {
 			payload: &provisioner.ClusterServicePayload{BackupsEnabled: false},
 			in:      CreateInput{Name: testBranch, Backup: &BackupConfiguration{}},
-			wantErr: ErrInvalidParam{BranchName: testBranch, Param: "backupConfiguration", Message: "backup configuration cannot be specified when backups are disabled in the selected region"},
+			wantErr: ErrInvalidParam{BranchName: testBranch, Param: "backupConfiguration", Message: "backup configuration cannot be specified when backups are disabled for this branch"},
 		},
 		"lock contention wraps ErrProjectBusy": {
 			payload: &provisioner.ClusterServicePayload{BackupsEnabled: true},

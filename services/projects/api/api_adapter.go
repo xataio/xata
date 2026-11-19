@@ -52,7 +52,10 @@ func storeToAPIProject(project *store.Project) *spec.Project {
 	}
 }
 
-func storeToAPIBranchShortMetadata(branch *store.Branch, connString string) *spec.BranchShortMetadata {
+// storeToAPIBranchShortMetadata builds the short branch response. backupsEnabled
+// is only known when the branch was just created (the control plane does not
+// store it per branch), so other callers pass nil to leave it out.
+func storeToAPIBranchShortMetadata(branch *store.Branch, connString string, backupsEnabled *bool) *spec.BranchShortMetadata {
 	var connStringPtr *string
 	if connString != "" {
 		connStringPtr = &connString
@@ -67,6 +70,7 @@ func storeToAPIBranchShortMetadata(branch *store.Branch, connString string) *spe
 		ConnectionString: connStringPtr,
 		Region:           getRegion(branch.Region),
 		PublicAccess:     branch.PublicAccess,
+		BackupsEnabled:   backupsEnabled,
 	}
 }
 
@@ -109,7 +113,7 @@ func storeToAPIBranchMetadata(branch *store.Branch, connString, instanceType str
 		Status:              mapStatus(cluster.Status),
 		Region:              getRegion(branch.Region),
 		PublicAccess:        branch.PublicAccess,
-		BackupsEnabled:      branch.BackupsEnabled,
+		BackupsEnabled:      cluster.GetBackupConfiguration().GetBackupsEnabled(),
 		ScaleToZero:         clustersToAPIScaleToZero(cluster.Configuration.ScaleToZero),
 		BackupConfiguration: clustersToAPIBackupConfig(cluster.BackupConfiguration),
 	}

@@ -6,9 +6,11 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	clustersv1 "xata/gen/proto/clusters/v1"
 	branchsvc "xata/services/projects/branch"
+	"xata/services/projects/store"
 )
 
 func Test_generateSchedule(t *testing.T) {
@@ -220,4 +222,55 @@ func Test_parseRecoveryWindow(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestStoreToAPIBranchMetadataBackupsEnabled checks branch details report the
+// data plane's backup state, not the region's: the control plane has no
+// per-branch value, and child branches can have backups off in a region that
+// supports them.
+func TestStoreToAPIBranchMetadataBackupsEnabled(t *testing.T) {
+	tests := map[string]struct {
+		regionBackups bool
+		backupConfig  *clustersv1.BackupConfiguration
+		want          bool
+	}{
+		"enabled in the data plane": {
+			regionBackups: true,
+			backupConfig:  &clustersv1.BackupConfiguration{BackupsEnabled: true},
+			want:          true,
+		},
+		"disabled in the data plane, region supports backups": {
+			regionBackups: true,
+			backupConfig:  &clustersv1.BackupConfiguration{BackupsEnabled: false},
+			want:          false,
+		},
+		"no backup configuration reported": {
+			regionBackups: true,
+			want:          false,
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			branch := &store.Branch{ID: "branch", BackupsEnabled: tc.regionBackups}
+			cluster := &clustersv1.DescribePostgresClusterResponse{
+				Configuration:       &clustersv1.ClusterConfiguration{NumInstances: 1},
+				Status:              &clustersv1.ClusterStatus{},
+				BackupConfiguration: tc.backupConfig,
+			}
+
+			got := storeToAPIBranchMetadata(branch, "", "xata.micro", cluster)
+
+			require.Equal(t, tc.want, got.BackupsEnabled)
+		})
+	}
+}
+
+func TestStoreToAPIBranchShortMetadataBackupsEnabled(t *testing.T) {
+	branch := &store.Branch{ID: "branch"}
+
+	require.Nil(t, storeToAPIBranchShortMetadata(branch, "", nil).BackupsEnabled)
+	got := storeToAPIBranchShortMetadata(branch, "", new(false)).BackupsEnabled
+	require.NotNil(t, got)
+	require.False(t, *got)
 }

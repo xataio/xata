@@ -146,6 +146,60 @@ func TestCreateBranchLockContention(t *testing.T) {
 	require.Equal(t, projectLockRetryAfter, rec.Header().Get("Retry-After"))
 }
 
+// TestCreateBranchSkipChildBranchBackups covers the flag end to end in the REST
+// create path: the child is provisioned with backups disabled even though its
+// region supports them, and the response reports it.
+func TestCreateBranchSkipChildBranchBackups(t *testing.T) {
+	tests := map[string]struct {
+		flag bool
+		want bool
+	}{
+		"flag off keeps backups": {flag: false, want: true},
+		"flag on skips backups":  {flag: true, want: false},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			mockStore := mocks.NewProjectsStore(t)
+			mockCells := cellsmock.NewCells(t)
+			mockProvisioner := provisionermocks.NewProvisioner(t)
+			mockAnalytics := analyticsmocks.NewClient(t)
+
+			feat := openfeaturetest.NewClient(map[openfeature.FeatureFlag]bool{flags.SkipChildBranchBackups: tc.flag})
+			sched := &scheduler.Scheduler{DefaultStrategy: &strategy.Random{}}
+			handler := NewAPIHandler(feat, mockStore, mockCells, "testdomain:5432", nil, sched, mockAnalytics, postgrescfgmocks.NewPostgresConfigProvider(t), postgresversionsmocks.NewImageProvider(t), mockProvisioner)
+			e := apitest.New(t).WithOpenAPISpec(projectsSpec).WithClaims(apitest.TestClaims)
+
+			parentID := "parent-1"
+			child := store.Branch{ID: "child-id", Name: "child", ParentID: &parentID, CellID: "cell_id", Region: "region-id-1"}
+			mockStore.EXPECT().GetOrgLimits(mock.Anything, apitest.TestOrganization, "project_id").Return(map[store.LimitKey]any{}, nil).Once()
+			mockStore.EXPECT().DescribeBranch(mock.Anything, apitest.TestOrganization, "project_id", parentID).
+				Return(&store.Branch{ID: parentID, CellID: "cell_id", Region: "region-id-1", BackupsEnabled: true}, nil).Once()
+			var got *provisioner.ClusterServicePayload
+			mockProvisioner.EXPECT().CreateBranch(mock.Anything, "project_id", apitest.TestOrganization, "child", mock.Anything).
+				Run(func(_ context.Context, _, _, _ string, payload *provisioner.ClusterServicePayload) {
+					got = payload
+				}).Return(&child, nil).Once()
+			// The connection string is best effort; fail it to keep the setup small.
+			mockCells.EXPECT().GetCellConnection(mock.Anything, apitest.TestOrganization, "cell_id").Return(nil, errors.New("no connection")).Once()
+			mockAnalytics.EXPECT().Track(mock.Anything, mock.Anything).Return().Once()
+
+			c, rec := e.POST("/organizations/" + apitest.TestOrganization + "/projects/project_id/branches").
+				WithJSONBody(map[string]any{"name": "child", "mode": "inherit", "parentID": parentID}).Context()
+			err := handler.CreateBranch(c, apitest.TestOrganization, "project_id")
+			require.NoError(t, err)
+
+			require.Equal(t, tc.want, got.BackupsEnabled)
+			require.Equal(t, tc.want, got.BackupConfig.GetBackupsEnabled())
+			rec.MustCode(http.StatusCreated)
+			var resp spec.BranchShortMetadata
+			rec.ReadBody(&resp)
+			require.NotNil(t, resp.BackupsEnabled)
+			require.Equal(t, tc.want, *resp.BackupsEnabled)
+		})
+	}
+}
+
 func testClaimsWithMarketplace(marketplace string) token.Claims {
 	return token.Claims{
 		ID:    apitest.TestUserID,
