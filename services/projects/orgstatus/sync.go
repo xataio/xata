@@ -129,8 +129,8 @@ func syncBranches(ctx context.Context, projectsStore store.ProjectsStore, cellCo
 				Msg("Organization status sync inputs")
 
 			// ==================== Richard testing start ====================
-			// Richard is testing https://github.com/xataio/maki/pull/3402 using logging only
-			// in https://github.com/xataio/maki/pull/3441; the existing update logic remains unchanged.
+			// Richard is testing https://github.com/ClickHouse/xatagres/pull/3402 using logging only
+			// in https://github.com/ClickHouse/xatagres/pull/3441; the existing update logic remains unchanged.
 			// temporary logging will be deleted
 
 			proposedHibernate := disabled || (hadS2Z && isHibernated)
