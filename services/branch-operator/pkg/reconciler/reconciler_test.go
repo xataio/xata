@@ -8,7 +8,6 @@ import (
 	"xata/services/branch-operator/api/v1alpha1"
 	"xata/services/branch-operator/pkg/reconciler"
 
-	barmanPluginApi "github.com/cloudnative-pg/plugin-barman-cloud/api/v1"
 	"github.com/stretchr/testify/require"
 	apiv1 "github.com/xataio/xata-cnpg/api/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -58,16 +57,6 @@ func TestInheritedMetadataLabels(t *testing.T) {
 			// Ensure the labels are present on the NetworkPolicy
 			require.Equal(t, "some-org-id", np.Labels[orgIDLabelKey])
 			require.Equal(t, "some-project-id", np.Labels[projectIDLabelKey])
-
-			// Expect the ObjectStore to be created
-			os := barmanPluginApi.ObjectStore{}
-			requireEventuallyNoErr(t, func() error {
-				return getK8SObject(ctx, br.Name, &os)
-			})
-
-			// Ensure the labels are present on the ObjectStore
-			require.Equal(t, "some-org-id", os.Labels[orgIDLabelKey])
-			require.Equal(t, "some-project-id", os.Labels[projectIDLabelKey])
 
 			// Expect the ScheduledBackup to be created
 			sb := apiv1.ScheduledBackup{}

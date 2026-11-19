@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	barmanPluginApi "github.com/cloudnative-pg/plugin-barman-cloud/api/v1"
 	"github.com/go-logr/zerologr"
 	snapshotv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 	apiv1 "github.com/xataio/xata-cnpg/api/v1"
@@ -90,9 +89,6 @@ func (s *BranchOperatorService) Init(ctx context.Context) error {
 	if err := apiv1.AddToScheme(scheme); err != nil {
 		return err
 	}
-	if err := barmanPluginApi.AddToScheme(scheme); err != nil {
-		return err
-	}
 	if err := snapshotv1.AddToScheme(scheme); err != nil {
 		return err
 	}
@@ -123,9 +119,6 @@ func (s *BranchOperatorService) Init(ctx context.Context) error {
 			Namespaces: cacheNamespaces(s.config.ClustersNamespace),
 		},
 		&networkingv1.NetworkPolicy{}: {
-			Namespaces: cacheNamespaces(s.config.ClustersNamespace),
-		},
-		&barmanPluginApi.ObjectStore{}: {
 			Namespaces: cacheNamespaces(s.config.ClustersNamespace),
 		},
 		&apiv1.Cluster{}: {
@@ -177,8 +170,6 @@ func (s *BranchOperatorService) Init(ctx context.Context) error {
 		BackupsCredentialsAccessKeyIDKey:     s.config.BackupsCredentialsAccessKeyIDKey,
 		BackupsCredentialsSecretAccessKeyKey: s.config.BackupsCredentialsSecretAccessKeyKey,
 		CloudProvider:                        s.config.CloudProvider,
-		BarmanRegionSecretName:               s.config.BarmanRegionSecretName,
-		BarmanRegionSecretKey:                s.config.BarmanRegionSecretKey,
 		Tolerations:                          s.config.Tolerations.Value,
 		EnforceZone:                          s.config.EnforceZone,
 		ImagePullSecrets:                     s.config.ImagePullSecrets,

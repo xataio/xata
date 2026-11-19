@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"time"
 
-	barmanPluginApi "github.com/cloudnative-pg/plugin-barman-cloud/api/v1"
 	snapshotv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 	apiv1 "github.com/xataio/xata-cnpg/api/v1"
 	v1 "k8s.io/api/core/v1"
@@ -34,7 +33,6 @@ import (
 // +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch;create;update;patch,namespace=xata-clusters
 // +kubebuilder:rbac:groups="",resources=serviceaccounts/token,verbs=create,namespace=xata-clusters
 // +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch,namespace=xata-clusters
-// +kubebuilder:rbac:groups=barmancloud.cnpg.io,resources=objectstores,verbs=get;list;watch;create;update;patch;delete,namespace=xata-clusters
 // +kubebuilder:rbac:groups=postgresql.cnpg.io,resources=scheduledbackups,verbs=get;list;watch;create;update;patch;delete,namespace=xata-clusters
 // +kubebuilder:rbac:groups=postgresql.cnpg.io,resources=clusters,verbs=get;list;watch;create;update;patch;delete,namespace=xata-clusters
 // +kubebuilder:rbac:groups=postgresql.cnpg.io,resources=poolers,verbs=get;list;watch;create;update;patch;delete,namespace=xata-clusters
@@ -65,8 +63,6 @@ type BranchReconciler struct {
 	BackupsCredentialsAccessKeyIDKey     string
 	BackupsCredentialsSecretAccessKeyKey string
 	CloudProvider                        string
-	BarmanRegionSecretName               string
-	BarmanRegionSecretKey                string
 	Tolerations                          []v1.Toleration
 	EnforceZone                          bool
 	ImagePullSecrets                     []string
@@ -111,13 +107,6 @@ func (r *BranchReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 			log.Error(applyErr, "updating Branch status")
 		}
 	}()
-
-	// Reconcile the ObjectStore for the branch
-	_, err = r.reconcileObjectStore(ctx, branch)
-	if err != nil {
-		log.Error(err, "reconciling ObjectStore")
-		return ctrl.Result{}, err
-	}
 
 	// Reconcile the VolumeSnapshot for the branch
 	_, err = r.reconcileVolumeSnapshot(ctx, branch)
@@ -270,7 +259,6 @@ func (r *BranchReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manage
 		Owns(&v1.Service{}, onGenerationChanged).
 		Owns(&v1.Secret{}, onGenerationChanged).
 		Owns(&v1.ServiceAccount{}, onGenerationChanged).
-		Owns(&barmanPluginApi.ObjectStore{}, onGenerationChanged).
 		Owns(&apiv1.ScheduledBackup{}, onGenerationChanged).
 		Owns(&snapshotv1.VolumeSnapshot{}, onGenerationChanged).
 		Owns(&apiv1.Cluster{}, onRelevantClusterChanges).

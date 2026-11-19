@@ -281,8 +281,6 @@ github.com/cloudnative-pg/cnpg-i v0.3.0 h1:5ayNOG5x68lU70IVbHDZQrv5p+bErCJ0mqRmO
 github.com/cloudnative-pg/cnpg-i v0.3.0/go.mod h1:VOIWWXcJ1RyioK+elR2DGOa4cBA6K+6UQgx05aZmH+g=
 github.com/cloudnative-pg/machinery v0.3.3 h1:CaqXqLTJH9RrVv3R/YU0NmFaI/F18HLg2JfH3mQLcDk=
 github.com/cloudnative-pg/machinery v0.3.3/go.mod h1:RYAYlVKBF5pH4mg+Q8wHjNDyENV9ajbkG41zOEf8DEs=
-github.com/cloudnative-pg/plugin-barman-cloud v0.7.0 h1:ACA/1Yqmltt5QQ8HdmYQi7qcPRbg4VR1mG8Cqds1Cv8=
-github.com/cloudnative-pg/plugin-barman-cloud v0.7.0/go.mod h1:jvJfCulVhL3fiF1jiZOKK2INF4JhNkEvY0s2oBz1UX8=
 github.com/cockroachdb/apd/v3 v3.2.1 h1:U+8j7t0axsIgvQUqthuNm82HIrYXodOV2iWLWtEaIwg=
 github.com/cockroachdb/apd/v3 v3.2.1/go.mod h1:klXJcjp+FffLTHlhIG69tezTDvdP065naDsHzKhYSqc=
 github.com/coder/websocket v1.8.15 h1:6B2JPeOGlpff2Uz6vOEH1Vzpi0iUz20A+lPVhPHtNUA=

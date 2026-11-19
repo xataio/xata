@@ -11,20 +11,17 @@ import (
 //
 // BackupSpec defines backup settings for a Branch
 type BackupSpecApplyConfiguration struct {
-	// Method specifies the backup method.
-	// "barman" uses the barman-cloud plugin; "pgbackrest" uses in-core pgbackrest.
+	// Method specifies the backup method. Only "pgbackrest" (in-core
+	// pgbackrest) is supported.
 	Method *apiv1alpha1.BackupMethod `json:"method,omitempty"`
-	// Retention specifies how long to retain backups (barman only).
-	// Examples: "60d", "4w", "2m".
-	// Ignored when Method is "pgbackrest"; use PgBackRest.RetentionFullDays instead.
+	// Retention is the retention period as requested through the clusters API
+	// and reported back by it. Examples: "60d", "4w", "2m". The effective
+	// pgbackrest retention is PgBackRest.RetentionFullDays, derived from it.
 	Retention *string `json:"retention,omitempty"`
 	// WALArchiving specifies whether WAL archiving is enabled
 	WALArchiving *apiv1alpha1.WALArchivingMode `json:"walArchiving,omitempty"`
 	// ScheduledBackup configures periodic base backups.
 	ScheduledBackup *ScheduledBackupSpecApplyConfiguration `json:"scheduledBackup,omitempty"`
-	// ServerName overrides the barman serverName plugin parameter (barman only).
-	// When empty, defaults to the branch name.
-	ServerName *string `json:"serverName,omitempty"`
 	// PgBackRest configures pgbackrest storage and options.
 	// Required when Method is "pgbackrest".
 	PgBackRest *PgBackRestSpecApplyConfiguration `json:"pgbackrest,omitempty"`
@@ -65,14 +62,6 @@ func (b *BackupSpecApplyConfiguration) WithWALArchiving(value apiv1alpha1.WALArc
 // If called multiple times, the ScheduledBackup field is set to the value of the last call.
 func (b *BackupSpecApplyConfiguration) WithScheduledBackup(value *ScheduledBackupSpecApplyConfiguration) *BackupSpecApplyConfiguration {
 	b.ScheduledBackup = value
-	return b
-}
-
-// WithServerName sets the ServerName field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the ServerName field is set to the value of the last call.
-func (b *BackupSpecApplyConfiguration) WithServerName(value string) *BackupSpecApplyConfiguration {
-	b.ServerName = &value
 	return b
 }
 

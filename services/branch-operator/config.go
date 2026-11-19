@@ -20,8 +20,6 @@ type Config struct {
 	BackupsCredentialsAccessKeyIDKey     string                     `env:"XATA_BACKUPS_CREDENTIALS_ACCESS_KEY_ID_KEY" env-default:"accessKey" env-description:"key in the credentials Secret holding the access key ID"`
 	BackupsCredentialsSecretAccessKeyKey string                     `env:"XATA_BACKUPS_CREDENTIALS_SECRET_ACCESS_KEY_KEY" env-default:"secretKey" env-description:"key in the credentials Secret holding the secret access key"`
 	CloudProvider                        string                     `env:"XATA_CLOUD_PROVIDER" env-default:"aws" env-description:"cloud provider for per-Branch identity and backup credentials: aws or gcp"`
-	BarmanRegionSecretName               string                     `env:"XATA_BARMAN_REGION_SECRET_NAME" env-default:"barman-dummy-secret" env-description:"chart-managed secret referenced as the barman AWS region"`
-	BarmanRegionSecretKey                string                     `env:"XATA_BARMAN_REGION_SECRET_KEY" env-default:"dummy" env-description:"key in the chart-managed barman AWS region secret"`
 	Tolerations                          envcfg.TolerationListField `env:"XATA_CLUSTERS_TOLERATIONS" env-default:"xata.io/workload=dataplane:NoSchedule" env-description:"tolerations for cluster pods in the format key=value:effect"`
 	EnforceZone                          bool                       `env:"XATA_ENFORCE_ZONE" env-default:"false" env-description:"enable zone-based pod anti-affinity for multi-instance clusters"`
 	ImagePullSecrets                     []string                   `env:"XATA_IMAGE_SECRETS" env-default:"ghcr-secret" env-description:"image pull secrets for private PostgreSQL images"`

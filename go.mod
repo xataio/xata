@@ -11,9 +11,7 @@ require (
 	github.com/bmatcuk/doublestar/v4 v4.10.0
 	github.com/bradleyfalzon/ghinstallation/v2 v2.18.0
 	github.com/cenkalti/backoff/v4 v4.3.0
-	github.com/cloudnative-pg/barman-cloud v0.3.3
 	github.com/cloudnative-pg/machinery v0.3.3
-	github.com/cloudnative-pg/plugin-barman-cloud v0.7.0
 	github.com/coder/websocket v1.8.15
 	github.com/customerio/go-customerio/v3 v3.11.0
 	github.com/elastic/go-concert v0.3.1
@@ -203,6 +201,7 @@ require (
 	github.com/clipperhouse/displaywidth v0.11.0 // indirect
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
 	github.com/cloudflare/backoff v0.0.0-20240920015135-e46b80a3a7d0 // indirect
+	github.com/cloudnative-pg/barman-cloud v0.3.3 // indirect
 	github.com/cloudnative-pg/cnpg-i v0.3.0 // indirect
 	github.com/cockroachdb/apd/v3 v3.2.1 // indirect
 	github.com/containerd/console v1.0.4 // indirect

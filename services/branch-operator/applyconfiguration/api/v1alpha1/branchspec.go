@@ -11,9 +11,8 @@ type BranchSpecApplyConfiguration struct {
 	Restore *RestoreSpecApplyConfiguration `json:"restore,omitempty"`
 	// ClusterSpec defines the CNPG cluster configuration for the branch
 	ClusterSpec *ClusterSpecApplyConfiguration `json:"cluster,omitempty"`
-	// BackupSpec configures backups for the branch. When set, an
-	// ObjectStore resource is created to manage backup storage and retention.
-	// When nil, no ObjectStore is created.
+	// BackupSpec configures pgbackrest backups for the branch. When nil, the
+	// branch has no WAL archiving or scheduled backups.
 	BackupSpec *BackupSpecApplyConfiguration `json:"backup,omitempty"`
 	// Pooler configures a PgBouncer connection pooler for the branch.
 	// When nil, no pooler is created.

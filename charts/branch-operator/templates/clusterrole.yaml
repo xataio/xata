@@ -96,18 +96,6 @@ rules:
   verbs:
   - create
 - apiGroups:
-  - barmancloud.cnpg.io
-  resources:
-  - objectstores
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
   - networking.k8s.io
   resources:
   - networkpolicies

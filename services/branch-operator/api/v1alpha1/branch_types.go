@@ -19,9 +19,8 @@ type BranchSpec struct {
 	// +kubebuilder:validation:Required
 	ClusterSpec ClusterSpec `json:"cluster"`
 
-	// BackupSpec configures backups for the branch. When set, an
-	// ObjectStore resource is created to manage backup storage and retention.
-	// When nil, no ObjectStore is created.
+	// BackupSpec configures pgbackrest backups for the branch. When nil, the
+	// branch has no WAL archiving or scheduled backups.
 	// +optional
 	BackupSpec *BackupSpec `json:"backup,omitempty"`
 
@@ -55,13 +54,6 @@ type RestoreSpec struct {
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="restore.timestamp is immutable"
 	Timestamp *metav1.Time `json:"timestamp,omitempty"`
-
-	// ServerName overrides the barman serverName parameter in the external
-	// cluster plugin configuration. Only applicable when Type is ObjectStore.
-	// When empty, defaults to the restore name.
-	// +kubebuilder:validation:Optional
-	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="restore.serverName is immutable"
-	ServerName string `json:"serverName,omitempty"`
 
 	// PgBackRestCipherPassphraseSecretRef references the passphrase for the
 	// pgbackrest repository used as the restore source.
@@ -100,13 +92,6 @@ func (r *RestoreSpec) IsObjectStoreType() bool {
 // child branch names.
 func XVolCloneName(parentBranchName, childBranchName string) string {
 	return parentBranchName + "-" + childBranchName
-}
-
-func (r *RestoreSpec) GetServerName() string {
-	if r == nil || r.ServerName == "" {
-		return r.Name
-	}
-	return r.ServerName
 }
 
 // ClusterSpec defines the PostgreSQL cluster configuration
@@ -392,25 +377,23 @@ const (
 type BackupMethod string
 
 const (
-	// BackupMethodBarman uses barman-cloud plugin for WAL archiving and backups
-	BackupMethodBarman BackupMethod = "barman"
 	// BackupMethodPgBackRest uses in-core pgbackrest for WAL archiving and backups
 	BackupMethodPgBackRest BackupMethod = "pgbackrest"
 )
 
 // BackupSpec defines backup settings for a Branch
-// +kubebuilder:validation:XValidation:rule="self.method != 'pgbackrest' || has(self.pgbackrest)",message="pgbackrest spec is required when method is pgbackrest"
+// +kubebuilder:validation:XValidation:rule="has(self.pgbackrest)",message="pgbackrest spec is required"
 type BackupSpec struct {
-	// Method specifies the backup method.
-	// "barman" uses the barman-cloud plugin; "pgbackrest" uses in-core pgbackrest.
-	// +kubebuilder:validation:Enum=barman;pgbackrest
-	// +kubebuilder:default:="barman"
+	// Method specifies the backup method. Only "pgbackrest" (in-core
+	// pgbackrest) is supported.
+	// +kubebuilder:validation:Enum=pgbackrest
+	// +kubebuilder:default:="pgbackrest"
 	// +optional
 	Method BackupMethod `json:"method,omitempty"`
 
-	// Retention specifies how long to retain backups (barman only).
-	// Examples: "60d", "4w", "2m".
-	// Ignored when Method is "pgbackrest"; use PgBackRest.RetentionFullDays instead.
+	// Retention is the retention period as requested through the clusters API
+	// and reported back by it. Examples: "60d", "4w", "2m". The effective
+	// pgbackrest retention is PgBackRest.RetentionFullDays, derived from it.
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:Pattern=`^\d+[dwm]$`
 	// +kubebuilder:default:="2d"
@@ -425,11 +408,6 @@ type BackupSpec struct {
 	// ScheduledBackup configures periodic base backups.
 	// +kubebuilder:validation:Optional
 	ScheduledBackup *ScheduledBackupSpec `json:"scheduledBackup,omitempty"`
-
-	// ServerName overrides the barman serverName plugin parameter (barman only).
-	// When empty, defaults to the branch name.
-	// +kubebuilder:validation:Optional
-	ServerName string `json:"serverName,omitempty"`
 
 	// PgBackRest configures pgbackrest storage and options.
 	// Required when Method is "pgbackrest".
@@ -610,21 +588,8 @@ func (b *BackupSpec) IsScheduledBackupEnabled() bool {
 	return b != nil && b.ScheduledBackup != nil
 }
 
-func (b *BackupSpec) RequiresBarmanPlugin() bool {
-	return b != nil && b.Method != BackupMethodPgBackRest &&
-		(b.WALArchiving == WALArchivingModeEnabled || b.ScheduledBackup != nil)
-}
-
 func (b *BackupSpec) IsPgBackRest() bool {
 	return b != nil && b.Method == BackupMethodPgBackRest && b.PgBackRest != nil
-}
-
-// GetServerName returns the serverName for the Barman cloud plugin.
-func (b *BackupSpec) GetServerName() string {
-	if b == nil {
-		return ""
-	}
-	return b.ServerName
 }
 
 // BranchStatus defines the observed state of a Branch

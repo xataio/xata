@@ -37,7 +37,7 @@ func TestClusterSpec(t *testing.T) {
 		{
 			name:        "basic - minimal configuration",
 			cfgModifier: nil,
-			expected:    baseExpectedSpec().WithPlugins(scaleToZeroPlugin(), barmanPlugin(false, map[string]string{"barmanObjectName": testBranchName})),
+			expected:    baseExpectedSpec().WithPlugins(scaleToZeroPlugin()),
 		},
 		{
 			name: "instances - number of instances set",
@@ -45,7 +45,7 @@ func TestClusterSpec(t *testing.T) {
 				cfg.Instances = 3
 			},
 			expected: baseExpectedSpec().
-				WithPlugins(scaleToZeroPlugin(), barmanPlugin(false, map[string]string{"barmanObjectName": testBranchName})).
+				WithPlugins(scaleToZeroPlugin()).
 				WithInstances(3).
 				WithEnablePDB(true),
 		},
@@ -55,7 +55,7 @@ func TestClusterSpec(t *testing.T) {
 				cfg.EnforceZone = true
 			},
 			expected: baseExpectedSpec().
-				WithPlugins(scaleToZeroPlugin(), barmanPlugin(false, map[string]string{"barmanObjectName": testBranchName})).
+				WithPlugins(scaleToZeroPlugin()).
 				WithAffinity(apiv1ac.AffinityConfiguration().
 					WithTopologyKey("topology.kubernetes.io/zone").
 					WithPodAntiAffinityType("preferred")),
@@ -66,7 +66,7 @@ func TestClusterSpec(t *testing.T) {
 				cfg.Storage.Size = "100Gi"
 			},
 			expected: baseExpectedSpec().
-				WithPlugins(scaleToZeroPlugin(), barmanPlugin(false, map[string]string{"barmanObjectName": testBranchName})).
+				WithPlugins(scaleToZeroPlugin()).
 				WithStorageConfiguration(apiv1ac.StorageConfiguration().
 					WithSize("100Gi")),
 		},
@@ -76,7 +76,7 @@ func TestClusterSpec(t *testing.T) {
 				cfg.Storage.StorageClass = new("some-new-storage-class")
 			},
 			expected: baseExpectedSpec().
-				WithPlugins(scaleToZeroPlugin(), barmanPlugin(false, map[string]string{"barmanObjectName": testBranchName})).
+				WithPlugins(scaleToZeroPlugin()).
 				WithStorageConfiguration(apiv1ac.StorageConfiguration().
 					WithSize("10Gi").
 					WithStorageClass("some-new-storage-class")),
@@ -87,7 +87,7 @@ func TestClusterSpec(t *testing.T) {
 				cfg.Storage.VolumeAttributesClass = new("some-volume-attributes-class")
 			},
 			expected: baseExpectedSpec().
-				WithPlugins(scaleToZeroPlugin(), barmanPlugin(false, map[string]string{"barmanObjectName": testBranchName})).
+				WithPlugins(scaleToZeroPlugin()).
 				WithStorageConfiguration(apiv1ac.StorageConfiguration().
 					WithSize("10Gi").
 					WithPersistentVolumeClaimTemplate(corev1.PersistentVolumeClaimSpec{
@@ -100,7 +100,7 @@ func TestClusterSpec(t *testing.T) {
 				cfg.Storage.VolumeSnapshotClass = new("some-other-snapshot-class")
 			},
 			expected: baseExpectedSpec().
-				WithPlugins(scaleToZeroPlugin(), barmanPlugin(false, map[string]string{"barmanObjectName": testBranchName})).
+				WithPlugins(scaleToZeroPlugin()).
 				WithBackup(apiv1ac.BackupConfiguration().
 					WithVolumeSnapshot(apiv1ac.VolumeSnapshotConfiguration().
 						WithClassName("some-other-snapshot-class").
@@ -116,7 +116,7 @@ func TestClusterSpec(t *testing.T) {
 			expected: func() *apiv1ac.ClusterSpecApplyConfiguration {
 				majorVersion := postgresversions.ExtractMajorVersionFromImage("ghcr.io/some/postgres:latest")
 				return baseExpectedSpec().
-					WithPlugins(scaleToZeroPlugin(), barmanPlugin(false, map[string]string{"barmanObjectName": testBranchName})).
+					WithPlugins(scaleToZeroPlugin()).
 					WithImageName("ghcr.io/some/postgres:latest").
 					WithBootstrap(apiv1ac.BootstrapConfiguration().
 						WithInitDB(resources.BootstrapInitDB(testBranchName, majorVersion)))
@@ -137,7 +137,7 @@ func TestClusterSpec(t *testing.T) {
 				}
 			},
 			expected: baseExpectedSpec().
-				WithPlugins(scaleToZeroPlugin(), barmanPlugin(false, map[string]string{"barmanObjectName": testBranchName})).
+				WithPlugins(scaleToZeroPlugin()).
 				WithResources(corev1.ResourceRequirements{
 					Requests: corev1.ResourceList{
 						corev1.ResourceCPU:    resource.MustParse("500m"),
@@ -157,75 +157,10 @@ func TestClusterSpec(t *testing.T) {
 				}
 			},
 			expected: baseExpectedSpec().
-				WithPlugins(scaleToZeroPlugin(), barmanPlugin(false, map[string]string{"barmanObjectName": testBranchName})).
+				WithPlugins(scaleToZeroPlugin()).
 				WithInheritedMetadata(apiv1ac.EmbeddedObjectMetadata().
 					WithAnnotations(resources.InheritedAnnotations).
 					WithLabels(map[string]string{"app": "my-app"})),
-		},
-		{
-			name: "backup configuration - barman plugin enabled when backup schedule is configured",
-			cfgModifier: func(cfg *resources.ClusterConfig) {
-				cfg.BackupSpec = &v1alpha1.BackupSpec{
-					Retention: "30d",
-					ScheduledBackup: &v1alpha1.ScheduledBackupSpec{
-						Schedule: "0 0 0 * * *",
-					},
-				}
-			},
-			expected: baseExpectedSpec().WithPlugins(
-				scaleToZeroPlugin(),
-				barmanPlugin(true, map[string]string{"barmanObjectName": testBranchName}),
-			),
-		},
-		{
-			name: "backup configuration - barman plugin enabled when WAL archiving is enabled",
-			cfgModifier: func(cfg *resources.ClusterConfig) {
-				cfg.BackupSpec = &v1alpha1.BackupSpec{
-					Retention:    "30d",
-					WALArchiving: v1alpha1.WALArchivingModeEnabled,
-				}
-			},
-			expected: baseExpectedSpec().WithPlugins(
-				scaleToZeroPlugin(),
-				barmanPlugin(true, map[string]string{"barmanObjectName": testBranchName}),
-			),
-		},
-		{
-			name: "backup configuration - barman plugin disabled when no WAL archiving or backup schedule configured",
-			cfgModifier: func(cfg *resources.ClusterConfig) {
-				cfg.BackupSpec = &v1alpha1.BackupSpec{
-					Retention: "30d",
-				}
-			},
-			expected: baseExpectedSpec().WithPlugins(scaleToZeroPlugin(), barmanPlugin(false, map[string]string{"barmanObjectName": testBranchName})),
-		},
-		{
-			name: "backup configuration - serverName set when different from branch name",
-			cfgModifier: func(cfg *resources.ClusterConfig) {
-				cfg.BackupSpec = &v1alpha1.BackupSpec{
-					Retention:    "30d",
-					WALArchiving: v1alpha1.WALArchivingModeEnabled,
-					ServerName:   "custom-server",
-				}
-			},
-			expected: baseExpectedSpec().WithPlugins(
-				scaleToZeroPlugin(),
-				barmanPlugin(true, map[string]string{"barmanObjectName": testBranchName, "serverName": "custom-server"}),
-			),
-		},
-		{
-			name: "backup configuration - serverName omitted when matching branch name",
-			cfgModifier: func(cfg *resources.ClusterConfig) {
-				cfg.BackupSpec = &v1alpha1.BackupSpec{
-					Retention:    "30d",
-					WALArchiving: v1alpha1.WALArchivingModeEnabled,
-					ServerName:   testBranchName,
-				}
-			},
-			expected: baseExpectedSpec().WithPlugins(
-				scaleToZeroPlugin(),
-				barmanPlugin(true, map[string]string{"barmanObjectName": testBranchName}),
-			),
 		},
 		{
 			name: "node selector - scheduling constraints applied",
@@ -237,7 +172,7 @@ func TestClusterSpec(t *testing.T) {
 				}
 			},
 			expected: baseExpectedSpec().
-				WithPlugins(scaleToZeroPlugin(), barmanPlugin(false, map[string]string{"barmanObjectName": testBranchName})).
+				WithPlugins(scaleToZeroPlugin()).
 				WithAffinity(apiv1ac.AffinityConfiguration().
 					WithNodeSelector(map[string]string{
 						"node.kubernetes.io/instance-type": "m5.2xlarge",
@@ -256,7 +191,7 @@ func TestClusterSpec(t *testing.T) {
 				}
 			},
 			expected: baseExpectedSpec().
-				WithPlugins(scaleToZeroPlugin(), barmanPlugin(false, map[string]string{"barmanObjectName": testBranchName})).
+				WithPlugins(scaleToZeroPlugin()).
 				WithAffinity(apiv1ac.AffinityConfiguration().
 					WithTolerations(corev1.Toleration{
 						Key:      "dedicated",
@@ -271,7 +206,7 @@ func TestClusterSpec(t *testing.T) {
 				cfg.ImagePullSecrets = []string{"ghcr-secret", "ecr-secret"}
 			},
 			expected: baseExpectedSpec().
-				WithPlugins(scaleToZeroPlugin(), barmanPlugin(false, map[string]string{"barmanObjectName": testBranchName})).
+				WithPlugins(scaleToZeroPlugin()).
 				WithImagePullSecrets(
 					corev1ac.LocalObjectReference().WithName("ghcr-secret"),
 					corev1ac.LocalObjectReference().WithName("ecr-secret"),
@@ -288,7 +223,7 @@ func TestClusterSpec(t *testing.T) {
 				}
 			},
 			expected: baseExpectedSpec().
-				WithPlugins(scaleToZeroPlugin(), barmanPlugin(false, map[string]string{"barmanObjectName": testBranchName})).
+				WithPlugins(scaleToZeroPlugin()).
 				WithPostgresConfiguration(apiv1ac.PostgresConfiguration().
 					WithParameters(map[string]string{"max_connections": "200"}).
 					WithAdditionalLibraries("pg_stat_statements")),
@@ -302,7 +237,7 @@ func TestClusterSpec(t *testing.T) {
 				}
 			},
 			expected: baseExpectedSpec().
-				WithPlugins(scaleToZeroPlugin(), barmanPlugin(false, map[string]string{"barmanObjectName": testBranchName})).
+				WithPlugins(scaleToZeroPlugin()).
 				WithBootstrap(apiv1ac.BootstrapConfiguration().
 					WithRecovery(resources.VolumeSnapshotBootstrapRecovery(testBranchName, "some-parent-cluster"))),
 		},
@@ -315,7 +250,7 @@ func TestClusterSpec(t *testing.T) {
 				}
 			},
 			expected: baseExpectedSpec().
-				WithPlugins(scaleToZeroPlugin(), barmanPlugin(false, map[string]string{"barmanObjectName": testBranchName})).
+				WithPlugins(scaleToZeroPlugin()).
 				WithBootstrap(apiv1ac.BootstrapConfiguration().
 					WithRecovery(resources.ObjectStoreBootstrapRecovery(testBranchName, &v1alpha1.RestoreSpec{
 						Type: v1alpha1.RestoreTypeObjectStore,
@@ -346,31 +281,7 @@ func TestClusterSpec(t *testing.T) {
 					Timestamp: &timestamp,
 				}
 				return baseExpectedSpec().
-					WithPlugins(scaleToZeroPlugin(), barmanPlugin(false, map[string]string{"barmanObjectName": testBranchName})).
-					WithBootstrap(apiv1ac.BootstrapConfiguration().
-						WithRecovery(resources.ObjectStoreBootstrapRecovery(testBranchName, restoreSpec))).
-					WithExternalClusters(resources.ExternalClusters(resources.ClusterConfig{
-						RestoreSpec: restoreSpec,
-					})...)
-			}(),
-		},
-		{
-			name: "recovery - object store with custom serverName",
-			cfgModifier: func(cfg *resources.ClusterConfig) {
-				cfg.RestoreSpec = &v1alpha1.RestoreSpec{
-					Type:       v1alpha1.RestoreTypeObjectStore,
-					Name:       "source-cluster",
-					ServerName: "some-other-servername",
-				}
-			},
-			expected: func() *apiv1ac.ClusterSpecApplyConfiguration {
-				restoreSpec := &v1alpha1.RestoreSpec{
-					Type:       v1alpha1.RestoreTypeObjectStore,
-					Name:       "source-cluster",
-					ServerName: "some-other-servername",
-				}
-				return baseExpectedSpec().
-					WithPlugins(scaleToZeroPlugin(), barmanPlugin(false, map[string]string{"barmanObjectName": testBranchName})).
+					WithPlugins(scaleToZeroPlugin()).
 					WithBootstrap(apiv1ac.BootstrapConfiguration().
 						WithRecovery(resources.ObjectStoreBootstrapRecovery(testBranchName, restoreSpec))).
 					WithExternalClusters(resources.ExternalClusters(resources.ClusterConfig{
@@ -387,7 +298,7 @@ func TestClusterSpec(t *testing.T) {
 				}
 			},
 			expected: baseExpectedSpec().
-				WithPlugins(scaleToZeroPlugin(), barmanPlugin(false, map[string]string{"barmanObjectName": testBranchName})).
+				WithPlugins(scaleToZeroPlugin()).
 				WithBootstrap(apiv1ac.BootstrapConfiguration().
 					WithNoop(apiv1.BootstrapNoop{})),
 		},
@@ -1025,7 +936,7 @@ func TestClusterSpec(t *testing.T) {
 				cfg.SmartShutdownTimeout = ptr.To[int32](300)
 			},
 			expected: baseExpectedSpec().
-				WithPlugins(scaleToZeroPlugin(), barmanPlugin(false, map[string]string{"barmanObjectName": testBranchName})).
+				WithPlugins(scaleToZeroPlugin()).
 				WithSmartShutdownTimeout(300),
 		},
 	}
@@ -1305,14 +1216,6 @@ func scaleToZeroPlugin() *apiv1ac.PluginConfigurationApplyConfiguration {
 	return apiv1ac.PluginConfiguration().WithName("cnpg-i-scale-to-zero.xata.io")
 }
 
-func barmanPlugin(enabled bool, params map[string]string) *apiv1ac.PluginConfigurationApplyConfiguration {
-	return apiv1ac.PluginConfiguration().
-		WithName("barman-cloud.cloudnative-pg.io").
-		WithEnabled(enabled).
-		WithIsWALArchiver(true).
-		WithParameters(params)
-}
-
 // baseExpectedSpec returns the expected apply configuration for a default
 // baseClusterConfig(). Test cases that modify the config should also modify
 // the expected spec to match.
@@ -1416,9 +1319,6 @@ func TestUsesAWSIAM(t *testing.T) {
 		want bool
 	}{
 		"no backup spec": {},
-		"barman": {
-			spec: &v1alpha1.BackupSpec{Method: v1alpha1.BackupMethodBarman},
-		},
 		"s3 with IAM": {
 			spec: &v1alpha1.BackupSpec{
 				Method:     v1alpha1.BackupMethodPgBackRest,

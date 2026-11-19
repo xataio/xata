@@ -3,15 +3,12 @@ package resources
 import (
 	"xata/services/branch-operator/api/v1alpha1"
 
-	barmanApi "github.com/cloudnative-pg/barman-cloud/pkg/api"
-	barmanPluginApi "github.com/cloudnative-pg/plugin-barman-cloud/api/v1"
 	snapshotv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 	apiv1 "github.com/xataio/xata-cnpg/api/v1"
 	apiv1ac "github.com/xataio/xata-cnpg/pkg/client/applyconfiguration/api/v1"
 	v1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
@@ -136,113 +133,19 @@ type BackupCredentials struct {
 	SecretAccessKeyKey string
 }
 
-// ObjectStoreSpec defines the ObjectStoreSpec for a branch's backup storage.
-// It configures cloud-provider object storage for CNPG backup retention.
-//
-// When backupsEndpoint is set the spec uses the AWS-S3 path with static
-// credentials from the configured Secret (Cloudflare R2 in production, RustFS
-// for local dev) and cloudProvider is ignored. Otherwise cloudProvider
-// selects the credential shape: "gcp" wires barman to GKE workload identity
-// federation; "aws" wires barman to inherit the pod's IAM role.
-func ObjectStoreSpec(
-	backupsBucket,
-	backupsEndpoint,
-	barmanRegionSecretName,
-	barmanRegionSecretKey,
-	retention,
-	cloudProvider string,
-	credentials BackupCredentials,
-) barmanPluginApi.ObjectStoreSpec {
-	awsCredentials := &apiv1.S3Credentials{
-		InheritFromIAMRole: true,
-		RegionReference: &apiv1.SecretKeySelector{
-			Name: barmanRegionSecretName,
-			Key:  barmanRegionSecretKey,
-		},
-	}
-
-	spec := barmanPluginApi.ObjectStoreSpec{
-		RetentionPolicy: retention,
-		Configuration: apiv1.BarmanObjectStoreConfiguration{
-			DestinationPath:   backupsBucket,
-			BarmanCredentials: apiv1.BarmanCredentials{AWS: awsCredentials},
-			Wal: &apiv1.WalBackupConfiguration{
-				Compression: barmanApi.CompressionTypeGzip,
-			},
-			Data: &apiv1.DataBackupConfiguration{
-				Compression:           barmanApi.CompressionTypeGzip,
-				AdditionalCommandArgs: []string{"--min-chunk-size=5MB", "--read-timeout=60", "-vv"},
-			},
-		},
-		InstanceSidecarConfiguration: barmanPluginApi.InstanceSidecarConfiguration{
-			Resources: v1.ResourceRequirements{
-				Requests: v1.ResourceList{
-					v1.ResourceCPU:    resource.MustParse("100m"),
-					v1.ResourceMemory: resource.MustParse("512Mi"),
-				},
-				Limits: v1.ResourceList{
-					v1.ResourceCPU:    resource.MustParse("250m"),
-					v1.ResourceMemory: resource.MustParse("512Mi"),
-				},
-			},
-			RetentionPolicyIntervalSeconds: 86400,
-		},
-	}
-
-	// A custom endpoint means a non-AWS, S3-compatible store (e.g. Cloudflare R2
-	// or RustFS for local dev). There's no IAM role to inherit, so switch to
-	// static credentials from the configured Secret. The region reference is
-	// kept: R2 expects a region ("auto") and RustFS ignores it.
-	if backupsEndpoint != "" {
-		spec.Configuration.EndpointURL = backupsEndpoint
-		awsCredentials.InheritFromIAMRole = false
-		awsCredentials.AccessKeyIDReference = &apiv1.SecretKeySelector{
-			Name: credentials.SecretName,
-			Key:  credentials.AccessKeyIDKey,
-		}
-		awsCredentials.SecretAccessKeyReference = &apiv1.SecretKeySelector{
-			Name: credentials.SecretName,
-			Key:  credentials.SecretAccessKeyKey,
-		}
-		return spec
-	}
-
-	// GKE workload identity federation: barman authenticates as the pod's GSA
-	// directly, no static credentials needed.
-	if cloudProvider == "gcp" {
-		spec.Configuration.BarmanCredentials = apiv1.BarmanCredentials{
-			Google: &apiv1.GoogleCredentials{GKEEnvironment: true},
-		}
-	}
-
-	return spec
-}
-
-// ScheduledBackupSpec generates the ScheduledBackup spec apply configuration for a
-// branch's scheduled backups. The method parameter determines the backup method:
-// barman uses the barman-cloud plugin, pgbackrest uses in-core pgbackrest with
-// full backups.
+// ScheduledBackupSpec generates the ScheduledBackup spec apply configuration
+// for a branch's scheduled backups: in-core pgbackrest full backups.
 func ScheduledBackupSpec(
 	clusterName, schedule string,
 	suspend bool,
-	method v1alpha1.BackupMethod,
 ) *apiv1ac.ScheduledBackupSpecApplyConfiguration {
-	spec := apiv1ac.ScheduledBackupSpec().
+	return apiv1ac.ScheduledBackupSpec().
 		WithCluster(corev1ac.LocalObjectReference().WithName(clusterName)).
 		WithSchedule(schedule).
 		WithImmediate(true).
-		WithSuspend(suspend)
-
-	if method == v1alpha1.BackupMethodPgBackRest {
-		return spec.
-			WithMethod(apiv1.BackupMethodPgBackRest).
-			WithPgBackRestBackupType(apiv1.PgBackRestBackupTypeFull)
-	}
-
-	return spec.
-		WithMethod(apiv1.BackupMethodPlugin).
-		WithPluginConfiguration(apiv1ac.BackupPluginConfiguration().
-			WithName("barman-cloud.cloudnative-pg.io"))
+		WithSuspend(suspend).
+		WithMethod(apiv1.BackupMethodPgBackRest).
+		WithPgBackRestBackupType(apiv1.PgBackRestBackupTypeFull)
 }
 
 // Secret builds a BasicAuth Secret with the given name, username, and password.

@@ -136,7 +136,7 @@ type ClusterConfig struct {
 	ImagePullSecrets  []string
 	// BackupCredentials references the Secret holding static S3 credentials,
 	// used for pgbackrest when targeting a non-AWS S3-compatible endpoint
-	// (Cloudflare R2, or RustFS for local dev). Mirrors the barman ObjectStore.
+	// (Cloudflare R2, or RustFS for local dev).
 	BackupCredentials BackupCredentials
 	// PgBackRestWebIdentityRoleARN is the ARN of the IAM role that pgBackRest uses for
 	// Branches with s3.keyType=web-id. If it is set, each Cluster gets the web
@@ -227,7 +227,7 @@ func ClusterSpec(
 		WithPostgresConfiguration(apiv1ac.PostgresConfiguration().
 			WithParameters(PostgresParametersToMap(cfg.Postgres)).
 			WithAdditionalLibraries(cfg.Postgres.GetSharedPreloadLibraries()...)).
-		WithPlugins(clusterPlugins(branchName, cfg)...).
+		WithPlugins(clusterPlugins()...).
 		WithResources(cfg.Resources).
 		WithBackup(backupConfiguration(branchName, cfg)).
 		WithProbes(apiv1ac.ProbesConfiguration().
@@ -276,17 +276,6 @@ func ClusterSpec(
 	return spec
 }
 
-// BarmanPluginParameters builds the parameter map for the barman-cloud plugin.
-func BarmanPluginParameters(branchName, serverName string) map[string]string {
-	params := map[string]string{
-		"barmanObjectName": branchName,
-	}
-	if serverName != "" && serverName != branchName {
-		params["serverName"] = serverName
-	}
-	return params
-}
-
 // VolumeSnapshotBootstrapRecovery creates a BootstrapRecovery apply configuration
 // using the provided branch and target cluster names.
 func VolumeSnapshotBootstrapRecovery(branchName, targetBranchName string) *apiv1ac.BootstrapRecoveryApplyConfiguration {
@@ -323,53 +312,34 @@ func ObjectStoreBootstrapRecovery(branchName string, restoreSpec *v1alpha1.Resto
 }
 
 // ExternalClusters creates the ExternalClusters apply configuration for
-// point-in-time recovery from object storage. For pgbackrest it points at the
-// source branch's repository (S3, GCS, or Azure); for barman it uses the
-// barman-cloud plugin. Returns nil if the restore spec is not for ObjectStore
-// type.
+// point-in-time recovery from object storage. It points at the source branch's
+// pgbackrest repository (S3, GCS, or Azure). Returns nil if the restore spec is
+// not for ObjectStore type or the branch has no pgbackrest spec.
 func ExternalClusters(cfg ClusterConfig) []*apiv1ac.ExternalClusterApplyConfiguration {
-	if !cfg.RestoreSpec.IsObjectStoreType() {
+	if !cfg.RestoreSpec.IsObjectStoreType() || !cfg.IsPgBackRest() {
 		return nil
 	}
 
-	// pgbackrest: external cluster points to the source branch's repo (S3,
-	// GCS, or Azure)
-	if cfg.IsPgBackRest() {
-		pgb := cfg.PgBackRest
+	pgb := cfg.PgBackRest
 
-		// The source backups are at the defined repo path of the Branch. Without
-		// one, they are at the stanza (= the restore source name).
-		// RepoPath is the bare prefix; the instance manager prepends the leading
-		// "/" when it writes repo1-path, so do NOT add one here (else repo1-path
-		// becomes "//<name>", which pgbackrest rejects).
-		options := apiv1ac.PgBackRestOptions().
-			WithRepoPath(cmp.Or(pgb.RepoPath, cfg.RestoreSpec.Name))
-
-		return []*apiv1ac.ExternalClusterApplyConfiguration{
-			apiv1ac.ExternalCluster().
-				WithName(cfg.RestoreSpec.Name).
-				WithPgBackRest(apiv1ac.PgBackRestExternalCluster().
-					WithRepository(pgbackrestRepository(
-						pgb,
-						cfg.BackupCredentials,
-						cfg.RestoreSpec.PgBackRestCipherPassphraseSecretRef,
-					)).
-					WithOptions(options)),
-		}
-	}
-
-	// barman: external cluster uses barman-cloud plugin
-	pluginParams := map[string]string{
-		"barmanObjectName": cfg.RestoreSpec.Name,
-		"serverName":       cfg.RestoreSpec.GetServerName(),
-	}
+	// The source backups are at the defined repo path of the Branch. Without
+	// one, they are at the stanza (= the restore source name).
+	// RepoPath is the bare prefix; the instance manager prepends the leading
+	// "/" when it writes repo1-path, so do NOT add one here (else repo1-path
+	// becomes "//<name>", which pgbackrest rejects).
+	options := apiv1ac.PgBackRestOptions().
+		WithRepoPath(cmp.Or(pgb.RepoPath, cfg.RestoreSpec.Name))
 
 	return []*apiv1ac.ExternalClusterApplyConfiguration{
 		apiv1ac.ExternalCluster().
 			WithName(cfg.RestoreSpec.Name).
-			WithPluginConfiguration(apiv1ac.PluginConfiguration().
-				WithName("barman-cloud.cloudnative-pg.io").
-				WithParameters(pluginParams)),
+			WithPgBackRest(apiv1ac.PgBackRestExternalCluster().
+				WithRepository(pgbackrestRepository(
+					pgb,
+					cfg.BackupCredentials,
+					cfg.RestoreSpec.PgBackRestCipherPassphraseSecretRef,
+				)).
+				WithOptions(options)),
 	}
 }
 
@@ -412,30 +382,18 @@ func smartShutdownTimeout(t *int32) int32 {
 	return DefaultSmartShutdownTimeout
 }
 
-// backupConfiguration builds the CNPG BackupConfiguration for the cluster.
-// clusterPlugins returns the plugin configurations for the CNPG Cluster.
-// The scale-to-zero plugin is always included. The barman-cloud plugin is
-// only included when barman is the backup method.
-func clusterPlugins(branchName string, cfg ClusterConfig) []*apiv1ac.PluginConfigurationApplyConfiguration {
-	plugins := []*apiv1ac.PluginConfigurationApplyConfiguration{
+// clusterPlugins returns the plugin configurations for the CNPG Cluster:
+// the scale-to-zero plugin only.
+func clusterPlugins() []*apiv1ac.PluginConfigurationApplyConfiguration {
+	return []*apiv1ac.PluginConfigurationApplyConfiguration{
 		apiv1ac.PluginConfiguration().
 			WithName("cnpg-i-scale-to-zero.xata.io"),
 	}
-
-	if !cfg.IsPgBackRest() {
-		plugins = append(plugins, apiv1ac.PluginConfiguration().
-			WithName("barman-cloud.cloudnative-pg.io").
-			WithEnabled(cfg.RequiresBarmanPlugin()).
-			WithIsWALArchiver(true).
-			WithParameters(BarmanPluginParameters(branchName, cfg.GetServerName())))
-	}
-
-	return plugins
 }
 
-// Volume snapshot config is always included regardless of backup method.
-// For barman, backup storage is configured via the separate ObjectStore CR.
-// For pgbackrest, backup storage is configured inline on the Cluster.
+// backupConfiguration builds the CNPG BackupConfiguration for the cluster.
+// Volume snapshot config is always included. pgbackrest backup storage is
+// configured inline on the Cluster when the branch has backups.
 func backupConfiguration(branchName string, cfg ClusterConfig) *apiv1ac.BackupConfigurationApplyConfiguration {
 	backup := apiv1ac.BackupConfiguration().
 		WithVolumeSnapshot(apiv1ac.VolumeSnapshotConfiguration().
@@ -444,7 +402,7 @@ func backupConfiguration(branchName string, cfg ClusterConfig) *apiv1ac.BackupCo
 			WithOnlineConfiguration(apiv1ac.OnlineConfiguration().
 				WithImmediateCheckpoint(true)))
 
-	// this is barman
+	// no backups configured for this branch
 	if !cfg.IsPgBackRest() {
 		return backup
 	}

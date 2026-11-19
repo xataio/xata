@@ -21,10 +21,6 @@ type RestoreSpecApplyConfiguration struct {
 	// Timestamp specifies the point-in-time to restore to.
 	// Only applicable when Type is ObjectStore.
 	Timestamp *v1.Time `json:"timestamp,omitempty"`
-	// ServerName overrides the barman serverName parameter in the external
-	// cluster plugin configuration. Only applicable when Type is ObjectStore.
-	// When empty, defaults to the restore name.
-	ServerName *string `json:"serverName,omitempty"`
 	// PgBackRestCipherPassphraseSecretRef references the passphrase for the
 	// pgbackrest repository used as the restore source.
 	PgBackRestCipherPassphraseSecretRef *corev1.SecretKeySelector `json:"pgbackrestCipherPassphraseSecretRef,omitempty"`
@@ -57,14 +53,6 @@ func (b *RestoreSpecApplyConfiguration) WithName(value string) *RestoreSpecApply
 // If called multiple times, the Timestamp field is set to the value of the last call.
 func (b *RestoreSpecApplyConfiguration) WithTimestamp(value v1.Time) *RestoreSpecApplyConfiguration {
 	b.Timestamp = &value
-	return b
-}
-
-// WithServerName sets the ServerName field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the ServerName field is set to the value of the last call.
-func (b *RestoreSpecApplyConfiguration) WithServerName(value string) *RestoreSpecApplyConfiguration {
-	b.ServerName = &value
 	return b
 }
 

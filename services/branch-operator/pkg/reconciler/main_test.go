@@ -11,7 +11,6 @@ import (
 	"xata/services/branch-operator/api/v1alpha1"
 	"xata/services/branch-operator/pkg/reconciler"
 
-	barmanPluginApi "github.com/cloudnative-pg/plugin-barman-cloud/api/v1"
 	snapshotv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 	"github.com/stretchr/testify/require"
 	apiv1 "github.com/xataio/xata-cnpg/api/v1"
@@ -54,7 +53,6 @@ func TestMain(m *testing.M) {
 				networkingv1.AddToScheme,
 				rbacv1.AddToScheme,
 				apiv1.AddToScheme,
-				barmanPluginApi.AddToScheme,
 				snapshotv1.AddToScheme,
 			},
 			Namespaces: []string{XataClustersNamespace},
@@ -68,8 +66,6 @@ func TestMain(m *testing.M) {
 					CloudProvider:     "aws",
 					// Each Cluster gets the web identity volume and environment variables.
 					PgBackRestWebIdentityRoleARN: "arn:aws:iam::123456789012:role/test-cnpg-backups",
-					BarmanRegionSecretName:       "barman-dummy-secret",
-					BarmanRegionSecretKey:        "dummy",
 					Tolerations:                  nil,
 					EnforceZone:                  false,
 					ImagePullSecrets:             nil,
@@ -161,19 +157,33 @@ func (b *BranchBuilder) WithClusterName(clusterName *string) *BranchBuilder {
 	return b
 }
 
+// ensureBackupSpec initialises the BackupSpec the way the clusters service
+// does: pgbackrest with an S3 repository. The CRD rejects a backup block
+// without a pgbackrest section. WithPgBackRest* override the repository.
+func (b *BranchBuilder) ensureBackupSpec() {
+	if b.branch.Spec.BackupSpec != nil {
+		return
+	}
+	b.branch.Spec.BackupSpec = &v1alpha1.BackupSpec{
+		Method: v1alpha1.BackupMethodPgBackRest,
+		PgBackRest: &v1alpha1.PgBackRestSpec{
+			S3: &v1alpha1.PgBackRestS3Spec{
+				Bucket: "test-bucket",
+				Region: "us-east-1",
+			},
+		},
+	}
+}
+
 // WithBackupRetention sets the BackupConfiguration.Retention field
 func (b *BranchBuilder) WithBackupRetention(retention string) *BranchBuilder {
-	if b.branch.Spec.BackupSpec == nil {
-		b.branch.Spec.BackupSpec = &v1alpha1.BackupSpec{}
-	}
+	b.ensureBackupSpec()
 	b.branch.Spec.BackupSpec.Retention = retention
 	return b
 }
 
 func (b *BranchBuilder) WithWALArchiving(enabled bool) *BranchBuilder {
-	if b.branch.Spec.BackupSpec == nil {
-		b.branch.Spec.BackupSpec = &v1alpha1.BackupSpec{}
-	}
+	b.ensureBackupSpec()
 	if enabled {
 		b.branch.Spec.BackupSpec.WALArchiving = v1alpha1.WALArchivingModeEnabled
 	} else {
@@ -242,9 +252,7 @@ func (b *BranchBuilder) WithPgBackRestRestoreCipher(source string) *BranchBuilde
 
 // WithBackupSchedule sets the BackupConfiguration.ScheduledBackup field
 func (b *BranchBuilder) WithBackupSchedule(schedule string) *BranchBuilder {
-	if b.branch.Spec.BackupSpec == nil {
-		b.branch.Spec.BackupSpec = &v1alpha1.BackupSpec{}
-	}
+	b.ensureBackupSpec()
 	b.branch.Spec.BackupSpec.ScheduledBackup = &v1alpha1.ScheduledBackupSpec{
 		Schedule: schedule,
 	}

@@ -56,17 +56,15 @@ spec:
             properties:
               backup:
                 description: |-
-                  BackupSpec configures backups for the branch. When set, an
-                  ObjectStore resource is created to manage backup storage and retention.
-                  When nil, no ObjectStore is created.
+                  BackupSpec configures pgbackrest backups for the branch. When nil, the
+                  branch has no WAL archiving or scheduled backups.
                 properties:
                   method:
-                    default: barman
+                    default: pgbackrest
                     description: |-
-                      Method specifies the backup method.
-                      "barman" uses the barman-cloud plugin; "pgbackrest" uses in-core pgbackrest.
+                      Method specifies the backup method. Only "pgbackrest" (in-core
+                      pgbackrest) is supported.
                     enum:
-                    - barman
                     - pgbackrest
                     type: string
                   pgbackrest:
@@ -241,9 +239,9 @@ spec:
                   retention:
                     default: 2d
                     description: |-
-                      Retention specifies how long to retain backups (barman only).
-                      Examples: "60d", "4w", "2m".
-                      Ignored when Method is "pgbackrest"; use PgBackRest.RetentionFullDays instead.
+                      Retention is the retention period as requested through the clusters API
+                      and reported back by it. Examples: "60d", "4w", "2m". The effective
+                      pgbackrest retention is PgBackRest.RetentionFullDays, derived from it.
                     pattern: ^\d+[dwm]$
                     type: string
                   scheduledBackup:
@@ -257,11 +255,6 @@ spec:
                           Examples: "0 0 0 * * *" (daily at midnight), "0 0 2 * * 0" (weekly on Sunday at 2am)
                         type: string
                     type: object
-                  serverName:
-                    description: |-
-                      ServerName overrides the barman serverName plugin parameter (barman only).
-                      When empty, defaults to the branch name.
-                    type: string
                   walArchiving:
                     default: Enabled
                     description: WALArchiving specifies whether WAL archiving is enabled
@@ -271,8 +264,8 @@ spec:
                     type: string
                 type: object
                 x-kubernetes-validations:
-                - message: pgbackrest spec is required when method is pgbackrest
-                  rule: self.method != 'pgbackrest' || has(self.pgbackrest)
+                - message: pgbackrest spec is required
+                  rule: has(self.pgbackrest)
               cluster:
                 description: ClusterSpec defines the CNPG cluster configuration for
                   the branch
@@ -555,15 +548,6 @@ spec:
                     x-kubernetes-map-type: atomic
                     x-kubernetes-validations:
                     - message: restore.pgbackrestCipherPassphraseSecretRef is immutable
-                      rule: self == oldSelf
-                  serverName:
-                    description: |-
-                      ServerName overrides the barman serverName parameter in the external
-                      cluster plugin configuration. Only applicable when Type is ObjectStore.
-                      When empty, defaults to the restore name.
-                    type: string
-                    x-kubernetes-validations:
-                    - message: restore.serverName is immutable
                       rule: self == oldSelf
                   timestamp:
                     description: |-
