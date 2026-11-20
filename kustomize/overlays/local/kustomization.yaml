@@ -3,7 +3,6 @@ kind: Kustomization
 
 components:
   - ../../components/xata-cnpg-1.28.0
-  - ../../components/barman-cloud-0.10.0
 
 resources:
   - ../../base/xata
@@ -15,7 +14,7 @@ resources:
   - projects
   # install Envoy Gateway:
   - https://github.com/envoyproxy/gateway/releases/download/v1.2.4/install.yaml
-  # installs cert manager to communicate with barman
+  # installs cert manager for the scale-to-zero plugin certificates
   - https://github.com/cert-manager/cert-manager/releases/download/v1.18.2/cert-manager.yaml
 
   - storage-class.yaml

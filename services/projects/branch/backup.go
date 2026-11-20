@@ -58,8 +58,8 @@ func BackupRetentionDays(backupConfig *BackupConfiguration) int {
 
 // ClustersBackupConfig builds the clusters backup configuration from the neutral
 // backup configuration and the region's backups-enabled flag. pgbackrest is the
-// only backup method; the barman-cloud plugin is no longer deployed. It is
-// exported so the api adapters can delegate to it instead of keeping a copy.
+// only backup method. It is exported so the api adapters can delegate to it
+// instead of keeping a copy.
 func ClustersBackupConfig(backupConfig *BackupConfiguration, backupsEnabled bool) *clustersv1.BackupConfiguration {
 	// if backups are disabled, return a disabled configuration
 	if !backupsEnabled {

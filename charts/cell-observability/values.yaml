@@ -221,7 +221,7 @@ vector:
         #   {"level":"info","logger":"pgaudit","msg":"record","record":{
         #     "error_severity":"LOG","backend_type":"client backend",
         #     "message":"","audit":{"audit_type":"SESSION",...}}}
-        # CNPG instance-manager / barman lines as
+        # CNPG instance-manager lines as
         #   {"level":"info","logger":"instance-manager","msg":"..."}
         # The query side (observability/logs.go) filters on logger and reads
         # severity_text + backend_type. For pgaudit we keep the full envelope

@@ -18,8 +18,6 @@ data:
   {{- with .Values.config.branchOperator.pgbackrestGCSProjectNumber }}
   XATA_PGBACKREST_GCS_PROJECT_NUMBER: {{ . | quote }}
   {{- end }}
-  XATA_BARMAN_REGION_SECRET_NAME: {{ .Values.config.branchOperator.barmanRegionSecret.name | quote }}
-  XATA_BARMAN_REGION_SECRET_KEY: {{ .Values.config.branchOperator.barmanRegionSecret.key | quote }}
   XATA_XATASTOR_ENABLED: {{ .Values.config.branchOperator.xatastor.enabled | quote }}
   XATA_BRANCH_MAX_CONCURRENT: {{ .Values.config.branchOperator.branchMaxConcurrent | quote }}
   XATA_WAKEUP_MAX_CONCURRENT: {{ .Values.config.branchOperator.wakeupMaxConcurrent | quote }}

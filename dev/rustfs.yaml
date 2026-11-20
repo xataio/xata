@@ -1,5 +1,5 @@
 # RustFS, an S3-compatible object store, standing in for S3 in local
-# development: pgBackRest and barman back branches up to the `backups` bucket
+# development: pgBackRest backs branches up to the `backups` bucket
 # and the billing collector writes events to `billing-events-local`. Loaded by
 # both Tiltfiles. Data lives on an emptyDir and is lost with the pod.
 apiVersion: v1

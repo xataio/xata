@@ -29,12 +29,6 @@ rules:
       - get
       - update
   - apiGroups:
-      - barmancloud.cnpg.io
-    resources:
-      - objectstores
-    verbs:
-      - get
-  - apiGroups:
       - postgresql.cnpg.io
     resources:
       - clusters

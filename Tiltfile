@@ -182,7 +182,6 @@ def create_resources():
     # CNPG
     k8s_resource(workload='cnpg-controller-manager', labels=['infra', 'cnpg'])
     k8s_resource(workload='scale-to-zero', labels=['infra', 'cnpg'])
-    k8s_resource(workload='barman-cloud', labels=['infra', 'backups', 'cnpg'])
 
     # E2E Tests
     local_resource(
@@ -213,7 +212,6 @@ groups_by_label = {
     'cnpg': [
         'cnpg-controller-manager',
         'scale-to-zero',
-        'barman-cloud'
     ],
     'infra': [
         'eg-gateway-helm-certgen',

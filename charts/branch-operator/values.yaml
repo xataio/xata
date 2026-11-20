@@ -21,16 +21,6 @@ config:
     # Number of the GCP project that owns pgbackrestWorkloadIdentityPool.
     # Required for managed folder IAM policies.
     pgbackrestGCSProjectNumber: ""
-    barmanRegionSecret:
-      # Without this barman will create a role and bind it to our CNPG pods with
-      # '*' permissions to all secrets in the namespace. This is a problem if
-      # you get priv esc from postgres. Setting the region secret will scope the
-      # role to just that secret and close the hole. With inheritFromIAMRole set
-      # to true this has no actual implication since the AWS credential chain is
-      # followed as normal and eventually fallback to IMDSv2 for credentials.
-      name: barman-dummy-secret
-      key: dummy
-      value: dummy
     xatastor:
       enabled: true
     wakeupPasswordSyncTimeout: 5m
