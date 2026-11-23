@@ -60,7 +60,7 @@ require (
 	github.com/testcontainers/testcontainers-go v0.43.0
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.43.0
 	github.com/xataio/pgroll v0.16.2
-	github.com/xataio/xata-cnpg v1.28.1-0.20261014133144-4550f9b3ac3e
+	github.com/xataio/xata-cnpg v1.28.1-0.20261118163730-812f1931f028
 	github.com/ziflex/lecho/v3 v3.11.0
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.71.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.71.0

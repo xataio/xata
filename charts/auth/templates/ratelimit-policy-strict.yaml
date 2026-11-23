@@ -1,4 +1,4 @@
-# Stricter rate limits for auth endpoints (login, user operations)
+# Stricter rate limits for auth endpoints.
 apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: BackendTrafficPolicy
 metadata:
@@ -17,6 +17,7 @@ spec:
         - clientSelectors:
             - headers:
                 - name: ":path"
+                  type: RegularExpression
                   value: "^/user.*"
           limit:
             requests: 500
@@ -25,7 +26,26 @@ spec:
         - clientSelectors:
             - headers:
                 - name: ":path"
+                  type: RegularExpression
                   value: "^/api-keys.*"
           limit:
             requests: 500
+            unit: Hour
+        # Very strict limit for organization invitations: 100 requests per hour
+        - clientSelectors:
+            - headers:
+                - name: ":path"
+                  type: RegularExpression
+                  value: "^/organizations/[^/]+/invitations.*"
+          limit:
+            requests: 100
+            unit: Hour
+        # Strict limit for organization members: 200 requests per hour
+        - clientSelectors:
+            - headers:
+                - name: ":path"
+                  type: RegularExpression
+                  value: "^/organizations/[^/]+/members.*"
+          limit:
+            requests: 200
             unit: Hour
