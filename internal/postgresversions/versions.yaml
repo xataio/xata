@@ -13,7 +13,7 @@
 #
 # The update workflow must preserve both fields.
 
-last_updated: "2026-11-13T03:25:46Z"
+last_updated: "2026-11-22T16:51:05Z"
 updated_by: workflow
 sources:
   - source: ghcr.io/xataio/postgres-images/cnpg-postgres-plus
@@ -27,7 +27,7 @@ sources:
         show_only_latest: true
         hidden: true
         pinned_tags:
-          "14.25": "14.25-20261113T032316Z"
+          "14.25": "14.25-20261122T164807Z"
       "15":
         # PostgreSQL 15.x versions
         versions: ["15.15", "15.17", "15.18", "15.19", "15.20"]
@@ -36,7 +36,7 @@ sources:
         show_only_latest: true
         hidden: true
         pinned_tags:
-          "15.20": "15.20-20261113T032316Z"
+          "15.20": "15.20-20261122T164807Z"
       "16":
         # PostgreSQL 16.x versions
         versions: ["16.11", "16.13", "16.14", "16.15", "16.16"]
@@ -44,7 +44,7 @@ sources:
         supported: true
         show_only_latest: true
         pinned_tags:
-          "16.16": "16.16-20261113T032316Z"
+          "16.16": "16.16-20261122T164807Z"
       "17":
         # PostgreSQL 17.x versions - current major version
         versions: ["17.5", "17.6", "17.7", "17.9", "17.10", "17.11", "17.12"]
@@ -52,7 +52,7 @@ sources:
         supported: true
         show_only_latest: true
         pinned_tags:
-          "17.12": "17.12-20261113T032316Z"
+          "17.12": "17.12-20261122T164807Z"
       "18":
         # PostgreSQL 18.x versions
         versions: ["18.0", "18.1", "18.3", "18.4", "18.6", "18.7"]
@@ -60,7 +60,15 @@ sources:
         supported: true
         show_only_latest: true
         pinned_tags:
-          "18.7": "18.7-20261113T032316Z"
+          "18.7": "18.7-20261122T164807Z"
+      "19":
+        versions: ["19.0"]
+        latest: "19.0"
+        supported: true
+        hidden: true
+        show_only_latest: true
+        pinned_tags:
+          "19.0": "19.0-20261122T164807Z"
   - source: ghcr.io/xataio/postgres-images/experimental
     package_url: https://github.com/xataio/postgres-images/pkgs/container/postgres-images%2Fexperimental
     major_versions:
@@ -69,27 +77,27 @@ sources:
         latest: "17.12"
         supported: true
         pinned_tags:
-          "17.12": "17.12-20261113T032312Z"
+          "17.12": "17.12-20261122T164803Z"
       "18":
         versions: ["18.1", "18.3", "18.4", "18.6", "18.7"]
         latest: "18.7"
         supported: true
         pinned_tags:
-          "18.7": "18.7-20261113T032312Z"
+          "18.7": "18.7-20261122T164803Z"
       "16":
         versions: ["16.11", "16.13", "16.14", "16.15", "16.16"]
         latest: "16.16"
         supported: true
         show_only_latest: true
         pinned_tags:
-          "16.16": "16.16-20261113T032312Z"
+          "16.16": "16.16-20261122T164803Z"
       "19":
-        versions: [19rc2-trixie]
-        latest: "19rc2-trixie"
+        versions: ["19.0"]
+        latest: "19.0"
         supported: true
         hidden: true
         pinned_tags:
-          19rc2-trixie: "19rc2-trixie-20261113T032312Z"
+          "19.0": "19.0-20261122T164803Z"
   - source: ghcr.io/xataio/postgres-images/xata-analytics
     package_url: https://github.com/xataio/postgres-images/pkgs/container/postgres-images%2Fxata-analytics
     major_versions:
