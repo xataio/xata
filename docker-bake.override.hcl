@@ -20,6 +20,7 @@ group "default" {
     "clusters",
     "gateway",
     "branch-operator",
+    "branching-replica-operator",
     "scale-to-zero-sidecar",
     "keycloak",
   ]

@@ -86,6 +86,16 @@ target "branch-operator" {
   cache-to   = ["type=registry,ref=${cache_ref("branch-operator")},mode=max"]
 }
 
+target "branching-replica-operator" {
+  inherits = ["_service"]
+  args = {
+    SERVICE_NAME = "branching-replica-operator"
+  }
+  tags       = image_tags("branching-replica-operator")
+  cache-from = ["type=registry,ref=${cache_ref("branching-replica-operator")}"]
+  cache-to   = ["type=registry,ref=${cache_ref("branching-replica-operator")},mode=max"]
+}
+
 target "scale-to-zero-sidecar" {
   inherits   = ["_service"]
   dockerfile = "services/scale-to-zero-sidecar/Dockerfile"

@@ -1,0 +1,24 @@
+image:
+  repository: ghcr.io/xataio/xata/branching-replica-operator
+  digest: ""
+  tag: latest
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+config:
+  clustersNamespace: xata-clusters
+
+resources:
+  limits:
+    cpu: 200m
+    memory: 128Mi
+  requests:
+    cpu: 200m
+    memory: 128Mi
+
+tolerations:
+  - key: "kubernetes.io/arch"
+    operator: "Equal"
+    value: "arm64"
+    effect: "NoSchedule"

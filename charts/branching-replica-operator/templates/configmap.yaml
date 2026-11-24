@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: branching-replica-operator-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: branching-replica-operator
+data:
+  XATA_CLUSTERS_NAMESPACE: {{ .Values.config.clustersNamespace | quote }}

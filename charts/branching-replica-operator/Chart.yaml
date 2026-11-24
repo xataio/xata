@@ -1,0 +1,6 @@
+apiVersion: v2
+name: branching-replica-operator
+description: BranchingReplica operator for running archive-fed PostgreSQL standbys in the dataplane
+type: application
+version: 0.0.0
+appVersion: "latest"

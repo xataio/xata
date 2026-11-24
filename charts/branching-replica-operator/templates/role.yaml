@@ -1,0 +1,23 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: branching-replica-operator
+  namespace: xata-clusters
+rules:
+- apiGroups:
+  - xata.io
+  resources:
+  - branchingreplicas
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - xata.io
+  resources:
+  - branchingreplicas/status
+  verbs:
+  - get
+  - patch
+  - update
