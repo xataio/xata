@@ -26,7 +26,7 @@ spec:
         description: |-
           BranchingReplica is a permanent, never-promoted, never-connectable physical copy
           of an external PostgreSQL primary, fed only from the WAL-G archive the
-          primary writes to object storage.
+          primary writes to object storage
         properties:
           apiVersion:
             description: |-
@@ -46,10 +46,299 @@ spec:
           metadata:
             type: object
           spec:
-            description: BranchingReplicaSpec defines the desired state of a BranchingReplica.
+            description: BranchingReplicaSpec defines the desired state of a BranchingReplica
+            properties:
+              postgres:
+                description: Postgres configures the PostgreSQL container of the replica
+                properties:
+                  image:
+                    description: |-
+                      Image is the PostgreSQL container image to use. Its major version must
+                      match the major version of the source.
+                    type: string
+                  parameters:
+                    additionalProperties:
+                      type: string
+                    description: |-
+                      Parameters are PostgreSQL configuration parameters. PostgreSQL aborts
+                      recovery if max_connections, max_worker_processes, max_wal_senders,
+                      max_prepared_transactions or max_locks_per_transaction is lower than on
+                      the source, so those must be set to at least the source's values.
+                    type: object
+                  resources:
+                    description: Resources are the resource requirements of the PostgreSQL
+                      container
+                    properties:
+                      claims:
+                        description: |-
+                          Claims lists the names of resources, defined in spec.resourceClaims,
+                          that are used by this container.
+
+                          This field depends on the
+                          DynamicResourceAllocation feature gate.
+
+                          This field is immutable. It can only be set for containers.
+                        items:
+                          description: ResourceClaim references one entry in PodSpec.ResourceClaims.
+                          properties:
+                            name:
+                              description: |-
+                                Name must match the name of one entry in pod.spec.resourceClaims of
+                                the Pod where this field is used. It makes that resource available
+                                inside a container.
+                              type: string
+                            request:
+                              description: |-
+                                Request is the name chosen for a request in the referenced claim.
+                                If empty, everything from the claim is made available, otherwise
+                                only the result of this request.
+                              type: string
+                          required:
+                          - name
+                          type: object
+                        type: array
+                        x-kubernetes-list-map-keys:
+                        - name
+                        x-kubernetes-list-type: map
+                      limits:
+                        additionalProperties:
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        description: |-
+                          Limits describes the maximum amount of compute resources allowed.
+                          More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                        type: object
+                      requests:
+                        additionalProperties:
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        description: |-
+                          Requests describes the minimum amount of compute resources required.
+                          If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
+                          otherwise to an implementation-defined value. Requests cannot exceed Limits.
+                          More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                        type: object
+                    type: object
+                required:
+                - image
+                type: object
+              source:
+                description: Source is the WAL-G archive the replica bootstraps from
+                  and follows
+                properties:
+                  s3:
+                    description: |-
+                      S3 is the location of the archive in S3, or in an S3-compatible store,
+                      and the credentials to read it
+                    properties:
+                      accessKeyIdRef:
+                        description: |-
+                          AccessKeyIDRef references the access key ID of read-only credentials
+                          for the archive
+                        properties:
+                          key:
+                            description: The key of the secret to select from.  Must
+                              be a valid secret key.
+                            type: string
+                          name:
+                            default: ""
+                            description: |-
+                              Name of the referent.
+                              This field is effectively required, but due to backwards compatibility is
+                              allowed to be empty. Instances of this type with an empty value here are
+                              almost certainly wrong.
+                              More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                            type: string
+                          optional:
+                            description: Specify whether the Secret or its key must
+                              be defined
+                            type: boolean
+                        required:
+                        - key
+                        type: object
+                        x-kubernetes-map-type: atomic
+                      accessKeySecretRef:
+                        description: |-
+                          AccessKeySecretRef references the secret access key of read-only
+                          credentials for the archive
+                        properties:
+                          key:
+                            description: The key of the secret to select from.  Must
+                              be a valid secret key.
+                            type: string
+                          name:
+                            default: ""
+                            description: |-
+                              Name of the referent.
+                              This field is effectively required, but due to backwards compatibility is
+                              allowed to be empty. Instances of this type with an empty value here are
+                              almost certainly wrong.
+                              More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                            type: string
+                          optional:
+                            description: Specify whether the Secret or its key must
+                              be defined
+                            type: boolean
+                        required:
+                        - key
+                        type: object
+                        x-kubernetes-map-type: atomic
+                      endpointUrl:
+                        description: |-
+                          EndpointURL is the endpoint of an S3-compatible store. If it is not
+                          set, AWS S3 is used.
+                        type: string
+                      forcePathStyle:
+                        description: |-
+                          ForcePathStyle enables path-style addressing, for S3-compatible stores
+                          that do not support bucket subdomains
+                        type: boolean
+                      prefix:
+                        description: |-
+                          Prefix is the exact prefix that the source's WAL-G writes to, for
+                          example s3://bucket/path/to/folder. WAL-G reads it verbatim, with no
+                          version suffix appended.
+                        type: string
+                      region:
+                        description: Region is the region of the bucket
+                        type: string
+                      sessionTokenRef:
+                        description: |-
+                          SessionTokenRef references the session token of temporary credentials.
+                          Set it when the access key belongs to a session. The token is read
+                          when a pod starts, so pods must be restarted after the Secret changes.
+                        properties:
+                          key:
+                            description: The key of the secret to select from.  Must
+                              be a valid secret key.
+                            type: string
+                          name:
+                            default: ""
+                            description: |-
+                              Name of the referent.
+                              This field is effectively required, but due to backwards compatibility is
+                              allowed to be empty. Instances of this type with an empty value here are
+                              almost certainly wrong.
+                              More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                            type: string
+                          optional:
+                            description: Specify whether the Secret or its key must
+                              be defined
+                            type: boolean
+                        required:
+                        - key
+                        type: object
+                        x-kubernetes-map-type: atomic
+                    required:
+                    - accessKeyIdRef
+                    - accessKeySecretRef
+                    - prefix
+                    type: object
+                required:
+                - s3
+                type: object
+              storage:
+                description: Storage configures the volume that holds the replica's
+                  data directory
+                properties:
+                  size:
+                    description: Size is the size of the volume, for example 100Gi
+                    type: string
+                  storageClass:
+                    description: |-
+                      StorageClass is the storage class of the volume. If it is not set, the
+                      default storage class is used.
+                    type: string
+                required:
+                - size
+                type: object
+              walg:
+                description: |-
+                  WALG configures the WAL-G sidecar that fetches the base backup and the
+                  WAL from the archive. The archive itself is described by Source.
+                properties:
+                  downloadConcurrency:
+                    description: |-
+                      DownloadConcurrency is the number of parallel WAL-G download streams.
+                      Sidecar memory grows with it. If it is not set, WAL-G chooses at
+                      runtime.
+                    minimum: 1
+                    type: integer
+                  resources:
+                    description: |-
+                      Resources are the resource requirements of the sidecar. Changing them
+                      does not roll existing pods.
+                    properties:
+                      claims:
+                        description: |-
+                          Claims lists the names of resources, defined in spec.resourceClaims,
+                          that are used by this container.
+
+                          This field depends on the
+                          DynamicResourceAllocation feature gate.
+
+                          This field is immutable. It can only be set for containers.
+                        items:
+                          description: ResourceClaim references one entry in PodSpec.ResourceClaims.
+                          properties:
+                            name:
+                              description: |-
+                                Name must match the name of one entry in pod.spec.resourceClaims of
+                                the Pod where this field is used. It makes that resource available
+                                inside a container.
+                              type: string
+                            request:
+                              description: |-
+                                Request is the name chosen for a request in the referenced claim.
+                                If empty, everything from the claim is made available, otherwise
+                                only the result of this request.
+                              type: string
+                          required:
+                          - name
+                          type: object
+                        type: array
+                        x-kubernetes-list-map-keys:
+                        - name
+                        x-kubernetes-list-type: map
+                      limits:
+                        additionalProperties:
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        description: |-
+                          Limits describes the maximum amount of compute resources allowed.
+                          More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                        type: object
+                      requests:
+                        additionalProperties:
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        description: |-
+                          Requests describes the minimum amount of compute resources required.
+                          If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
+                          otherwise to an implementation-defined value. Requests cannot exceed Limits.
+                          More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                        type: object
+                    type: object
+                type: object
+            required:
+            - postgres
+            - source
+            - storage
             type: object
           status:
-            description: BranchingReplicaStatus defines the observed state of a BranchingReplica.
+            description: BranchingReplicaStatus defines the observed state of a BranchingReplica
             type: object
         type: object
     served: true

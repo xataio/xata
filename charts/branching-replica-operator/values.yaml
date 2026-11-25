@@ -8,6 +8,8 @@ imagePullSecrets: []
 
 config:
   clustersNamespace: xata-clusters
+  imageSecrets: ghcr-secret
+  clustersTolerations: "xata.io/workload=dataplane:NoSchedule,kubernetes.io/arch=arm64:NoSchedule"
 
 resources:
   limits:

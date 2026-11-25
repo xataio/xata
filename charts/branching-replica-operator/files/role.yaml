@@ -6,6 +6,26 @@ metadata:
   namespace: xata-clusters
 rules:
 - apiGroups:
+  - cnpg-extensions.yandex.cloud
+  resources:
+  - backupconfigs
+  verbs:
+  - create
+  - get
+  - list
+  - update
+  - watch
+- apiGroups:
+  - postgresql.cnpg.io
+  resources:
+  - clusters
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - watch
+- apiGroups:
   - xata.io
   resources:
   - branchingreplicas

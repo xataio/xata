@@ -4,6 +4,8 @@ import (
 	"context"
 
 	"github.com/go-logr/zerologr"
+	walgv1beta1 "github.com/wal-g/cnpg-plugin-wal-g/api/v1beta1"
+	apiv1 "github.com/xataio/xata-cnpg/api/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -47,6 +49,12 @@ func (s *BranchingReplicaOperatorService) Init(ctx context.Context) error {
 	if err := v1alpha1.AddToScheme(scheme); err != nil {
 		return err
 	}
+	if err := apiv1.AddToScheme(scheme); err != nil {
+		return err
+	}
+	if err := walgv1beta1.AddToScheme(scheme); err != nil {
+		return err
+	}
 
 	mgr, err := ctrl.NewManager(config, ctrl.Options{
 		Scheme: scheme,
@@ -61,7 +69,9 @@ func (s *BranchingReplicaOperatorService) Init(ctx context.Context) error {
 	}
 
 	r := &reconciler.BranchingReplicaReconciler{
-		Client: mgr.GetClient(),
+		Client:           mgr.GetClient(),
+		Tolerations:      s.config.Tolerations.Value,
+		ImagePullSecrets: s.config.ImagePullSecrets,
 	}
 	if err := r.SetupWithManager(mgr); err != nil {
 		return err

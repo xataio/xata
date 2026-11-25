@@ -1,0 +1,53 @@
+apiVersion: xata.io/v1alpha1
+kind: BranchingReplica
+metadata:
+  name: example
+  namespace: xata-clusters
+spec:
+  source:
+    # Where the archive is in S3, and the credentials to read it.
+    s3:
+      # The exact prefix that the source's WAL-G writes to: the one that
+      # contains basebackups_005/ and wal_005/.
+      prefix: s3://ptwwk223zwq20r1a1hv6krpwdq
+      region: us-east-1
+      # Read-only credentials for the archive, in a Secret in the same
+      # namespace as the BranchingReplica.
+      accessKeyIdRef:
+        name: example-archive-credentials
+        key: AWS_ACCESS_KEY_ID
+      accessKeySecretRef:
+        name: example-archive-credentials
+        key: AWS_SECRET_ACCESS_KEY
+      # The session token, when the credentials are temporary. Leave it
+      # out for long-lived access keys.
+      sessionTokenRef:
+        name: example-archive-credentials
+        key: AWS_SESSION_TOKEN
+  postgres:
+    image: ghcr.io/xataio/postgres-images/cnpg-postgres-plus:18.7
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: "1"
+        memory: 512Mi
+    parameters:
+      max_connections: "500"
+      max_worker_processes: "32"
+      max_wal_senders: "10"
+      max_prepared_transactions: "0"
+      max_locks_per_transaction: "64"
+  walg:
+    downloadConcurrency: 4
+    resources:
+      requests:
+        cpu: 50m
+        memory: 512Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+  storage:
+    size: 10Gi
+    storageClass: xatastor

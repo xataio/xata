@@ -7,3 +7,5 @@ metadata:
     app: branching-replica-operator
 data:
   XATA_CLUSTERS_NAMESPACE: {{ .Values.config.clustersNamespace | quote }}
+  XATA_IMAGE_SECRETS: {{ .Values.config.imageSecrets | quote }}
+  XATA_CLUSTERS_TOLERATIONS: {{ .Values.config.clustersTolerations | quote }}
