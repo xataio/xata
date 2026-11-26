@@ -114,17 +114,6 @@ func TestCreateBranch(t *testing.T) {
 				})).Return(&clustersv1.CreatePostgresClusterResponse{}, nil).Once()
 			},
 		},
-		"UsePool is always set": {
-			payload: basePayload,
-			branch:  mainBranch,
-			setupMocks: func(mockStore *storemocks.ProjectsStore, mockClusters *protomocks.ClustersServiceClient) {
-				mockStore.EXPECT().GetProject(mock.Anything, orgID, projectID).Return(project, nil).Once()
-				mockCreateBranch(mockStore, mainBranch, project)
-				mockClusters.EXPECT().CreatePostgresCluster(mock.Anything, mock.MatchedBy(func(req *clustersv1.CreatePostgresClusterRequest) bool {
-					return req.UsePool != nil && *req.UsePool
-				})).Return(&clustersv1.CreatePostgresClusterResponse{}, nil).Once()
-			},
-		},
 		"UseXatastor flag is forwarded for main branch": {
 			payload: func() *ClusterServicePayload {
 				p := basePayload()

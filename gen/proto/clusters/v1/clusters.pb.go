@@ -104,8 +104,6 @@ type CreatePostgresClusterRequest struct {
 	//	*CreatePostgresClusterRequest_ContinuousBackup
 	//	*CreatePostgresClusterRequest_BaseBackup
 	DataSource isCreatePostgresClusterRequest_DataSource `protobuf_oneof:"data_source"`
-	// whether to try to adopt a cluster from a matching pool
-	UsePool *bool `protobuf:"varint,10,opt,name=use_pool,json=usePool,proto3,oneof" json:"use_pool,omitempty"`
 	// whether to use the xatastor StorageClass for the root cluster (no-op if
 	// xatastor is not enabled in the cell)
 	UseXatastor *bool `protobuf:"varint,11,opt,name=use_xatastor,json=useXatastor,proto3,oneof" json:"use_xatastor,omitempty"`
@@ -219,13 +217,6 @@ func (x *CreatePostgresClusterRequest) GetBaseBackup() *BaseBackup {
 		}
 	}
 	return nil
-}
-
-func (x *CreatePostgresClusterRequest) GetUsePool() bool {
-	if x != nil && x.UsePool != nil {
-		return *x.UsePool
-	}
-	return false
 }
 
 func (x *CreatePostgresClusterRequest) GetUseXatastor() bool {
@@ -2770,7 +2761,7 @@ var File_clusters_v1_clusters_proto protoreflect.FileDescriptor
 
 const file_clusters_v1_clusters_proto_rawDesc = "" +
 	"\n" +
-	"\x1aclusters/v1/clusters.proto\x12\vclusters.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xb7\x05\n" +
+	"\x1aclusters/v1/clusters.proto\x12\vclusters.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\x9a\x05\n" +
 	"\x1cCreatePostgresClusterRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12G\n" +
 	"\rconfiguration\x18\x02 \x01(\v2!.clusters.v1.ClusterConfigurationR\rconfiguration\x12 \n" +
@@ -2782,16 +2773,14 @@ const file_clusters_v1_clusters_proto_rawDesc = "" +
 	"\x10cluster_snapshot\x18\a \x01(\v2\x1c.clusters.v1.ClusterSnapshotH\x00R\x0fclusterSnapshot\x12L\n" +
 	"\x11continuous_backup\x18\b \x01(\v2\x1d.clusters.v1.ContinuousBackupH\x00R\x10continuousBackup\x12:\n" +
 	"\vbase_backup\x18\t \x01(\v2\x17.clusters.v1.BaseBackupH\x00R\n" +
-	"baseBackup\x12\x1e\n" +
-	"\buse_pool\x18\n" +
-	" \x01(\bH\x02R\ausePool\x88\x01\x01\x12&\n" +
-	"\fuse_xatastor\x18\v \x01(\bH\x03R\vuseXatastor\x88\x01\x01\x12'\n" +
+	"baseBackup\x12&\n" +
+	"\fuse_xatastor\x18\v \x01(\bH\x02R\vuseXatastor\x88\x01\x01\x12'\n" +
 	"\x0fidempotency_key\x18\f \x01(\tR\x0eidempotencyKeyB\r\n" +
 	"\vdata_sourceB\f\n" +
 	"\n" +
-	"_parent_idB\v\n" +
-	"\t_use_poolB\x0f\n" +
-	"\r_use_xatastor\"t\n" +
+	"_parent_idB\x0f\n" +
+	"\r_use_xatastorJ\x04\b\n" +
+	"\x10\vR\buse_pool\"t\n" +
 	"\x1dCreatePostgresClusterResponse\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\tR\x06status\x12+\n" +

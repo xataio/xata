@@ -514,14 +514,11 @@ func TestCreatePostgresCluster(t *testing.T) {
 			expectedStatusCode: codes.InvalidArgument,
 		},
 		{
-			name: "use_pool with matching pool - adopts pool cluster and keeps the branch backup spec",
+			name: "matching pool - adopts pool cluster and keeps the branch backup spec",
 			extraObjects: []client.Object{
 				poolForTest("default-storage-class", testImage, "2", "3996Mi"),
 				poolClusterForTest(),
 				poolClusterAppSecretForTest("pool-password"),
-			},
-			requestFn: func(r *clustersv1.CreatePostgresClusterRequest) {
-				r.UsePool = new(true)
 			},
 			expectedBranchFn: func(b *v1alpha1.Branch) {
 				b.Spec.ClusterSpec.Name = new("pool-cluster-1")
@@ -529,16 +526,13 @@ func TestCreatePostgresCluster(t *testing.T) {
 			},
 		},
 		{
-			name: "use_pool with no matching pool - falls back to normal creation",
+			name: "no matching pool - falls back to normal creation",
 			extraObjects: []client.Object{
 				poolForTest("other-storage-class", testImage, "2", "3996Mi"),
 			},
-			requestFn: func(r *clustersv1.CreatePostgresClusterRequest) {
-				r.UsePool = new(true)
-			},
 		},
 		{
-			name: "use_pool with a pool disk larger than requested - falls back to normal creation",
+			name: "pool disk larger than requested - falls back to normal creation",
 			extraObjects: []client.Object{
 				func() client.Object {
 					pool := poolForTest("default-storage-class", testImage, "2", "3996Mi")
@@ -546,24 +540,6 @@ func TestCreatePostgresCluster(t *testing.T) {
 					return pool
 				}(),
 				poolClusterForTest(),
-			},
-			requestFn: func(r *clustersv1.CreatePostgresClusterRequest) {
-				r.UsePool = new(true)
-			},
-		},
-		{
-			name: "use_pool false with matching pool - field is ignored and the pool cluster is adopted",
-			extraObjects: []client.Object{
-				poolForTest("default-storage-class", testImage, "2", "3996Mi"),
-				poolClusterForTest(),
-				poolClusterAppSecretForTest("pool-password"),
-			},
-			requestFn: func(r *clustersv1.CreatePostgresClusterRequest) {
-				r.UsePool = new(false)
-			},
-			expectedBranchFn: func(b *v1alpha1.Branch) {
-				b.Spec.ClusterSpec.Name = new("pool-cluster-1")
-				b.Annotations = map[string]string{v1alpha1.WakeupPoolAnnotation: "test-pool-slot"}
 			},
 		},
 		{
@@ -601,7 +577,7 @@ func TestCreatePostgresCluster(t *testing.T) {
 			},
 		},
 		{
-			name:            "use_xatastor with use_pool - adopts matching xatastor pool cluster",
+			name:            "use_xatastor with matching xatastor pool - adopts pool cluster",
 			xatastorEnabled: true,
 			extraObjects: []client.Object{
 				poolForTest("xatastor", testImage, "2", "3996Mi"),
@@ -610,7 +586,6 @@ func TestCreatePostgresCluster(t *testing.T) {
 			},
 			requestFn: func(r *clustersv1.CreatePostgresClusterRequest) {
 				r.UseXatastor = new(true)
-				r.UsePool = new(true)
 			},
 			expectedBranchFn: func(b *v1alpha1.Branch) {
 				b.Spec.ClusterSpec.Storage.StorageClass = new("xatastor")
@@ -620,7 +595,7 @@ func TestCreatePostgresCluster(t *testing.T) {
 			},
 		},
 		{
-			name:            "use_xatastor with use_pool - no xatastor pool, falls back to normal xatastor creation",
+			name:            "use_xatastor with no xatastor pool - falls back to normal xatastor creation",
 			xatastorEnabled: true,
 			extraObjects: []client.Object{
 				poolForTest("default-storage-class", testImage, "2", "3996Mi"),
@@ -628,7 +603,6 @@ func TestCreatePostgresCluster(t *testing.T) {
 			},
 			requestFn: func(r *clustersv1.CreatePostgresClusterRequest) {
 				r.UseXatastor = new(true)
-				r.UsePool = new(true)
 			},
 			expectedBranchFn: func(b *v1alpha1.Branch) {
 				b.Spec.ClusterSpec.Storage.StorageClass = new("xatastor")
@@ -1038,7 +1012,7 @@ func TestCreatePostgresClusterAppSecret(t *testing.T) {
 		require.Len(t, string(secret.Data[corev1.BasicAuthPasswordKey]), 64)
 	})
 
-	t.Run("use_pool adoption - branch secret copies the pool cluster password", func(t *testing.T) {
+	t.Run("pool adoption -branch secret copies the pool cluster password", func(t *testing.T) {
 		svc, k8sClient := setupTestClustersService(t,
 			withExistingObjects(
 				poolForTest("default-storage-class", testImage, "2", "3996Mi"),
@@ -1046,7 +1020,6 @@ func TestCreatePostgresClusterAppSecret(t *testing.T) {
 				poolClusterAppSecretForTest("pool-password"),
 			))
 		req, _, _, _, _ := exampleRequestsAndBranches()
-		req.UsePool = new(true)
 
 		_, err := svc.CreatePostgresCluster(ctx, req)
 		require.NoError(t, err)
@@ -1087,14 +1060,13 @@ func TestCreatePostgresClusterAppSecret(t *testing.T) {
 		require.NotEmpty(t, secret.Data[corev1.BasicAuthPasswordKey])
 	})
 
-	t.Run("use_pool adoption - pool secret missing fails the request", func(t *testing.T) {
+	t.Run("pool adoption -pool secret missing fails the request", func(t *testing.T) {
 		svc, k8sClient := setupTestClustersService(t,
 			withExistingObjects(
 				poolForTest("default-storage-class", testImage, "2", "3996Mi"),
 				poolClusterForTest(),
 			))
 		req, _, _, _, _ := exampleRequestsAndBranches()
-		req.UsePool = new(true)
 
 		_, err := svc.CreatePostgresCluster(ctx, req)
 		require.Error(t, err)

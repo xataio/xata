@@ -64,8 +64,9 @@ message CreatePostgresClusterRequest {
     ContinuousBackup continuous_backup = 8;
     BaseBackup base_backup = 9;
   }
-  // whether to try to adopt a cluster from a matching pool
-  optional bool use_pool = 10;
+  // use_pool: root branches always try to adopt a cluster from a matching pool
+  reserved 10;
+  reserved "use_pool";
   // whether to use the xatastor StorageClass for the root cluster (no-op if
   // xatastor is not enabled in the cell)
   optional bool use_xatastor = 11;
