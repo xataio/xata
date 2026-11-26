@@ -253,6 +253,12 @@ func (b *BranchBuilder) WithPgBackRestRestoreCipher(source string) *BranchBuilde
 	return b
 }
 
+// WithInstances sets the number of instances in the ClusterSpec
+func (b *BranchBuilder) WithInstances(instances int32) *BranchBuilder {
+	b.branch.Spec.ClusterSpec.Instances = instances
+	return b
+}
+
 // WithBackupSchedule sets the BackupConfiguration.ScheduledBackup field
 func (b *BranchBuilder) WithBackupSchedule(schedule string) *BranchBuilder {
 	b.ensureBackupSpec()

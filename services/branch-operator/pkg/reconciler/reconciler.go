@@ -32,7 +32,7 @@ import (
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch,namespace=xata-clusters
 // +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch;create;update;patch,namespace=xata-clusters
 // +kubebuilder:rbac:groups="",resources=serviceaccounts/token,verbs=create,namespace=xata-clusters
-// +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch,namespace=xata-clusters
+// +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch;delete,namespace=xata-clusters
 // +kubebuilder:rbac:groups=postgresql.cnpg.io,resources=scheduledbackups,verbs=get;list;watch;create;update;patch;delete,namespace=xata-clusters
 // +kubebuilder:rbac:groups=postgresql.cnpg.io,resources=clusters,verbs=get;list;watch;create;update;patch;delete,namespace=xata-clusters
 // +kubebuilder:rbac:groups=postgresql.cnpg.io,resources=poolers,verbs=get;list;watch;create;update;patch;delete,namespace=xata-clusters

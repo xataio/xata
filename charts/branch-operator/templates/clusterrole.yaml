@@ -81,7 +81,6 @@ rules:
   resources:
   - secrets
   - serviceaccounts
-  - services
   verbs:
   - create
   - get
@@ -95,6 +94,18 @@ rules:
   - serviceaccounts/token
   verbs:
   - create
+- apiGroups:
+  - ""
+  resources:
+  - services
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
 - apiGroups:
   - networking.k8s.io
   resources:

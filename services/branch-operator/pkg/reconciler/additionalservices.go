@@ -4,6 +4,7 @@ import (
 	"context"
 
 	v1 "k8s.io/api/core/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"xata/services/branch-operator/api/v1alpha1"
@@ -29,11 +30,21 @@ func (r *BranchReconciler) reconcileAdditionalServiceR(
 }
 
 // reconcileAdditionalServiceRO ensures that the read-only additional service
-// exists for the given Branch.
+// exists for the given Branch only if the Branch has replicas
 func (r *BranchReconciler) reconcileAdditionalServiceRO(
 	ctx context.Context,
 	branch *v1alpha1.Branch,
 ) (controllerutil.OperationResult, error) {
+	// If the branch has no replicas, ensure that the read-only service does not
+	// exist
+	if branch.Spec.ClusterSpec.Instances == 1 {
+		return controllerutil.OperationResultNone, client.IgnoreNotFound(
+			r.Delete(ctx, &v1.Service{
+				Name:      "branch-" + branch.Name + "-ro",
+				Namespace: r.ClustersNamespace,
+			}))
+	}
+
 	return r.reconcileAdditionalService(ctx, branch, "branch-"+branch.Name+"-ro", "ro")
 }
 
