@@ -125,5 +125,5 @@ cleanup:
       cpu: 50m
       memory: 128Mi
 
-# XATA_FEATURE_FLAGS overrides that win over PostHog, e.g. useClusterPool:false.
+# XATA_FEATURE_FLAGS overrides that win over PostHog.
 featureFlags: ""

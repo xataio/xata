@@ -287,13 +287,14 @@ func (c *ClustersService) CreatePostgresCluster(ctx context.Context, req *cluste
 		}
 	}
 
-	// If use_pool is set, we look for a create pool matching the request. If one
-	// is found, a cluster from that pool is selected and used to instantiate the
-	// branch. Child branches do not use clusters from the create pool - their
-	// clusters are created via XVol cloning and then waking up a cluster using a
-	// WakeupRequest.
+	// Look for a create pool matching the request. If one is found, a cluster
+	// from that pool is selected and used to instantiate the branch. Child
+	// branches do not use clusters from the create pool - their clusters are
+	// created via XVol cloning and then waking up a cluster using a
+	// WakeupRequest. A request with a data source restores into its own
+	// cluster, so it does not use the pool either.
 	var poolCluster *apiv1.Cluster
-	if req.GetUsePool() && parent == nil {
+	if parent == nil && req.GetDataSource() == nil {
 		if err := c.waitForClusterCache(ctx); err != nil {
 			return nil, fmt.Errorf("wait for cluster cache: %w", err)
 		}

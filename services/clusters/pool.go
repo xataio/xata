@@ -9,6 +9,7 @@ import (
 	apiv1 "github.com/xataio/xata-cnpg/api/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -22,6 +23,11 @@ import (
 func findPoolCluster(ctx context.Context, kubeClient client.Client, clusterReader client.Reader, namespace, storageClass, image, cpuRequest, memory, storageSize string) (string, *apiv1.Cluster, error) {
 	var pools cpv1alpha1.ClusterPoolList
 	if err := kubeClient.List(ctx, &pools, client.InNamespace(namespace)); err != nil {
+		// If the ClusterPool CRD is not installed, treat it as if no matching pool
+		// exists
+		if meta.IsNoMatchError(err) {
+			return "", nil, nil
+		}
 		return "", nil, fmt.Errorf("list cluster pools: %w", err)
 	}
 

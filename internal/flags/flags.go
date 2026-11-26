@@ -32,10 +32,6 @@ var (
 		Name:           "legacyPgVersions",
 		DefaultEnabled: false,
 	}
-	UseClusterPool = openfeature.FeatureFlag{
-		Name:           "useClusterPool",
-		DefaultEnabled: false,
-	}
 	UseXatastor = openfeature.FeatureFlag{
 		Name:           "useXatastor",
 		DefaultEnabled: false,

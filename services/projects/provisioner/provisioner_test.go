@@ -114,13 +114,9 @@ func TestCreateBranch(t *testing.T) {
 				})).Return(&clustersv1.CreatePostgresClusterResponse{}, nil).Once()
 			},
 		},
-		"UsePool flag is forwarded": {
-			payload: func() *ClusterServicePayload {
-				p := basePayload()
-				p.Flags.UsePool = true
-				return p
-			},
-			branch: mainBranch,
+		"UsePool is always set": {
+			payload: basePayload,
+			branch:  mainBranch,
 			setupMocks: func(mockStore *storemocks.ProjectsStore, mockClusters *protomocks.ClustersServiceClient) {
 				mockStore.EXPECT().GetProject(mock.Anything, orgID, projectID).Return(project, nil).Once()
 				mockCreateBranch(mockStore, mainBranch, project)

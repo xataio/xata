@@ -712,7 +712,6 @@ func (s *handler) CreateBranch(c echo.Context, organizationID spec.OrganizationI
 		claims := api.GetUserClaims(c)
 		marketplace := claims.Organizations[organizationID].Marketplace
 		featureFlags := provisioner.FlagsConfig{
-			UsePool:     s.feat.BoolValue(ctx, flags.UseClusterPool),
 			UseXatastor: useXatastor,
 		}
 		orgLimits, err := provisioner.ResolveOrgLimits(ctx, s.store, claims.Organizations[organizationID].UsageTier, organizationID, projectID, featureFlags)

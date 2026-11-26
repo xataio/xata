@@ -14,6 +14,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -551,13 +552,34 @@ func TestCreatePostgresCluster(t *testing.T) {
 			},
 		},
 		{
-			name: "use_pool false - normal creation unchanged",
+			name: "use_pool false with matching pool - field is ignored and the pool cluster is adopted",
 			extraObjects: []client.Object{
 				poolForTest("default-storage-class", testImage, "2", "3996Mi"),
 				poolClusterForTest(),
+				poolClusterAppSecretForTest("pool-password"),
 			},
 			requestFn: func(r *clustersv1.CreatePostgresClusterRequest) {
 				r.UsePool = new(false)
+			},
+			expectedBranchFn: func(b *v1alpha1.Branch) {
+				b.Spec.ClusterSpec.Name = new("pool-cluster-1")
+				b.Annotations = map[string]string{v1alpha1.WakeupPoolAnnotation: "test-pool-slot"}
+			},
+		},
+		{
+			name: "ClusterPool CRD not installed - falls back to normal creation",
+			serviceOpts: []testServiceOption{
+				withInterceptorFuncs(interceptor.Funcs{
+					List: func(ctx context.Context, c client.WithWatch, list client.ObjectList, opts ...client.ListOption) error {
+						if _, ok := list.(*cpv1alpha1.ClusterPoolList); ok {
+							return &meta.NoKindMatchError{
+								GroupKind:        schema.GroupKind{Group: "xata.io", Kind: "ClusterPool"},
+								SearchedVersions: []string{"v1alpha1"},
+							}
+						}
+						return c.List(ctx, list, opts...)
+					},
+				}),
 			},
 		},
 		{

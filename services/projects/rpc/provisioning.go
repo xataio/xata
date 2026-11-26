@@ -55,7 +55,6 @@ func (p *ProjectsService) CreateBranch(ctx context.Context, req *projectsv1.Crea
 
 	branchFlags := provisioner.FlagsConfig{}
 	if p.feat != nil {
-		branchFlags.UsePool = p.feat.BoolValue(ctx, flags.UseClusterPool)
 		branchFlags.UseXatastor = p.feat.BoolValue(ctx, flags.UseXatastor)
 	}
 
@@ -129,7 +128,7 @@ func (p *ProjectsService) GetBranchConnectionString(ctx context.Context, req *pr
 // gRPC server has none, so it is built from the request. The org is used as both
 // the distinct id (the PostHog provider rejects an empty one, which would make
 // every flag error out and fall back to its default) and the targeting group, so
-// org-targeted flags — pool, xatastor, pgBackRest, the kill switch — evaluate as
+// org-targeted flags — xatastor, the kill switch — evaluate as
 // they do on the REST path.
 func withFlagContext(ctx context.Context, organizationID string) context.Context {
 	return ofsdk.WithTransactionContext(ctx, ofsdk.NewEvaluationContext(

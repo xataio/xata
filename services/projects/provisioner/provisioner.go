@@ -16,7 +16,6 @@ import (
 )
 
 type FlagsConfig struct {
-	UsePool     bool
 	UseXatastor bool
 }
 
@@ -174,6 +173,8 @@ func (p *BranchProvisioner) CreateBranch(ctx context.Context, projectID, organiz
 			ProjectId:           projectID,
 			Configuration:       &payload.Configuration,
 			BackupConfiguration: payload.BackupConfig,
+			// The clusters service only adopts a pool cluster for root branches
+			UsePool: new(true),
 		}
 		if branch.ParentID != nil {
 			request.DataSource = &clustersv1.CreatePostgresClusterRequest_ClusterSnapshot{
@@ -181,10 +182,6 @@ func (p *BranchProvisioner) CreateBranch(ctx context.Context, projectID, organiz
 					ClusterId: *branch.ParentID,
 				},
 			}
-		}
-
-		if payload.Flags.UsePool {
-			request.UsePool = new(true)
 		}
 
 		if branch.ParentID == nil {
