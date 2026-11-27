@@ -32,8 +32,8 @@ var ErrBranchHibernated = errors.New("branch is hibernated")
 // clusters service no longer knows it.
 var ErrBranchNotFound = errors.New("branch not found")
 
-// ErrNoReadReplica is returned when the read-only endpoint is dialed on a
-// branch configured with a single instance.
+// ErrNoReadReplica is returned when the read (r) or read-only (ro) endpoint
+// is dialed on a branch configured with a single instance.
 var ErrNoReadReplica = errors.New("branch has no read replica")
 
 // ErrReactivateTimeout is returned when a held connection gives up waiting
@@ -193,8 +193,12 @@ func (d *ClusterDialer) Dial(ctx context.Context, network string, branch *Branch
 	// The configured instance count is the desired state, so a branch that
 	// was just scaled up still holds while its replica comes up. A count of
 	// one means no replica is coming, and zero means the count is unknown.
-	if branch.Endpoint == EndpointRO && cluster.GetConfiguration().GetNumInstances() == 1 {
-		dialLogger.Warn().Msg("read-only endpoint dialed on a single-instance branch, not holding the connection")
+	// The r and ro Services only exist on a branch that has a replica.
+	needsReplica := branch.Endpoint == EndpointR || branch.Endpoint == EndpointRO
+	if needsReplica && cluster.GetConfiguration().GetNumInstances() == 1 {
+		dialLogger.Warn().
+			Str("endpoint", branch.Endpoint).
+			Msg("endpoint that needs a replica dialed on a single-instance branch, not holding the connection")
 		return nil, ErrNoReadReplica
 	}
 
