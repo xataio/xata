@@ -30,6 +30,7 @@ import (
 	"xata/internal/storageqos"
 	cpv1alpha1 "xata/proto/clusterpool-operator/api/v1alpha1"
 	"xata/services/branch-operator/api/v1alpha1"
+	"xata/services/branch-operator/pkg/shared"
 	"xata/services/clusters/internal/connectors/cnpg"
 	cnpgmocks "xata/services/clusters/internal/connectors/cnpg/mocks"
 )
@@ -38,7 +39,7 @@ var pitrTimestamp = time.Date(2024, 6, 15, 14, 30, 0, 0, time.UTC)
 
 const testImage = "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.5"
 
-var expectedPrivilegedExtensions = MandatoryPostgresParameters(testImage)["xatautils.privileged_extensions"]
+var expectedPrivilegedExtensions = MandatoryPostgresParameters(testImage, shared.LegacySQLIdentity)["xatautils.privileged_extensions"]
 
 func TestCreatePostgresCluster(t *testing.T) {
 	t.Parallel()

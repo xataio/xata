@@ -16,6 +16,19 @@ type SQLIdentity struct {
 	Database string
 	// PrivilegeGroup is a NOLOGIN, NOSUPERUSER role granted to Login.
 	PrivilegeGroup string
+	// UtilsLibrary is the security library in shared_preload_libraries. It is
+	// also the prefix of its settings.
+	UtilsLibrary string
+}
+
+// UtilsSettingPrefix returns the prefix of the security library settings.
+func (id SQLIdentity) UtilsSettingPrefix() string {
+	return id.UtilsLibrary + "."
+}
+
+// UtilsScriptsPath returns the directory of the extension custom scripts.
+func (id SQLIdentity) UtilsScriptsPath() string {
+	return "/etc/" + id.UtilsLibrary + "/extensions"
 }
 
 var (
@@ -24,6 +37,7 @@ var (
 		Login:          "xata",
 		Database:       "xata",
 		PrivilegeGroup: "xata_superuser",
+		UtilsLibrary:   "xatautils",
 	}
 
 	// WhiteLabelSQLIdentity is used by Branches with the WhiteLabel profile.
@@ -31,7 +45,11 @@ var (
 		Login:          "dbadmin",
 		Database:       "defaultdb",
 		PrivilegeGroup: "db_superuser",
+		UtilsLibrary:   "pgprivs",
 	}
+
+	// UtilsLibraries are the security libraries of all profiles.
+	UtilsLibraries = []string{LegacySQLIdentity.UtilsLibrary, WhiteLabelSQLIdentity.UtilsLibrary}
 )
 
 // SQLIdentityFor returns the SQL names for the given profile. The Branch CRD

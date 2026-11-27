@@ -42,8 +42,8 @@ func TestGeneratePostInitSQLWhiteLabel(t *testing.T) {
 func TestSQLIdentityFor(t *testing.T) {
 	require.Equal(t, shared.LegacySQLIdentity, shared.SQLIdentityFor(v1alpha1.SQLIdentityLegacy))
 	require.Equal(t, shared.WhiteLabelSQLIdentity, shared.SQLIdentityFor(v1alpha1.SQLIdentityWhiteLabel))
-	require.Equal(t, shared.SQLIdentity{Login: "xata", Database: "xata", PrivilegeGroup: "xata_superuser"}, shared.LegacySQLIdentity)
-	require.Equal(t, shared.SQLIdentity{Login: "dbadmin", Database: "defaultdb", PrivilegeGroup: "db_superuser"}, shared.WhiteLabelSQLIdentity)
+	require.Equal(t, shared.SQLIdentity{Login: "xata", Database: "xata", PrivilegeGroup: "xata_superuser", UtilsLibrary: "xatautils"}, shared.LegacySQLIdentity)
+	require.Equal(t, shared.SQLIdentity{Login: "dbadmin", Database: "defaultdb", PrivilegeGroup: "db_superuser", UtilsLibrary: "pgprivs"}, shared.WhiteLabelSQLIdentity)
 }
 
 func TestClusterSpecSQLIdentity(t *testing.T) {

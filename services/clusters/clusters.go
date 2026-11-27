@@ -279,9 +279,9 @@ func (c *ClustersService) CreatePostgresCluster(ctx context.Context, req *cluste
 		WithPgBackRestCipher(c.config.PgBackRestEncryptionEnabled).
 		WithPgBackRestRestoreCipher(restoreSource).
 		WithPgBackRestRestoreSource(restoreSource).
-		WithXataUtilsPreloadLibrary().
-		WithMandatoryPostgresParameters().
-		WithSQLIdentity(branchv1alpha1.SQLIdentityProfile(c.config.SQLIdentityProfile), cmp.Or(parent, restoreSource))
+		WithSQLIdentity(branchv1alpha1.SQLIdentityProfile(c.config.SQLIdentityProfile), cmp.Or(parent, restoreSource)).
+		WithUtilsPreloadLibrary().
+		WithMandatoryPostgresParameters()
 
 	// Fail fast if pgbackrest is requested but the cell isn't configured for it.
 	if branch := branchBuilder.Build(); branch.Spec.BackupSpec.IsPgBackRest() {
@@ -455,7 +455,7 @@ func (c *ClustersService) UpdatePostgresCluster(ctx context.Context, req *cluste
 		branch = NewBranchBuilder().
 			FromExistingBranch(existing).
 			WithUpdatesFrom(req, c.config.UseStorageQoSClasses).
-			WithXataUtilsPreloadLibrary().
+			WithUtilsPreloadLibrary().
 			WithMandatoryPostgresParameters().
 			Build()
 
@@ -479,17 +479,17 @@ func (c *ClustersService) UpdatePostgresCluster(ctx context.Context, req *cluste
 
 // RotatePostgresClusterCredentials updates the K8s secret for the given user
 // in place with a freshly generated password. CNPG picks up the change via
-// the cnpg.io/reload label (and, for the xata role, managed role
+// the cnpg.io/reload label (and, for the login role, managed role
 // reconciliation) and syncs the new password to PostgreSQL.
 func (c *ClustersService) RotatePostgresClusterCredentials(ctx context.Context, req *clustersv1.RotatePostgresClusterCredentialsRequest) (*clustersv1.RotatePostgresClusterCredentialsResponse, error) {
-	// Verify the branch exists
-	if _, err := c.getBranch(ctx, req.GetId()); err != nil {
+	branch, err := c.getBranch(ctx, req.GetId())
+	if err != nil {
 		return nil, k8sErrorToGRPCError(err)
 	}
 
 	var secretName string
 	switch req.GetUser() {
-	case "xata":
+	case shared.BranchSQLIdentity(branch).Login:
 		secretName = req.GetId() + "-app"
 	case "postgres":
 		secretName = req.GetId() + "-superuser"

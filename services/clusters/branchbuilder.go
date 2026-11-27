@@ -8,6 +8,7 @@ import (
 	clustersv1 "xata/gen/proto/clusters/v1"
 	"xata/internal/pgbackrest"
 	"xata/services/branch-operator/api/v1alpha1"
+	"xata/services/branch-operator/pkg/shared"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -21,7 +22,6 @@ const (
 	LabelBranchID                  = "xata.io/branchID"
 	LabelXatastorAntiAffinityGroup = "xatastor.xata.io/anti-affinity-group"
 	AnnotationIdempotencyKey       = "xata.io/idempotency-key"
-	XataUtilsPreloadName           = "xatautils"
 
 	DefaultPgBackRestRetentionDays = 7
 	DefaultPgBackRestCompressType  = "lz4"
@@ -436,45 +436,44 @@ func pgBackRestS3Spec(bucket, region, endpoint, credentialsSecretName string) *v
 	}
 }
 
-// WithXataUtilsPreloadLibrary ensures that the "xatautils" library is the
-// first entry in the SharedPreloadLibraries list.
-func (b *BranchBuilder) WithXataUtilsPreloadLibrary() *BranchBuilder {
+// WithUtilsPreloadLibrary makes the security library of the Branch's SQL
+// identity the first entry in the SharedPreloadLibraries list. For a
+// non-legacy identity it also removes the libraries of other profiles. Set
+// the SQL identity first.
+func (b *BranchBuilder) WithUtilsPreloadLibrary() *BranchBuilder {
 	if b.branch.Spec.ClusterSpec.Postgres == nil {
 		b.branch.Spec.ClusterSpec.Postgres = &v1alpha1.PostgresConfiguration{}
 	}
 
-	libs := b.branch.Spec.ClusterSpec.Postgres.SharedPreloadLibraries
-
-	// Remove all existing entries
-	libs = slices.DeleteFunc(libs, func(s string) bool {
-		return s == XataUtilsPreloadName
+	id := shared.BranchSQLIdentity(b.branch)
+	lib := id.UtilsLibrary
+	libs := slices.DeleteFunc(slices.Clone(b.branch.Spec.ClusterSpec.Postgres.SharedPreloadLibraries), func(s string) bool {
+		return s == lib || (id != shared.LegacySQLIdentity && slices.Contains(shared.UtilsLibraries, s))
 	})
-
-	// Add "xatautils" as the first entry
-	libs = append([]string{XataUtilsPreloadName}, libs...)
-	b.branch.Spec.ClusterSpec.Postgres.SharedPreloadLibraries = libs
+	b.branch.Spec.ClusterSpec.Postgres.SharedPreloadLibraries = append([]string{lib}, libs...)
 
 	return b
 }
 
 // WithMandatoryPostgresParameters applies mandatory PostgreSQL parameter
-// overrides to the Branch's Postgres configuration.
+// overrides for the Branch's SQL identity to the Branch's Postgres
+// configuration. Settings of any security library that the request set are
+// removed. Set the SQL identity and the preload libraries first.
 func (b *BranchBuilder) WithMandatoryPostgresParameters() *BranchBuilder {
 	if b.branch.Spec.ClusterSpec.Postgres == nil {
 		b.branch.Spec.ClusterSpec.Postgres = &v1alpha1.PostgresConfiguration{}
 	}
+	pg := b.branch.Spec.ClusterSpec.Postgres
 
-	// Convert existing parameters to a map for easy merging
 	postgresParams := make(map[string]string)
-	for _, p := range b.branch.Spec.ClusterSpec.Postgres.Parameters {
+	for _, p := range pg.Parameters {
 		postgresParams[p.Name] = p.Value
 	}
 
-	// Apply mandatatory postgres parameters using the branch's image
-	maps.Copy(postgresParams, MandatoryPostgresParameters(b.branch.Spec.ClusterSpec.Image))
+	applyPostgresParameterOverrides(postgresParams, b.branch.Spec.ClusterSpec.Image,
+		pg.SharedPreloadLibraries, shared.BranchSQLIdentity(b.branch))
 
-	// Convert back to slice and set on Branch spec
-	b.branch.Spec.ClusterSpec.Postgres.Parameters = postgresParametersFromMap(postgresParams)
+	pg.Parameters = postgresParametersFromMap(postgresParams)
 
 	return b
 }
