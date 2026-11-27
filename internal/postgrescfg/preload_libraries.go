@@ -76,7 +76,8 @@ func GetInternalPreloadLibraries() []string {
 }
 
 func FilterOutInternalPreloadLibraries(libraries []string) []string {
-	internalSet := make(map[string]struct{}, len(internalPreloadLibraries))
+	// pgprivs takes the place of xatautils on some branches.
+	internalSet := map[string]struct{}{"pgprivs": {}}
 	for _, lib := range internalPreloadLibraries {
 		internalSet[lib] = struct{}{}
 	}

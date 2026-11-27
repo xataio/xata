@@ -51,7 +51,16 @@ func (s *Service) ConnectionString(ctx context.Context, organizationID string, b
 	}
 	// The deprecated branch connectionString keeps sslmode for backwards
 	// compatibility.
-	return FormatConnectionString(creds.GetUsername(), creds.GetPassword(), hostname, port) + "?sslmode=require", nil
+	return FormatConnectionString(creds.GetUsername(), creds.GetPassword(), hostname, port, DatabaseName(creds)) + "?sslmode=require", nil
+}
+
+// DatabaseName returns the database of the branch that owns creds. A cell
+// that does not report one uses branchDatabaseName.
+func DatabaseName(creds *clustersv1.GetPostgresClusterCredentialsResponse) string {
+	if db := creds.GetDatabase(); db != "" {
+		return db
+	}
+	return branchDatabaseName
 }
 
 // resolveGatewayHostPort returns the region's gateway host:port, falling back to
@@ -95,11 +104,11 @@ func (s *Service) BranchEndpoint(region *store.Region, subdomain *string, hostLa
 
 // FormatConnectionString assembles the branch DSN from its parts. It carries no
 // sslmode parameter, clients choose their own TLS settings.
-func FormatConnectionString(username, password, hostname string, port int) string {
+func FormatConnectionString(username, password, hostname string, port int, database string) string {
 	hostPort := hostname
 	if port != defaultPostgresPort {
 		hostPort = fmt.Sprintf("%s:%d", hostname, port)
 	}
 	return fmt.Sprintf("postgresql://%s:%s@%s/%s",
-		username, password, hostPort, branchDatabaseName)
+		username, password, hostPort, database)
 }

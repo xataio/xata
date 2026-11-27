@@ -124,6 +124,9 @@ func (s *Service) Provision(ctx context.Context, in CreateInput, payload *provis
 		if invalidCfg, ok := errors.AsType[provisioner.ErrInvalidConfiguration](err); ok {
 			return nil, "", ErrInvalidParam{BranchName: in.Name, Param: "configuration", Message: invalidCfg.Message}
 		}
+		if unavailable, ok := errors.AsType[provisioner.ErrImageUnavailable](err); ok {
+			return nil, "", ErrInvalidParam{BranchName: in.Name, Param: "image", Message: unavailable.Message}
+		}
 		if unhealthy, ok := errors.AsType[provisioner.ErrParentBranchUnhealthy](err); ok {
 			return nil, "", ErrParentBranchUnhealthy{ParentID: unhealthy.ParentID}
 		}

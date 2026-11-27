@@ -304,6 +304,11 @@ func TestFilterOutInternalPreloadLibraries(t *testing.T) {
 			want:      []string{"pg_stat_statements", "auto_explain"},
 		},
 		{
+			name:      "filters out pgprivs",
+			libraries: []string{"pgprivs", "pg_stat_statements"},
+			want:      []string{"pg_stat_statements"},
+		},
+		{
 			name:      "handles empty slice",
 			libraries: []string{},
 			want:      []string(nil),

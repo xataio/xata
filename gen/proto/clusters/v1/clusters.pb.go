@@ -670,10 +670,13 @@ func (x *GetPostgresClusterCredentialsRequest) GetUsername() string {
 
 // GetPostgresClusterCredentialsResponse is the response object for GetPostgresClusterCredentials
 type GetPostgresClusterCredentialsResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Username      string                 `protobuf:"bytes,2,opt,name=username,proto3" json:"username,omitempty"`
-	Password      string                 `protobuf:"bytes,3,opt,name=password,proto3" json:"password,omitempty"`
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Id       string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Username string                 `protobuf:"bytes,2,opt,name=username,proto3" json:"username,omitempty"`
+	Password string                 `protobuf:"bytes,3,opt,name=password,proto3" json:"password,omitempty"`
+	// Application database of the branch. Empty from older cells, which use
+	// the legacy database name.
+	Database      string `protobuf:"bytes,4,opt,name=database,proto3" json:"database,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -725,6 +728,13 @@ func (x *GetPostgresClusterCredentialsResponse) GetUsername() string {
 func (x *GetPostgresClusterCredentialsResponse) GetPassword() string {
 	if x != nil {
 		return x.Password
+	}
+	return ""
+}
+
+func (x *GetPostgresClusterCredentialsResponse) GetDatabase() string {
+	if x != nil {
+		return x.Database
 	}
 	return ""
 }
@@ -2803,11 +2813,12 @@ const file_clusters_v1_clusters_proto_rawDesc = "" +
 	"\x1dUpdatePostgresClusterResponse\"R\n" +
 	"$GetPostgresClusterCredentialsRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1a\n" +
-	"\busername\x18\x02 \x01(\tR\busername\"o\n" +
+	"\busername\x18\x02 \x01(\tR\busername\"\x8b\x01\n" +
 	"%GetPostgresClusterCredentialsResponse\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1a\n" +
 	"\busername\x18\x02 \x01(\tR\busername\x12\x1a\n" +
-	"\bpassword\x18\x03 \x01(\tR\bpassword\"M\n" +
+	"\bpassword\x18\x03 \x01(\tR\bpassword\x12\x1a\n" +
+	"\bdatabase\x18\x04 \x01(\tR\bdatabase\"M\n" +
 	"'RotatePostgresClusterCredentialsRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04user\x18\x02 \x01(\tR\x04user\"*\n" +

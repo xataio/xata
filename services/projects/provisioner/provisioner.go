@@ -7,6 +7,7 @@ import (
 
 	clustersv1 "xata/gen/proto/clusters/v1"
 	"xata/internal/idgen"
+	"xata/services/clusters"
 	"xata/services/projects/cells"
 	"xata/services/projects/store"
 
@@ -203,6 +204,9 @@ func (p *BranchProvisioner) CreateBranch(ctx context.Context, projectID, organiz
 		}
 		if st.Code() == codes.InvalidArgument {
 			return nil, ErrInvalidConfiguration{Name: name, Message: st.Message()}
+		}
+		if clusters.IsImageUnavailableError(err) {
+			return nil, ErrImageUnavailable{Message: st.Message()}
 		}
 		if st.Code() == codes.FailedPrecondition && payload.ParentID != nil {
 			return nil, ErrParentBranchUnhealthy{ParentID: *payload.ParentID}

@@ -29,7 +29,8 @@ const (
 	DefaultBackupRetentionPeriod = 2 // days
 	BackupMethodPgBackRest       = "pgbackrest"
 
-	// branchDatabaseName is the database managed users connect to on every branch.
+	// branchDatabaseName is the database managed users connect to, unless the
+	// cell reports another one.
 	branchDatabaseName = "xata"
 	// defaultPostgresPort is omitted from connection strings, clients assume it.
 	defaultPostgresPort = 5432

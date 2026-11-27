@@ -4387,11 +4387,13 @@ func TestGetBranchCredentials(t *testing.T) {
 			wantError: false,
 		},
 		{
-			name:          "get credentials with invalid username fails",
-			projectID:     projectID,
-			branchID:      branchID,
-			reqUsername:   new("postgres"),
-			setupMocks:    func() {},
+			name:        "get credentials with invalid username fails",
+			projectID:   projectID,
+			branchID:    branchID,
+			reqUsername: new("postgres"),
+			setupMocks: func() {
+				mockStore.EXPECT().DescribeBranch(mock.Anything, apitest.TestOrganization, projectID, branchID).Return(nil, store.ErrBranchNotFound{ID: branchID}).Once()
+			},
 			wantError:     true,
 			expectedError: ErrorInvalidParam{BranchName: branchID, Param: "username", Message: "only the xata user credentials can be retrieved"},
 		},
@@ -4470,11 +4472,13 @@ func TestRotateBranchCredentials(t *testing.T) {
 			wantError: false,
 		},
 		{
-			name:          "rotate credentials with invalid username fails",
-			projectID:     "project_id",
-			branchID:      "branchID",
-			jsonBody:      map[string]string{"username": "postgres"},
-			setupMocks:    func() {},
+			name:      "rotate credentials with invalid username fails",
+			projectID: "project_id",
+			branchID:  "branchID",
+			jsonBody:  map[string]string{"username": "postgres"},
+			setupMocks: func() {
+				mockStore.EXPECT().DescribeBranch(mock.Anything, apitest.TestOrganization, "project_id", "branchID").Return(nil, store.ErrBranchNotFound{ID: "branchID"}).Once()
+			},
 			wantError:     true,
 			expectedError: ErrorInvalidParam{BranchName: "branchID", Param: "username", Message: "only the xata user credentials can be rotated"},
 		},
@@ -6389,6 +6393,9 @@ func TestGetBranchPostgresConfig(t *testing.T) {
 					{Name: "xata.small", VCPUsRequest: 500, VCPUsLimit: 2000, RAM: 2},
 				}
 				mockStore.EXPECT().ListInstanceTypes(mock.Anything, apitest.TestOrganization, "us-east-1").Return(instanceTypes, nil).Once()
+
+				// The catalog answers alone when the cell has no credentials.
+				mockClient.EXPECT().GetPostgresClusterCredentials(mock.Anything, &clustersv1.GetPostgresClusterCredentialsRequest{Id: "test-branch", Username: "app"}).Return(nil, errors.New("cell unavailable")).Once()
 			},
 			setupPostgresConfig: func(mockPostgresConfig *postgrescfgmocks.PostgresConfigProvider) {
 				configurableParams := map[string]postgrescfg.PostgresParameterSpec{

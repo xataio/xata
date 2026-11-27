@@ -145,6 +145,28 @@ func TestProvisioningError(t *testing.T) {
 		require.Equal(t, `unknown region "xx"`, br.GetFieldViolations()[0].GetDescription())
 	})
 
+	t.Run("an image the cell does not offer is a 400 on the image field", func(t *testing.T) {
+		err := provisioningError("provision branch", branch.ErrInvalidParam{BranchName: "main", Param: "image", Message: "Postgres 17 is not available in this cell"})
+
+		st, ok := status.FromError(err)
+		require.True(t, ok)
+		require.Equal(t, codes.InvalidArgument, st.Code())
+
+		httpStatus, ok := httpStatusDetail(t, st)
+		require.True(t, ok)
+		require.Equal(t, http.StatusBadRequest, httpStatus)
+
+		var br *errdetails.BadRequest
+		for _, d := range st.Details() {
+			if b, ok := d.(*errdetails.BadRequest); ok {
+				br = b
+			}
+		}
+		require.NotNil(t, br, "expected a BadRequest detail")
+		require.Equal(t, "image", br.GetFieldViolations()[0].GetField())
+		require.Equal(t, "Postgres 17 is not available in this cell", br.GetFieldViolations()[0].GetDescription())
+	})
+
 	t.Run("a coded error carries its status without a field violation", func(t *testing.T) {
 		err := provisioningError("create branch", store.ErrProjectBusy{ProjectID: "prj_1"})
 

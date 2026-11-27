@@ -84,6 +84,18 @@ func TestExtractVersionFromImageName(t *testing.T) {
 			expected:    "17.7",
 			description: "Extract version from xata-analytics full registry path",
 		},
+		{
+			name:        "digest",
+			imageName:   "localhost:5000/pg/cnpg-postgres-plus:18.7-b1@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+			expected:    "18.7",
+			description: "Ignore the digest",
+		},
+		{
+			name:        "digest without tag",
+			imageName:   "registry.example.com/cnpg-postgres-plus@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+			expected:    "",
+			description: "Do not read the digest as a tag",
+		},
 	}
 
 	for _, tc := range testCases {
@@ -187,6 +199,18 @@ func TestExtractMajorVersionFromImage(t *testing.T) {
 			imageName:   "ghcr.io/xataio/postgres-images/xata-analytics:17.7",
 			expected:    17,
 			description: "Extract major version from xata-analytics full registry path",
+		},
+		{
+			name:        "digest",
+			imageName:   "localhost:5000/pg/cnpg-postgres-plus:18.7-b1@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+			expected:    18,
+			description: "Ignore the digest",
+		},
+		{
+			name:        "digest without tag",
+			imageName:   "registry.example.com/cnpg-postgres-plus@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+			expected:    0,
+			description: "Do not read the digest as a tag",
 		},
 	}
 
@@ -292,6 +316,10 @@ func TestParseImageVersion(t *testing.T) {
 		"double digit minor": {
 			image: "postgres:14.10",
 			want:  &ImageVersion{Offering: "postgres", Major: 14, Minor: 10},
+		},
+		"digest": {
+			image: "localhost:5000/pg/cnpg-postgres-plus:18.7-b1@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+			want:  &ImageVersion{Offering: "postgres", Major: 18, Minor: 7},
 		},
 		"rc version": {
 			image:   "postgres:18rc1",

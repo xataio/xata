@@ -1,10 +1,16 @@
 package branch
 
 import (
+	"context"
 	"testing"
 
+	clustersv1 "xata/gen/proto/clusters/v1"
+	"xata/gen/protomocks"
+	"xata/services/projects/cells/cellsmock"
 	"xata/services/projects/store"
+	storemocks "xata/services/projects/store/mocks"
 
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
@@ -78,6 +84,44 @@ func TestBranchEndpoint(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, tt.wantHostname, gotHostname)
 			require.Equal(t, tt.wantPort, gotPort)
+		})
+	}
+}
+
+func TestConnectionStringDatabase(t *testing.T) {
+	tests := map[string]struct {
+		creds   *clustersv1.GetPostgresClusterCredentialsResponse
+		wantDSN string
+	}{
+		"older cell reports no database": {
+			creds:   &clustersv1.GetPostgresClusterCredentialsResponse{Username: "xata", Password: "pw"},
+			wantDSN: "postgresql://xata:pw@br-1-deprecated.us-east-1.example.com/xata?sslmode=require",
+		},
+		"xata database": {
+			creds:   &clustersv1.GetPostgresClusterCredentialsResponse{Username: "xata", Password: "pw", Database: "xata"},
+			wantDSN: "postgresql://xata:pw@br-1-deprecated.us-east-1.example.com/xata?sslmode=require",
+		},
+		"other login and database": {
+			creds:   &clustersv1.GetPostgresClusterCredentialsResponse{Username: "dbadmin", Password: "pw", Database: "defaultdb"},
+			wantDSN: "postgresql://dbadmin:pw@br-1-deprecated.us-east-1.example.com/defaultdb?sslmode=require",
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			st := storemocks.NewProjectsStore(t)
+			st.EXPECT().GetRegion(mock.Anything, "org-1", "us-east-1").
+				Return(&store.Region{GatewayHostPort: "us-east-1.example.com"}, nil).Once()
+			st.EXPECT().GetCell(mock.Anything, "org-1", "cell-1").
+				Return(&store.Cell{ID: "cell-1"}, nil).Once()
+			cl := protomocks.NewClustersServiceClient(t)
+			cl.EXPECT().GetPostgresClusterCredentials(mock.Anything, &clustersv1.GetPostgresClusterCredentialsRequest{Id: "br-1", Username: "app"}).
+				Return(tc.creds, nil).Once()
+
+			s := New(st, cellsmock.NewCellsMock(t, cl), nil, nil, "", nil, nil, nil)
+			dsn, err := s.ConnectionString(context.Background(), "org-1", &store.Branch{ID: "br-1", Region: "us-east-1", CellID: "cell-1"})
+			require.NoError(t, err)
+			require.Equal(t, tc.wantDSN, dsn)
 		})
 	}
 }

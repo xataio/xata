@@ -247,6 +247,15 @@ func TestProvision(t *testing.T) {
 			},
 			wantErr: ErrInvalidParam{BranchName: testBranch, Param: "configuration", Message: "bad config"},
 		},
+		"provisioner image-unavailable maps to invalid image param": {
+			payload: &provisioner.ClusterServicePayload{BackupsEnabled: true},
+			in:      CreateInput{OrganizationID: testOrg, ProjectID: testProject, Name: testBranch},
+			setup: func(st *storemocks.ProjectsStore, prov *provisionermocks.Provisioner, _ *cellsmock.Cells) {
+				prov.EXPECT().CreateBranch(mock.Anything, testProject, testOrg, testBranch, mock.Anything).
+					Return(nil, provisioner.ErrImageUnavailable{Message: "Postgres 17 is not available in this cell"}).Once()
+			},
+			wantErr: ErrInvalidParam{BranchName: testBranch, Param: "image", Message: "Postgres 17 is not available in this cell"},
+		},
 		"provisioner parent-unhealthy maps to domain error": {
 			payload: &provisioner.ClusterServicePayload{BackupsEnabled: true},
 			in:      CreateInput{OrganizationID: testOrg, ProjectID: testProject, Name: testBranch},

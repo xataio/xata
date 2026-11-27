@@ -28,6 +28,10 @@ func SecretNotFoundForIDError(id string) error {
 // refuses a restore source.
 const RestoreSourceUnsupportedReason = "RESTORE_SOURCE_UNSUPPORTED"
 
+// ImageUnavailableReason is the ErrorInfo reason of the error that refuses an
+// image the cell does not offer. Its message is safe to show to the user.
+const ImageUnavailableReason = "IMAGE_UNAVAILABLE"
+
 // restoreSourceUnsupportedError refuses a restore from the backups of source.
 func restoreSourceUnsupportedError(source, reason string) error {
 	st := status.New(codes.FailedPrecondition, fmt.Sprintf("restore source %s: %s", source, reason))
@@ -43,12 +47,24 @@ func restoreSourceUnsupportedError(source, reason string) error {
 
 // IsRestoreSourceUnsupportedError reports whether err refuses a restore source.
 func IsRestoreSourceUnsupportedError(err error) bool {
+	return isFailedPrecondition(err, RestoreSourceUnsupportedReason)
+}
+
+// IsImageUnavailableError reports whether err refuses an image the cell does
+// not offer.
+func IsImageUnavailableError(err error) bool {
+	return isFailedPrecondition(err, ImageUnavailableReason)
+}
+
+// isFailedPrecondition reports whether err is a FailedPrecondition error
+// tagged with reason.
+func isFailedPrecondition(err error, reason string) bool {
 	st, ok := status.FromError(err)
 	if !ok || st.Code() != codes.FailedPrecondition {
 		return false
 	}
 	for _, d := range st.Details() {
-		if info, ok := d.(*errdetails.ErrorInfo); ok && info.GetReason() == RestoreSourceUnsupportedReason {
+		if info, ok := d.(*errdetails.ErrorInfo); ok && info.GetReason() == reason {
 			return true
 		}
 	}

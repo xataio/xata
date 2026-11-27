@@ -179,6 +179,9 @@ type ErrorCredentialsForBranchNotFound struct {
 }
 
 func (e ErrorCredentialsForBranchNotFound) Error() string {
+	if e.Username == "" {
+		return fmt.Sprintf("Credentials on branch with ID [%s]: not found", e.BranchID)
+	}
 	return fmt.Sprintf("Credentials for username [%s] on branch with ID [%s]: not found", e.Username, e.BranchID)
 }
 

@@ -26,3 +26,13 @@ type ErrParentBranchUnhealthy struct {
 func (e ErrParentBranchUnhealthy) Error() string {
 	return fmt.Sprintf("parent branch %s is not healthy", e.ParentID)
 }
+
+// ErrImageUnavailable reports that the cell does not offer the requested
+// image. Message comes from the cell and is safe to show to the user.
+type ErrImageUnavailable struct {
+	Message string
+}
+
+func (e ErrImageUnavailable) Error() string {
+	return e.Message
+}

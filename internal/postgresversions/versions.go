@@ -281,6 +281,9 @@ func convertImageName(imageName string) string {
 // e.g., "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.5" -> "postgres:17.5"
 // e.g., "ghcr.io/xataio/postgres-images/xata-analytics:17.7" -> "analytics:17.7"
 func ShortImageName(fullImageName string) string {
+	// A digest is not part of the name or the tag.
+	fullImageName, _, _ = strings.Cut(fullImageName, "@")
+
 	// Find the last "/" to extract the image name with tag
 	lastSlashIndex := strings.LastIndex(fullImageName, "/")
 	var imageWithTag string
@@ -397,6 +400,8 @@ func ValidateImage(image string) error {
 // e.g., "cnpg-postgres-plus:17.6" -> "17.6"
 // e.g., "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.5-08092025" -> "17.5"
 func ExtractVersionFromImageName(imageName string) string {
+	imageName, _, _ = strings.Cut(imageName, "@")
+
 	// Find the last colon to get the version part
 	lastColonIndex := strings.LastIndex(imageName, ":")
 	if lastColonIndex == -1 {
@@ -417,6 +422,8 @@ func ExtractVersionFromImageName(imageName string) string {
 // e.g., "cnpg-postgres-plus:17.5" -> 17
 // e.g., "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.5-08092025" -> 17
 func ExtractMajorVersionFromImage(imageName string) int {
+	imageName, _, _ = strings.Cut(imageName, "@")
+
 	// Find the last colon to get the version part
 	lastColonIndex := strings.LastIndex(imageName, ":")
 	if lastColonIndex == -1 {

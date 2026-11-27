@@ -923,15 +923,50 @@ func (s *handler) DescribeBranch(c echo.Context, organizationID spec.Organizatio
 	})
 }
 
-// branchDatabaseName is the database managed users connect to on every branch.
-const branchDatabaseName = "xata"
+// branchLogin returns the login of the branch's managed user. It is xata
+// unless the cell reports the database, and with it the login, of the branch.
+// A failed lookup is an error, because the login is then not known.
+func (s *handler) branchLogin(ctx context.Context, organizationID, projectID, branchID string) (string, error) {
+	const xata = "xata"
+
+	branch, err := s.store.DescribeBranch(ctx, organizationID, projectID, branchID)
+	if errors.As(err, &store.ErrBranchNotFound{}) {
+		return xata, nil
+	}
+	if err != nil {
+		return "", err
+	}
+	client, err := s.cells.GetCellConnection(ctx, organizationID, branch.CellID)
+	if err != nil {
+		return "", err
+	}
+	defer client.Close()
+
+	creds, err := client.GetPostgresClusterCredentials(ctx, &clustersv1.GetPostgresClusterCredentialsRequest{Id: branch.ID, Username: "app"})
+	if errors.Is(err, clusters.SecretNotFoundForIDError(branch.ID)) {
+		return xata, nil
+	}
+	if err != nil {
+		return "", err
+	}
+	if creds.GetDatabase() == "" {
+		return xata, nil
+	}
+	return creds.GetUsername(), nil
+}
 
 // Get branch credentials
 // (GET /organizations/{organizationID}/projects/{projectID}/branches/{branchID}/credentials)
 func (s *handler) GetBranchCredentials(c echo.Context, organizationID spec.OrganizationID, projectID, branchID string, params spec.GetBranchCredentialsParams) error {
 	return s.withOrganizationAccess(c, organizationID, All, func() error {
 		if params.Username != nil && *params.Username != "xata" {
-			return ErrorInvalidParam{BranchName: branchID, Param: "username", Message: "only the xata user credentials can be retrieved"}
+			login, err := s.branchLogin(c.Request().Context(), organizationID, projectID, branchID)
+			if err != nil {
+				return err
+			}
+			if *params.Username != login {
+				return ErrorInvalidParam{BranchName: branchID, Param: "username", Message: "only the " + login + " user credentials can be retrieved"}
+			}
 		}
 
 		branch, err := s.store.DescribeBranch(c.Request().Context(), organizationID, projectID, branchID)
@@ -952,7 +987,11 @@ func (s *handler) GetBranchCredentials(c echo.Context, organizationID spec.Organ
 		creds, err := client.GetPostgresClusterCredentials(c.Request().Context(), &clustersv1.GetPostgresClusterCredentialsRequest{Id: branch.ID, Username: "app"})
 		if err != nil {
 			if errors.Is(err, clusters.SecretNotFoundForIDError(branch.ID)) {
-				return ErrorCredentialsForBranchNotFound{BranchID: branch.ID, Username: "xata"}
+				notFound := ErrorCredentialsForBranchNotFound{BranchID: branch.ID}
+				if params.Username != nil {
+					notFound.Username = *params.Username
+				}
+				return notFound
 			}
 			return err
 		}
@@ -977,8 +1016,8 @@ func (s *handler) GetBranchCredentials(c echo.Context, organizationID spec.Organ
 			Password:         creds.GetPassword(),
 			Hostname:         hostname,
 			Port:             port,
-			Dbname:           branchDatabaseName,
-			ConnectionString: branchsvc.FormatConnectionString(creds.GetUsername(), creds.GetPassword(), hostname, port),
+			Dbname:           branchsvc.DatabaseName(creds),
+			ConnectionString: branchsvc.FormatConnectionString(creds.GetUsername(), creds.GetPassword(), hostname, port, branchsvc.DatabaseName(creds)),
 		})
 	})
 }
@@ -993,7 +1032,13 @@ func (s *handler) RotateBranchCredentials(c echo.Context, organizationID spec.Or
 		}
 
 		if body.Username != "xata" {
-			return ErrorInvalidParam{BranchName: branchID, Param: "username", Message: "only the xata user credentials can be rotated"}
+			login, err := s.branchLogin(c.Request().Context(), organizationID, projectID, branchID)
+			if err != nil {
+				return err
+			}
+			if body.Username != login {
+				return ErrorInvalidParam{BranchName: branchID, Param: "username", Message: "only the " + login + " user credentials can be rotated"}
+			}
 		}
 
 		branch, err := s.store.DescribeBranch(c.Request().Context(), organizationID, projectID, branchID)
@@ -1016,6 +1061,10 @@ func (s *handler) RotateBranchCredentials(c echo.Context, organizationID spec.Or
 			User: body.Username,
 		})
 		if err != nil {
+			// The cell refuses xata on a branch with another login.
+			if st, _ := status.FromError(err); st.Code() == codes.InvalidArgument {
+				return ErrorInvalidParam{BranchName: branchID, Param: "username", Message: st.Message()}
+			}
 			return err
 		}
 
@@ -1335,6 +1384,9 @@ func (s *handler) UpdateBranch(c echo.Context, organizationID spec.OrganizationI
 			}
 			if st.Code() == codes.InvalidArgument {
 				return ErrorInvalidParam{BranchName: branchID, Param: "configuration", Message: st.Message()}
+			}
+			if clusters.IsImageUnavailableError(err) {
+				return ErrorInvalidParam{BranchName: branchID, Param: "image", Message: st.Message()}
 			}
 			if st.Code() == codes.PermissionDenied {
 				return ErrorBranchUpdateForbidden{BranchID: branchID}
@@ -1987,6 +2039,17 @@ func (s *handler) GetBranchPostgresConfig(c echo.Context, organizationID spec.Or
 
 		// Merge configurable parameters with instance-specific defaults
 		mergedParams := postgrescfg.MergeParametersMaps(configurableParams, instanceDefaults)
+
+		// A cell that reports the database of the branch sets these parameters
+		// to its database and login.
+		if creds, err := client.GetPostgresClusterCredentials(c.Request().Context(), &clustersv1.GetPostgresClusterCredentialsRequest{Id: branch.ID, Username: "app"}); err == nil && creds.GetDatabase() != "" {
+			for name, value := range map[string]string{"cron.database_name": creds.GetDatabase(), "duckdb.postgres_role": creds.GetUsername()} {
+				if p, ok := mergedParams[name]; ok {
+					p.DefaultValue = value
+					mergedParams[name] = p
+				}
+			}
+		}
 
 		// Convert to API format using helper function
 		parameters := postgresConfigToAPIParameters(mergedParams, instanceType, cluster.Configuration.PostgresConfigurationParameters, cluster.Configuration.ImageName, cluster.Configuration.PreloadLibraries)

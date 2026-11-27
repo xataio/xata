@@ -129,6 +129,9 @@ message GetPostgresClusterCredentialsResponse {
   string id = 1;
   string username = 2;
   string password = 3;
+  // Application database of the branch. Empty from older cells, which use
+  // the legacy database name.
+  string database = 4;
 }
 
 // RotatePostgresClusterCredentialsRequest is the request object for RotatePostgresClusterCredentials

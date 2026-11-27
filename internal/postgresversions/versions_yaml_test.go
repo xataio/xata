@@ -330,6 +330,7 @@ func TestShortImageName(t *testing.T) {
 		{"ghcr.io/xataio/postgres-images/xata-analytics:17.7", "analytics:17.7"},
 		{"ghcr.io/xataio/postgres-images/xata-analytics:18.1", "analytics:18.1"},
 		{"xata-analytics:17.7", "analytics:17.7"},
+		{"localhost:5000/pg/cnpg-postgres-plus:18.7-b1@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", "postgres:18.7-b1"},
 	}
 
 	for _, tc := range testCases {

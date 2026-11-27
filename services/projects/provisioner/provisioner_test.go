@@ -16,6 +16,7 @@ import (
 
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -26,6 +27,11 @@ const (
 )
 
 func TestCreateBranch(t *testing.T) {
+	unavailable, err := status.New(codes.FailedPrecondition, "Postgres 17 is not available in this cell").
+		WithDetails(&errdetails.ErrorInfo{Reason: clusters.ImageUnavailableReason, Domain: "xata"})
+	require.NoError(t, err)
+	imageUnavailableErr := unavailable.Err()
+
 	project := &store.Project{
 		ID:   projectID,
 		Name: "test",
@@ -295,6 +301,28 @@ func TestCreateBranch(t *testing.T) {
 					Return(nil, status.Error(codes.FailedPrecondition, "unhealthy")).Once()
 			},
 			wantErr: ErrParentBranchUnhealthy{ParentID: parentID},
+		},
+		"image refused by the cell maps to ErrImageUnavailable": {
+			payload: basePayload,
+			branch:  mainBranch,
+			setupMocks: func(mockStore *storemocks.ProjectsStore, mockClusters *protomocks.ClustersServiceClient) {
+				mockStore.EXPECT().GetProject(mock.Anything, orgID, projectID).Return(project, nil).Once()
+				mockCreateBranch(mockStore, mainBranch, project)
+				mockClusters.EXPECT().CreatePostgresCluster(mock.Anything, mock.Anything).
+					Return(nil, imageUnavailableErr).Once()
+			},
+			wantErr: ErrImageUnavailable{Message: "Postgres 17 is not available in this cell"},
+		},
+		"other FailedPrecondition without parent is returned as is": {
+			payload: basePayload,
+			branch:  mainBranch,
+			setupMocks: func(mockStore *storemocks.ProjectsStore, mockClusters *protomocks.ClustersServiceClient) {
+				mockStore.EXPECT().GetProject(mock.Anything, orgID, projectID).Return(project, nil).Once()
+				mockCreateBranch(mockStore, mainBranch, project)
+				mockClusters.EXPECT().CreatePostgresCluster(mock.Anything, mock.Anything).
+					Return(nil, status.Error(codes.FailedPrecondition, "cell not configured")).Once()
+			},
+			wantErr: status.Error(codes.FailedPrecondition, "cell not configured"),
 		},
 	}
 
