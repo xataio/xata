@@ -623,7 +623,9 @@ func (c *ClustersService) DescribePostgresCluster(ctx context.Context, request *
 }
 
 // GetPostgresClusterCredentials retrieves the credentials for a Branch. The
-// username in the request is the secret suffix ("app" or "superuser").
+// username in the request is the secret suffix ("app" or "superuser"). The
+// response has the application database only when the login is not the
+// legacy one.
 func (c *ClustersService) GetPostgresClusterCredentials(ctx context.Context, request *clustersv1.GetPostgresClusterCredentialsRequest) (*clustersv1.GetPostgresClusterCredentialsResponse, error) {
 	creds, err := c.cnpgConnector.GetClusterCredentials(ctx, request.GetId(), c.config.ClustersNamespace, request.GetUsername())
 	if err != nil {
@@ -633,10 +635,24 @@ func (c *ClustersService) GetPostgresClusterCredentials(ctx context.Context, req
 		return nil, fmt.Errorf("get credentials: %w", err)
 	}
 
-	return &clustersv1.GetPostgresClusterCredentialsResponse{
+	resp := &clustersv1.GetPostgresClusterCredentialsResponse{
 		Username: creds.Username,
 		Password: creds.Password,
-	}, nil
+	}
+	if request.GetUsername() != "app" || creds.Username == shared.LegacySQLIdentity.Login {
+		return resp, nil
+	}
+
+	branch, err := c.getBranch(ctx, request.GetId())
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil, SecretNotFoundForIDError(request.GetId())
+		}
+		return nil, fmt.Errorf("get branch: %w", err)
+	}
+	resp.Database = shared.BranchSQLIdentity(branch).Database
+
+	return resp, nil
 }
 
 // GetRecoveryWindow returns the recovery window for a branch from the Branch
