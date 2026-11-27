@@ -24,9 +24,9 @@ func TestWaitForRolePasswordSyncUsesBranchLogin(t *testing.T) {
 		login      string
 		want       string
 	}{
-		"white label login synced":          {statusRole: "dbadmin", login: shared.WhiteLabelSQLIdentity.Login, want: tracing.PasswordSyncOutcomeSynced},
-		"legacy login synced":               {statusRole: "xata", login: shared.LegacySQLIdentity.Login, want: tracing.PasswordSyncOutcomeSynced},
-		"white label ignores legacy status": {statusRole: "xata", login: shared.WhiteLabelSQLIdentity.Login, want: tracing.PasswordSyncOutcomeTimedOut},
+		"white label login synced":          {statusRole: "dbadmin", login: shared.WhiteLabelSQLIdentity().Login, want: tracing.PasswordSyncOutcomeSynced},
+		"legacy login synced":               {statusRole: "xata", login: shared.LegacySQLIdentity().Login, want: tracing.PasswordSyncOutcomeSynced},
+		"white label ignores legacy status": {statusRole: "xata", login: shared.WhiteLabelSQLIdentity().Login, want: tracing.PasswordSyncOutcomeTimedOut},
 	}
 
 	for name, tc := range tests {

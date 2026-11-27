@@ -6,21 +6,26 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rs/zerolog/log"
 	apiv1 "github.com/xataio/xata-cnpg/api/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"xata/internal/postgresversions"
 	cpv1alpha1 "xata/proto/clusterpool-operator/api/v1alpha1"
+	branchv1alpha1 "xata/services/branch-operator/api/v1alpha1"
+	"xata/services/branch-operator/pkg/shared"
 )
 
 // findPoolCluster finds a healthy, pre-provisioned cluster from a ClusterPool
-// that matches the requested configuration (storage class, Postgres version,
-// CPU, memory, and a disk no larger than the requested storage size).
-func findPoolCluster(ctx context.Context, kubeClient client.Client, clusterReader client.Reader, namespace, storageClass, image, cpuRequest, memory, storageSize string) (string, *apiv1.Cluster, error) {
+// that matches the requested configuration (SQL identity, storage class,
+// Postgres version, CPU, memory, and a disk no larger than the requested
+// storage size).
+func findPoolCluster(ctx context.Context, kubeClient client.Client, clusterReader client.Reader, namespace string, sqlIdentity branchv1alpha1.SQLIdentityProfile, storageClass, image, cpuRequest, memory, storageSize string) (string, *apiv1.Cluster, error) {
 	var pools cpv1alpha1.ClusterPoolList
 	if err := kubeClient.List(ctx, &pools, client.InNamespace(namespace)); err != nil {
 		// If the ClusterPool CRD is not installed, treat it as if no matching pool
@@ -38,6 +43,25 @@ func findPoolCluster(ctx context.Context, kubeClient client.Client, clusterReade
 	for i := range pools.Items {
 		pool := &pools.Items[i]
 		spec := &pool.Spec.ClusterSpec
+
+		// The image name does not identify the SQL names of a pool cluster
+		if pool.Spec.SQLIdentity != string(sqlIdentity) {
+			continue
+		}
+		// A legacy pool is not checked. The names of initdb cannot change
+		// after a claim.
+		if id := shared.SQLIdentityFor(sqlIdentity); id != shared.LegacySQLIdentity() {
+			initdb := ptr.Deref(spec.Bootstrap, apiv1.BootstrapConfiguration{}).InitDB
+			// A slot pool has no initdb and is never a create pool
+			if initdb == nil {
+				continue
+			}
+			if initdb.Database != id.Database || initdb.Owner != id.Login {
+				log.Ctx(ctx).Warn().Str("poolName", pool.Name).
+					Msg("skipping pool: initdb database or owner does not match its sql identity")
+				continue
+			}
+		}
 
 		poolSC := ""
 		if spec.StorageConfiguration.StorageClass != nil {

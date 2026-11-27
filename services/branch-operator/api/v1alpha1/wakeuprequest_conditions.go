@@ -15,6 +15,7 @@ const (
 	CSINodePodNotFoundReason = "CSINodePodNotFound"
 	PoolNotFoundReason       = "WakeupPoolNotFound"
 	NoPoolAnnotationReason   = "WakeupPoolAnnotationMissing"
+	PoolSQLIdentityReason    = "WakeupPoolSQLIdentityMismatch"
 
 	// Reason strings for the `Succeeded` Unknown condition (retryable errors
 	// and in-progress states)
@@ -34,6 +35,7 @@ var WakeupConditionMessages = map[string]string{
 	BranchNotFoundReason:               "The specified branch was not found",
 	NoPoolAnnotationReason:             "The branch has no wakeup pool annotation",
 	PoolNotFoundReason:                 "The specified wakeup pool was not found",
+	PoolSQLIdentityReason:              "The wakeup pool does not have the SQL identity of the branch",
 	PoolExhaustedReason:                "The wakeup pool has no healthy clusters",
 	WakeupInProgressReason:             "Wakeup is in progress",
 	PVNotAvailableReason:               "The cluster's primary PV could not be resolved",

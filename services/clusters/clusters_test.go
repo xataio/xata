@@ -39,7 +39,7 @@ var pitrTimestamp = time.Date(2024, 6, 15, 14, 30, 0, 0, time.UTC)
 
 const testImage = "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.5"
 
-var expectedPrivilegedExtensions = MandatoryPostgresParameters(testImage, shared.LegacySQLIdentity)["xatautils.privileged_extensions"]
+var expectedPrivilegedExtensions = MandatoryPostgresParameters(testImage, shared.LegacySQLIdentity())["xatautils.privileged_extensions"]
 
 func TestCreatePostgresCluster(t *testing.T) {
 	t.Parallel()

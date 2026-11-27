@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	apiv1 "github.com/xataio/xata-cnpg/api/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -155,31 +156,68 @@ func TestCreatePostgresClusterSQLIdentityStrictValidation(t *testing.T) {
 	}
 }
 
-func TestCreatePostgresClusterSQLIdentitySkipsCreatePool(t *testing.T) {
+// A Branch takes a cluster only from a create pool that declares its SQL
+// identity. The legacy rows are the behaviour without SQL identity profiles.
+func TestCreatePostgresClusterSQLIdentityCreatePool(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 
-	svc, k8sClient := setupTestClustersService(t,
-		withSQLIdentityProfile(v1alpha1.SQLIdentityWhiteLabel),
-		withExistingObjects(
-			poolForTest("default-storage-class", testImage, "2", "3996Mi"),
-			poolClusterForTest(),
-			poolClusterAppSecretForTest("pool-password"),
-		))
-	req, _, _, _, _ := exampleRequestsAndBranches()
-	_, err := svc.CreatePostgresCluster(ctx, req)
-	require.NoError(t, err)
+	tests := map[string]struct {
+		cellProfile  v1alpha1.SQLIdentityProfile
+		poolProfile  v1alpha1.SQLIdentityProfile
+		wantPool     bool
+		wantUsername string
+	}{
+		"legacy branch, legacy pool":           {wantPool: true, wantUsername: "xata"},
+		"legacy branch, white label pool":      {poolProfile: v1alpha1.SQLIdentityWhiteLabel, wantUsername: "xata"},
+		"white label branch, legacy pool":      {cellProfile: v1alpha1.SQLIdentityWhiteLabel, wantUsername: "dbadmin"},
+		"white label branch, white label pool": {cellProfile: v1alpha1.SQLIdentityWhiteLabel, poolProfile: v1alpha1.SQLIdentityWhiteLabel, wantPool: true, wantUsername: "dbadmin"},
+	}
 
-	// Pool clusters use the legacy names, so the Branch gets a cold cluster
-	branch, err := getBranchFromK8s(ctx, k8sClient, req.GetId())
-	require.NoError(t, err)
-	require.Equal(t, new(req.GetId()), branch.Spec.ClusterSpec.Name)
-	require.False(t, branch.HasWakeupPoolAnnotation())
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 
-	secret := &corev1.Secret{}
-	require.NoError(t, k8sClient.Get(ctx, client.ObjectKey{Name: req.GetId() + "-app", Namespace: "xata-clusters"}, secret))
-	require.Equal(t, "dbadmin", string(secret.Data[corev1.BasicAuthUsernameKey]))
-	require.NotEqual(t, "pool-password", string(secret.Data[corev1.BasicAuthPasswordKey]))
+			pool := poolForTest("default-storage-class", testImage, "2", "3996Mi")
+			pool.Spec.SQLIdentity = string(tc.poolProfile)
+			if tc.poolProfile == v1alpha1.SQLIdentityWhiteLabel {
+				pool.Spec.ClusterSpec.Bootstrap = &apiv1.BootstrapConfiguration{
+					InitDB: &apiv1.BootstrapInitDB{Database: "defaultdb", Owner: "dbadmin"},
+				}
+			}
+			svc, k8sClient := setupTestClustersService(t,
+				withSQLIdentityProfile(tc.cellProfile),
+				withExistingObjects(pool, poolClusterForTest(), poolClusterAppSecretForTest("pool-password")))
+			req, _, _, _, _ := exampleRequestsAndBranches()
+
+			_, err := svc.CreatePostgresCluster(ctx, req)
+			require.NoError(t, err)
+
+			branch, err := getBranchFromK8s(ctx, k8sClient, req.GetId())
+			require.NoError(t, err)
+			require.Equal(t, tc.cellProfile, branch.Spec.SQLIdentity)
+
+			secret := &corev1.Secret{}
+			require.NoError(t, k8sClient.Get(ctx, client.ObjectKey{Name: req.GetId() + "-app", Namespace: "xata-clusters"}, secret))
+			require.Equal(t, tc.wantUsername, string(secret.Data[corev1.BasicAuthUsernameKey]))
+
+			cluster := &apiv1.Cluster{}
+			require.NoError(t, k8sClient.Get(ctx, client.ObjectKey{Name: "pool-cluster-1", Namespace: "xata-clusters"}, cluster))
+
+			if !tc.wantPool {
+				// The Branch gets a cold cluster and the pool keeps its own
+				require.Equal(t, new(req.GetId()), branch.Spec.ClusterSpec.Name)
+				require.False(t, branch.HasWakeupPoolAnnotation())
+				require.NotEqual(t, "pool-password", string(secret.Data[corev1.BasicAuthPasswordKey]))
+				require.Len(t, cluster.OwnerReferences, 1)
+				return
+			}
+			require.Equal(t, new("pool-cluster-1"), branch.Spec.ClusterSpec.Name)
+			require.Equal(t, "test-pool-slot", branch.WakeupPoolName())
+			require.Equal(t, "pool-password", string(secret.Data[corev1.BasicAuthPasswordKey]))
+			require.Empty(t, cluster.OwnerReferences)
+		})
+	}
 }
 
 func TestUpdatePostgresClusterKeepsSQLIdentity(t *testing.T) {

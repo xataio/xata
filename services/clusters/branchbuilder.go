@@ -448,7 +448,7 @@ func (b *BranchBuilder) WithUtilsPreloadLibrary() *BranchBuilder {
 	id := shared.BranchSQLIdentity(b.branch)
 	lib := id.UtilsLibrary
 	libs := slices.DeleteFunc(slices.Clone(b.branch.Spec.ClusterSpec.Postgres.SharedPreloadLibraries), func(s string) bool {
-		return s == lib || (id != shared.LegacySQLIdentity && slices.Contains(shared.UtilsLibraries, s))
+		return s == lib || (id != shared.LegacySQLIdentity() && shared.IsUtilsLibrary(s))
 	})
 	b.branch.Spec.ClusterSpec.Postgres.SharedPreloadLibraries = append([]string{lib}, libs...)
 

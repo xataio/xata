@@ -154,7 +154,7 @@ func TestPrivilegedExtensionsTagSuffix(t *testing.T) {
 
 			require.NotEmpty(t, extensions.GetExtensions("postgres:18.7-wl1"))
 			require.Equal(t, extensions.GetExtensions("postgres:18.1"), extensions.GetExtensions("postgres:18.7-wl1"))
-			for _, id := range []shared.SQLIdentity{shared.LegacySQLIdentity, shared.WhiteLabelSQLIdentity} {
+			for _, id := range []shared.SQLIdentity{shared.LegacySQLIdentity(), shared.WhiteLabelSQLIdentity()} {
 				got := privilegedExtensions(tc.image, id)
 				require.NotEmpty(t, got)
 				require.Equal(t, privilegedExtensions(tc.regular, id), got)

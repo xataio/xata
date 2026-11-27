@@ -38,8 +38,8 @@ func TestBranchSQLIdentity(t *testing.T) {
 		profile v1alpha1.SQLIdentityProfile
 		want    shared.SQLIdentity
 	}{
-		"legacy":      {profile: v1alpha1.SQLIdentityLegacy, want: shared.LegacySQLIdentity},
-		"white label": {profile: v1alpha1.SQLIdentityWhiteLabel, want: shared.WhiteLabelSQLIdentity},
+		"legacy":      {profile: v1alpha1.SQLIdentityLegacy, want: shared.LegacySQLIdentity()},
+		"white label": {profile: v1alpha1.SQLIdentityWhiteLabel, want: shared.WhiteLabelSQLIdentity()},
 	}
 
 	for name, tc := range tests {

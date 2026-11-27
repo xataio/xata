@@ -21,8 +21,8 @@ func TestGeneratePostInitSQLWhiteLabel(t *testing.T) {
 	)
 
 	for _, v := range []int{14, 15, 16, 17, 18} {
-		legacy := resources.GeneratePostInitSQL(v, shared.LegacySQLIdentity)
-		got := resources.GeneratePostInitSQL(v, shared.WhiteLabelSQLIdentity)
+		legacy := resources.GeneratePostInitSQL(v, shared.LegacySQLIdentity())
+		got := resources.GeneratePostInitSQL(v, shared.WhiteLabelSQLIdentity())
 
 		want := make([]string, len(legacy))
 		for i, s := range legacy {
@@ -40,10 +40,10 @@ func TestGeneratePostInitSQLWhiteLabel(t *testing.T) {
 }
 
 func TestSQLIdentityFor(t *testing.T) {
-	require.Equal(t, shared.LegacySQLIdentity, shared.SQLIdentityFor(v1alpha1.SQLIdentityLegacy))
-	require.Equal(t, shared.WhiteLabelSQLIdentity, shared.SQLIdentityFor(v1alpha1.SQLIdentityWhiteLabel))
-	require.Equal(t, shared.SQLIdentity{Login: "xata", Database: "xata", PrivilegeGroup: "xata_superuser", UtilsLibrary: "xatautils"}, shared.LegacySQLIdentity)
-	require.Equal(t, shared.SQLIdentity{Login: "dbadmin", Database: "defaultdb", PrivilegeGroup: "db_superuser", UtilsLibrary: "pgprivs"}, shared.WhiteLabelSQLIdentity)
+	require.Equal(t, shared.LegacySQLIdentity(), shared.SQLIdentityFor(v1alpha1.SQLIdentityLegacy))
+	require.Equal(t, shared.WhiteLabelSQLIdentity(), shared.SQLIdentityFor(v1alpha1.SQLIdentityWhiteLabel))
+	require.Equal(t, shared.SQLIdentity{Login: "xata", Database: "xata", PrivilegeGroup: "xata_superuser", UtilsLibrary: "xatautils"}, shared.LegacySQLIdentity())
+	require.Equal(t, shared.SQLIdentity{Login: "dbadmin", Database: "defaultdb", PrivilegeGroup: "db_superuser", UtilsLibrary: "pgprivs"}, shared.WhiteLabelSQLIdentity())
 }
 
 func TestClusterSpecSQLIdentity(t *testing.T) {
@@ -51,8 +51,8 @@ func TestClusterSpecSQLIdentity(t *testing.T) {
 		profile v1alpha1.SQLIdentityProfile
 		want    shared.SQLIdentity
 	}{
-		"no profile is legacy": {profile: v1alpha1.SQLIdentityLegacy, want: shared.LegacySQLIdentity},
-		"white label":          {profile: v1alpha1.SQLIdentityWhiteLabel, want: shared.WhiteLabelSQLIdentity},
+		"no profile is legacy": {profile: v1alpha1.SQLIdentityLegacy, want: shared.LegacySQLIdentity()},
+		"white label":          {profile: v1alpha1.SQLIdentityWhiteLabel, want: shared.WhiteLabelSQLIdentity()},
 	}
 
 	for name, tc := range tests {
@@ -111,8 +111,8 @@ func TestClusterSpecPostInitSQLImageReference(t *testing.T) {
 				SQLIdentity: v1alpha1.SQLIdentityWhiteLabel,
 			})
 			require.Equal(t, tc.image, *spec.ImageName)
-			require.Equal(t, resources.GeneratePostInitSQL(tc.major, shared.WhiteLabelSQLIdentity), spec.Bootstrap.InitDB.PostInitSQL)
-			require.NotEqual(t, resources.GeneratePostInitSQL(14, shared.WhiteLabelSQLIdentity), spec.Bootstrap.InitDB.PostInitSQL)
+			require.Equal(t, resources.GeneratePostInitSQL(tc.major, shared.WhiteLabelSQLIdentity()), spec.Bootstrap.InitDB.PostInitSQL)
+			require.NotEqual(t, resources.GeneratePostInitSQL(14, shared.WhiteLabelSQLIdentity()), spec.Bootstrap.InitDB.PostInitSQL)
 		})
 	}
 }

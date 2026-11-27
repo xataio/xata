@@ -22,12 +22,13 @@ func TestWakeupWhiteLabelBranch(t *testing.T) {
 	clusterName := "cluster-" + randomString(10)
 	branchName := "branch-" + randomString(10)
 	wrName := "wur-" + randomString(10)
-	id := shared.WhiteLabelSQLIdentity
+	id := shared.WhiteLabelSQLIdentity()
 
 	pool := &poolv1alpha1.ClusterPool{
 		Name:      poolName,
 		Namespace: TestNamespace,
 		Spec: poolv1alpha1.ClusterPoolSpec{
+			SQLIdentity: string(v1alpha1.SQLIdentityWhiteLabel),
 			Clusters:    1,
 			ClusterSpec: apiv1.ClusterSpec{Instances: 1},
 		},
@@ -78,4 +79,72 @@ func TestWakeupWhiteLabelBranch(t *testing.T) {
 	require.Equal(t, []string{id.PrivilegeGroup}, c.Spec.Managed.Roles[0].InRoles)
 	require.Equal(t, branchName+"-app", c.Spec.Managed.Roles[0].PasswordSecret.Name)
 	require.False(t, c.Spec.Managed.Roles[0].Superuser)
+}
+
+// A Branch does not take a cluster from a pool that declares another SQL
+// identity.
+func TestWakeupPoolSQLIdentityMismatch(t *testing.T) {
+	t.Parallel()
+
+	tests := map[string]struct {
+		branchProfile v1alpha1.SQLIdentityProfile
+		poolProfile   v1alpha1.SQLIdentityProfile
+	}{
+		"white label branch, legacy pool": {branchProfile: v1alpha1.SQLIdentityWhiteLabel},
+		"legacy branch, white label pool": {poolProfile: v1alpha1.SQLIdentityWhiteLabel},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			ctx := context.Background()
+
+			poolName := "pool-" + randomString(10)
+			branchName := "branch-" + randomString(10)
+
+			pool := &poolv1alpha1.ClusterPool{
+				Name:      poolName,
+				Namespace: TestNamespace,
+				Spec: poolv1alpha1.ClusterPoolSpec{
+					SQLIdentity: string(tc.poolProfile),
+					Clusters:    1,
+					ClusterSpec: apiv1.ClusterSpec{Instances: 1},
+				},
+			}
+			require.NoError(t, k8sClient.Create(ctx, pool))
+
+			cluster, err := setupPoolCluster(ctx, pool, "cluster-"+randomString(10), TestNamespace, 1)
+			require.NoError(t, err)
+
+			branch := &v1alpha1.Branch{
+				Name: branchName,
+				Annotations: map[string]string{
+					v1alpha1.WakeupPoolAnnotation:     poolName,
+					v1alpha1.AwaitingWakeupAnnotation: "true",
+				},
+				Spec: v1alpha1.BranchSpec{
+					SQLIdentity: tc.branchProfile,
+					ClusterSpec: v1alpha1.ClusterSpec{
+						Instances: 1,
+						Storage:   v1alpha1.StorageSpec{Size: "1Gi"},
+						Image:     "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.7",
+					},
+				},
+			}
+			require.NoError(t, k8sClient.Create(ctx, branch))
+			require.NoError(t, createXVol(ctx, "xvol-"+branchName, "Available"))
+
+			wr, err := createWakeupRequest(ctx, "wur-"+randomString(10), branch.Name)
+			require.NoError(t, err)
+			requireWakeupSucceededCondition(t, ctx, wr, metav1.ConditionFalse, v1alpha1.PoolSQLIdentityReason)
+
+			// The pool keeps its cluster and the Branch gets none
+			c := &apiv1.Cluster{}
+			require.NoError(t, k8sClient.Get(ctx, client.ObjectKeyFromObject(cluster), c))
+			require.True(t, metav1.IsControlledBy(c, pool))
+			b := &v1alpha1.Branch{}
+			require.NoError(t, k8sClient.Get(ctx, client.ObjectKeyFromObject(branch), b))
+			require.Nil(t, b.Spec.ClusterSpec.Name)
+		})
+	}
 }

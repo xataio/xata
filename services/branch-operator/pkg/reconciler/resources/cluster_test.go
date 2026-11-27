@@ -119,7 +119,7 @@ func TestClusterSpec(t *testing.T) {
 					WithPlugins(scaleToZeroPlugin()).
 					WithImageName("ghcr.io/some/postgres:latest").
 					WithBootstrap(apiv1ac.BootstrapConfiguration().
-						WithInitDB(resources.BootstrapInitDB(testBranchName, majorVersion, shared.LegacySQLIdentity)))
+						WithInitDB(resources.BootstrapInitDB(testBranchName, majorVersion, shared.LegacySQLIdentity())))
 			}(),
 		},
 		{
@@ -239,7 +239,7 @@ func TestClusterSpec(t *testing.T) {
 			expected: baseExpectedSpec().
 				WithPlugins(scaleToZeroPlugin()).
 				WithBootstrap(apiv1ac.BootstrapConfiguration().
-					WithRecovery(resources.VolumeSnapshotBootstrapRecovery(testBranchName, "some-parent-cluster", shared.LegacySQLIdentity))),
+					WithRecovery(resources.VolumeSnapshotBootstrapRecovery(testBranchName, "some-parent-cluster", shared.LegacySQLIdentity()))),
 		},
 		{
 			name: "recovery - recovery from object store (PITR) without timestamp",
@@ -255,7 +255,7 @@ func TestClusterSpec(t *testing.T) {
 					WithRecovery(resources.ObjectStoreBootstrapRecovery(testBranchName, &v1alpha1.RestoreSpec{
 						Type: v1alpha1.RestoreTypeObjectStore,
 						Name: "source-cluster",
-					}, shared.LegacySQLIdentity))).
+					}, shared.LegacySQLIdentity()))).
 				WithExternalClusters(resources.ExternalClusters(resources.ClusterConfig{
 					RestoreSpec: &v1alpha1.RestoreSpec{
 						Type: v1alpha1.RestoreTypeObjectStore,
@@ -283,7 +283,7 @@ func TestClusterSpec(t *testing.T) {
 				return baseExpectedSpec().
 					WithPlugins(scaleToZeroPlugin()).
 					WithBootstrap(apiv1ac.BootstrapConfiguration().
-						WithRecovery(resources.ObjectStoreBootstrapRecovery(testBranchName, restoreSpec, shared.LegacySQLIdentity))).
+						WithRecovery(resources.ObjectStoreBootstrapRecovery(testBranchName, restoreSpec, shared.LegacySQLIdentity()))).
 					WithExternalClusters(resources.ExternalClusters(resources.ClusterConfig{
 						RestoreSpec: restoreSpec,
 					})...)
@@ -634,7 +634,7 @@ func TestClusterSpec(t *testing.T) {
 					WithRecovery(resources.ObjectStoreBootstrapRecovery(testBranchName, &v1alpha1.RestoreSpec{
 						Type: v1alpha1.RestoreTypeObjectStore,
 						Name: "source-cluster",
-					}, shared.LegacySQLIdentity))).
+					}, shared.LegacySQLIdentity()))).
 				WithExternalClusters(
 					apiv1ac.ExternalCluster().
 						WithName("source-cluster").
@@ -805,7 +805,7 @@ func TestClusterSpec(t *testing.T) {
 					WithRecovery(resources.ObjectStoreBootstrapRecovery(testBranchName, &v1alpha1.RestoreSpec{
 						Type: v1alpha1.RestoreTypeObjectStore,
 						Name: "source-cluster",
-					}, shared.LegacySQLIdentity))).
+					}, shared.LegacySQLIdentity()))).
 				WithExternalClusters(
 					apiv1ac.ExternalCluster().
 						WithName("source-cluster").
@@ -916,7 +916,7 @@ func TestClusterSpec(t *testing.T) {
 					WithRecovery(resources.ObjectStoreBootstrapRecovery(testBranchName, &v1alpha1.RestoreSpec{
 						Type: v1alpha1.RestoreTypeObjectStore,
 						Name: "source-cluster",
-					}, shared.LegacySQLIdentity))).
+					}, shared.LegacySQLIdentity()))).
 				WithExternalClusters(
 					apiv1ac.ExternalCluster().
 						WithName("source-cluster").
@@ -1342,7 +1342,7 @@ func TestGeneratePostInitSQL(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			sql := resources.GeneratePostInitSQL(tc.majorVersion, shared.LegacySQLIdentity)
+			sql := resources.GeneratePostInitSQL(tc.majorVersion, shared.LegacySQLIdentity())
 
 			// Verify basic structure
 			require.GreaterOrEqual(t, len(sql), 6, "Should have at least 6 SQL statements")
@@ -1382,7 +1382,7 @@ func baseExpectedSpec() *apiv1ac.ClusterSpecApplyConfiguration {
 		WithSuperuserSecret(corev1ac.LocalObjectReference().
 			WithName(testBranchName + "-superuser")).
 		WithBootstrap(apiv1ac.BootstrapConfiguration().
-			WithInitDB(resources.BootstrapInitDB(testBranchName, majorVersion, shared.LegacySQLIdentity))).
+			WithInitDB(resources.BootstrapInitDB(testBranchName, majorVersion, shared.LegacySQLIdentity()))).
 		WithPostgresConfiguration(apiv1ac.PostgresConfiguration()).
 		WithResources(corev1.ResourceRequirements{}).
 		WithBackup(apiv1ac.BackupConfiguration().
@@ -1402,7 +1402,7 @@ func baseExpectedSpec() *apiv1ac.ClusterSpecApplyConfiguration {
 				WithDisabledDefaultServices(
 					apiv1.ServiceSelectorTypeR,
 					apiv1.ServiceSelectorTypeRO)).
-			WithRoles(shared.AppRoleConfiguration(testBranchName, shared.LegacySQLIdentity))).
+			WithRoles(shared.AppRoleConfiguration(testBranchName, shared.LegacySQLIdentity()))).
 		WithMonitoring(apiv1ac.MonitoringConfiguration().
 			WithTLSConfig(apiv1ac.ClusterMonitoringTLSConfiguration().
 				WithEnabled(true)).

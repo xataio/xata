@@ -31,34 +31,40 @@ func (id SQLIdentity) UtilsScriptsPath() string {
 	return "/etc/" + id.UtilsLibrary + "/extensions"
 }
 
-var (
-	// LegacySQLIdentity is used by Branches without a SQL identity profile.
-	LegacySQLIdentity = SQLIdentity{
+// LegacySQLIdentity returns the SQL names of a Branch without a SQL identity
+// profile.
+func LegacySQLIdentity() SQLIdentity {
+	return SQLIdentity{
 		Login:          "xata",
 		Database:       "xata",
 		PrivilegeGroup: "xata_superuser",
 		UtilsLibrary:   "xatautils",
 	}
+}
 
-	// WhiteLabelSQLIdentity is used by Branches with the WhiteLabel profile.
-	WhiteLabelSQLIdentity = SQLIdentity{
+// WhiteLabelSQLIdentity returns the SQL names of a Branch with the WhiteLabel
+// profile.
+func WhiteLabelSQLIdentity() SQLIdentity {
+	return SQLIdentity{
 		Login:          "dbadmin",
 		Database:       "defaultdb",
 		PrivilegeGroup: "db_superuser",
 		UtilsLibrary:   "pgprivs",
 	}
+}
 
-	// UtilsLibraries are the security libraries of all profiles.
-	UtilsLibraries = []string{LegacySQLIdentity.UtilsLibrary, WhiteLabelSQLIdentity.UtilsLibrary}
-)
+// IsUtilsLibrary reports whether name is the security library of a profile.
+func IsUtilsLibrary(name string) bool {
+	return name == LegacySQLIdentity().UtilsLibrary || name == WhiteLabelSQLIdentity().UtilsLibrary
+}
 
 // SQLIdentityFor returns the SQL names for the given profile. The Branch CRD
 // accepts only known profiles.
 func SQLIdentityFor(p v1alpha1.SQLIdentityProfile) SQLIdentity {
 	if p == v1alpha1.SQLIdentityWhiteLabel {
-		return WhiteLabelSQLIdentity
+		return WhiteLabelSQLIdentity()
 	}
-	return LegacySQLIdentity
+	return LegacySQLIdentity()
 }
 
 // BranchSQLIdentity returns the SQL names stored on the Branch.

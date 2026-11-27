@@ -43,7 +43,7 @@ func MandatoryPostgresParameters(image string, id shared.SQLIdentity) map[string
 // profile defaults of id. For a non-legacy id it first removes the settings
 // of every security library from params.
 func applyPostgresParameterOverrides(params map[string]string, image string, preloadLibraries []string, id shared.SQLIdentity) {
-	if id != shared.LegacySQLIdentity {
+	if id != shared.LegacySQLIdentity() {
 		maps.DeleteFunc(params, func(k, _ string) bool { return isUtilsSetting(k) })
 	}
 	maps.Copy(params, MandatoryPostgresParameters(image, id))
@@ -53,13 +53,8 @@ func applyPostgresParameterOverrides(params map[string]string, image string, pre
 // isUtilsSetting reports whether name is a setting of a security library. GUC
 // names are case-insensitive.
 func isUtilsSetting(name string) bool {
-	name = strings.ToLower(strings.TrimSpace(name))
-	for _, lib := range shared.UtilsLibraries {
-		if strings.HasPrefix(name, lib+".") {
-			return true
-		}
-	}
-	return false
+	lib, _, ok := strings.Cut(strings.ToLower(strings.TrimSpace(name)), ".")
+	return ok && shared.IsUtilsLibrary(lib)
 }
 
 // profileDefaults are extension settings whose default value is a legacy SQL
@@ -83,7 +78,7 @@ var profileDefaults = []struct {
 // purpose. Remove this special case when Projects sends the default of the
 // Branch.
 func applyProfileDefaults(params map[string]string, preloadLibraries []string, id shared.SQLIdentity) {
-	if id == shared.LegacySQLIdentity {
+	if id == shared.LegacySQLIdentity() {
 		return
 	}
 	for _, d := range profileDefaults {
@@ -91,7 +86,7 @@ func applyProfileDefaults(params map[string]string, preloadLibraries []string, i
 			delete(params, d.setting)
 			continue
 		}
-		if v, ok := params[d.setting]; !ok || v == d.value(shared.LegacySQLIdentity) {
+		if v, ok := params[d.setting]; !ok || v == d.value(shared.LegacySQLIdentity()) {
 			params[d.setting] = d.value(id)
 		}
 	}
@@ -105,7 +100,7 @@ func privilegedExtensions(image string, id shared.SQLIdentity) string {
 	exts := extensions.GetExtensions(shortImage)
 	extNames := make([]string, 0, len(exts))
 	for _, ext := range exts {
-		if ext.Name != id.UtilsLibrary && slices.Contains(shared.UtilsLibraries, ext.Name) {
+		if ext.Name != id.UtilsLibrary && shared.IsUtilsLibrary(ext.Name) {
 			continue
 		}
 		extNames = append(extNames, ext.Name)

@@ -299,12 +299,10 @@ func (c *ClustersService) CreatePostgresCluster(ctx context.Context, req *cluste
 	// branches do not use clusters from the create pool - their clusters are
 	// created via XVol cloning and then waking up a cluster using a
 	// WakeupRequest. A request with a data source restores into its own
-	// cluster, so it does not use the pool either. Pool clusters are
-	// bootstrapped with the legacy SQL names, so a Branch with another SQL
-	// identity is always created cold.
+	// cluster, so it does not use the pool either. The pool must declare the
+	// SQL identity of the Branch.
 	var poolCluster *apiv1.Cluster
-	usesLegacySQLIdentity := branchBuilder.Build().Spec.SQLIdentity == branchv1alpha1.SQLIdentityLegacy
-	if parent == nil && req.GetDataSource() == nil && usesLegacySQLIdentity {
+	if parent == nil && req.GetDataSource() == nil {
 		if err := c.waitForClusterCache(ctx); err != nil {
 			return nil, fmt.Errorf("wait for cluster cache: %w", err)
 		}
@@ -325,7 +323,7 @@ func (c *ClustersService) CreatePostgresCluster(ctx context.Context, req *cluste
 
 		var poolName string
 		poolName, poolCluster, err = findPoolCluster(ctx, c.kubeClient, c.clusterReader, c.config.ClustersNamespace,
-			storageClass, image, cpuReq, memReq, storageSize,
+			branch.Spec.SQLIdentity, storageClass, image, cpuReq, memReq, storageSize,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("find pool cluster: %w", err)
@@ -651,7 +649,7 @@ func (c *ClustersService) GetPostgresClusterCredentials(ctx context.Context, req
 		Username: creds.Username,
 		Password: creds.Password,
 	}
-	if request.GetUsername() != "app" || creds.Username == shared.LegacySQLIdentity.Login {
+	if request.GetUsername() != "app" || creds.Username == shared.LegacySQLIdentity().Login {
 		return resp, nil
 	}
 

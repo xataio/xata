@@ -9,7 +9,16 @@ import (
 const ClusterPoolKind = "ClusterPool"
 
 // ClusterPoolSpec defines the desired state of a ClusterPool
+// +kubebuilder:validation:XValidation:rule="has(oldSelf.sqlIdentity) == has(self.sqlIdentity)",message="sqlIdentity is immutable"
 type ClusterPoolSpec struct {
+	// SQLIdentity declares the SQL identity profile of the clusters that
+	// ClusterSpec makes. Only a Branch with the same profile takes a cluster
+	// from the pool. When empty, the clusters have the legacy names.
+	// +optional
+	// +kubebuilder:validation:Enum=WhiteLabel
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="sqlIdentity is immutable"
+	SQLIdentity string `json:"sqlIdentity,omitempty"`
+
 	// Clusters is the target number of clusters to maintain in the pool.
 	// When a cluster is removed from the pool the controller will
 	// create another cluster to replace it.

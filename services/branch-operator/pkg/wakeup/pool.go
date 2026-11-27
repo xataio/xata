@@ -18,8 +18,9 @@ import (
 
 // takeClusterFromPool attempts to remove a Cluster from the specified
 // ClusterPool. It does this by listing all Clusters owned by the pool and
-// removing the pool's controller owner reference from one of them.
-func (r *WakeupReconciler) takeClusterFromPool(ctx context.Context, namespace, poolName string) (*apiv1.Cluster, error) {
+// removing the pool's controller owner reference from one of them. The pool
+// must declare the given SQL identity.
+func (r *WakeupReconciler) takeClusterFromPool(ctx context.Context, namespace, poolName string, sqlIdentity v1alpha1.SQLIdentityProfile) (*apiv1.Cluster, error) {
 	// Get the ClusterPool resource by name.
 	pool := &poolv1alpha1.ClusterPool{}
 	err := r.Get(ctx, client.ObjectKey{Name: poolName, Namespace: namespace}, pool)
@@ -33,6 +34,15 @@ func (r *WakeupReconciler) takeClusterFromPool(ctx context.Context, namespace, p
 	}
 	if err != nil {
 		return nil, err
+	}
+
+	// A cluster with other SQL names cannot run the data of the Branch
+	if pool.Spec.SQLIdentity != string(sqlIdentity) {
+		return nil, &ConditionError{
+			ConditionReason: v1alpha1.PoolSQLIdentityReason,
+			Err:             fmt.Errorf("pool %q has SQL identity %q, branch has %q", poolName, pool.Spec.SQLIdentity, sqlIdentity),
+			Terminal:        true,
+		}
 	}
 
 	// List clusters in the pool that are available for claiming. The

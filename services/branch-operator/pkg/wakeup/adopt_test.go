@@ -4,8 +4,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-
-	"xata/services/branch-operator/api/v1alpha1"
 )
 
 func TestAdoptableImage(t *testing.T) {
@@ -16,7 +14,6 @@ func TestAdoptableImage(t *testing.T) {
 	const digest = "@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
 	tests := map[string]struct {
-		profile      v1alpha1.SQLIdentityProfile
 		branchImage  string
 		clusterImage string
 		want         string
@@ -71,10 +68,14 @@ func TestAdoptableImage(t *testing.T) {
 			clusterImage: repo + "cnpg-postgres-plus:17.11-wl1" + digest,
 			want:         repo + "cnpg-postgres-plus:17.11-wl1" + digest,
 		},
-		"white label branch does not adopt": {
-			profile:      v1alpha1.SQLIdentityWhiteLabel,
-			branchImage:  "registry.example.com/cnpg-postgres-plus:17.10-wl1" + digest,
-			clusterImage: repo + "cnpg-postgres-plus:17.11",
+		"newer minor of a postgres repository is adopted with its digest": {
+			branchImage:  "registry.example.com/postgres:18.7" + digest,
+			clusterImage: "registry.example.com/postgres:18.8" + digest,
+			want:         "registry.example.com/postgres:18.8" + digest,
+		},
+		"same tag with another digest is not adopted": {
+			branchImage:  "registry.example.com/postgres:18.7" + digest,
+			clusterImage: "registry.example.com/postgres:18.7@sha256:" + "f123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
 			want:         "",
 		},
 		"empty branch image is not adopted": {
@@ -93,7 +94,7 @@ func TestAdoptableImage(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			got := adoptableImage(tc.profile, tc.branchImage, tc.clusterImage)
+			got := adoptableImage(tc.branchImage, tc.clusterImage)
 			require.Equal(t, tc.want, got)
 		})
 	}

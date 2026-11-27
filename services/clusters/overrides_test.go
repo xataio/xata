@@ -78,7 +78,7 @@ func TestMandatoryPostgresParameters(t *testing.T) {
 		t.Run(image, func(t *testing.T) {
 			t.Parallel()
 
-			legacy := MandatoryPostgresParameters(image, shared.LegacySQLIdentity)
+			legacy := MandatoryPostgresParameters(image, shared.LegacySQLIdentity())
 			require.Equal(t, legacyMandatoryParameters(image), legacy)
 			require.Contains(t, legacy["xatautils.privileged_extensions"], "xatautils")
 
@@ -88,7 +88,7 @@ func TestMandatoryPostgresParameters(t *testing.T) {
 				func(name string) bool { return name == "xatautils" }), ", ")
 			require.NotEmpty(t, ext)
 
-			wl := MandatoryPostgresParameters(image, shared.WhiteLabelSQLIdentity)
+			wl := MandatoryPostgresParameters(image, shared.WhiteLabelSQLIdentity())
 			require.Equal(t, map[string]string{
 				"lc_messages":                             "C.utf8",
 				"lc_monetary":                             "C.utf8",
@@ -150,7 +150,7 @@ func TestCreatePostgresClusterUtilsLibrary(t *testing.T) {
 			cellProfile: v1alpha1.SQLIdentityWhiteLabel,
 			image:       testImagePG18,
 			wantLibs:    []string{"pgprivs", "pg_stat_statements", "pg_cron", "pg_duckdb"},
-			wantParams: merge(MandatoryPostgresParameters(testImagePG18, shared.WhiteLabelSQLIdentity), map[string]string{
+			wantParams: merge(MandatoryPostgresParameters(testImagePG18, shared.WhiteLabelSQLIdentity()), map[string]string{
 				"max_connections":      "200",
 				"cron.database_name":   "defaultdb",
 				"duckdb.postgres_role": "dbadmin",
@@ -243,7 +243,7 @@ func TestUpdatePostgresClusterUtilsLibrary(t *testing.T) {
 			stored:   v1alpha1.SQLIdentityWhiteLabel,
 			update:   fullUpdate,
 			wantLibs: []string{"pgprivs", "pg_stat_statements", "pg_cron"},
-			wantParams: merge(MandatoryPostgresParameters(testImage, shared.WhiteLabelSQLIdentity), map[string]string{
+			wantParams: merge(MandatoryPostgresParameters(testImage, shared.WhiteLabelSQLIdentity()), map[string]string{
 				"max_connections":    "300",
 				"shared_buffers":     "128MB",
 				"cron.database_name": "defaultdb",
@@ -253,7 +253,7 @@ func TestUpdatePostgresClusterUtilsLibrary(t *testing.T) {
 			stored:   v1alpha1.SQLIdentityWhiteLabel,
 			update:   &clustersv1.UpdateClusterConfiguration{Hibernate: new(true)},
 			wantLibs: []string{"pgprivs", "pg_stat_statements"},
-			wantParams: merge(MandatoryPostgresParameters(testImage, shared.WhiteLabelSQLIdentity), map[string]string{
+			wantParams: merge(MandatoryPostgresParameters(testImage, shared.WhiteLabelSQLIdentity()), map[string]string{
 				"max_connections": "100",
 				"shared_buffers":  "128MB",
 			}),
@@ -392,7 +392,7 @@ func TestApplyProfileDefaults(t *testing.T) {
 			want:   map[string]string{},
 		},
 		"legacy does not change": {
-			id:     shared.LegacySQLIdentity,
+			id:     shared.LegacySQLIdentity(),
 			params: map[string]string{"cron.database_name": "jobs"},
 			want:   map[string]string{"cron.database_name": "jobs"},
 		},

@@ -18,6 +18,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	cpv1alpha1 "xata/proto/clusterpool-operator/api/v1alpha1"
+	branchv1alpha1 "xata/services/branch-operator/api/v1alpha1"
 )
 
 func TestFindPoolCluster(t *testing.T) {
@@ -79,8 +80,23 @@ func TestFindPoolCluster(t *testing.T) {
 		return pool
 	}
 
+	// The image of a white label pool can have the short name of a legacy
+	// image, so only the declared SQL identity tells the pools apart.
+	whiteLabelPool := matchingPool.DeepCopy()
+	whiteLabelPool.Spec.SQLIdentity = string(branchv1alpha1.SQLIdentityWhiteLabel)
+	whiteLabelPool.Spec.ClusterSpec.ImageName = "registry.example.com/postgres:17.5@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	whiteLabelPool.Spec.ClusterSpec.Bootstrap = &apiv1.BootstrapConfiguration{
+		InitDB: &apiv1.BootstrapInitDB{Database: "defaultdb", Owner: "dbadmin"},
+	}
+	whiteLabelPoolWithBootstrap := func(bootstrap *apiv1.BootstrapConfiguration) *cpv1alpha1.ClusterPool {
+		pool := whiteLabelPool.DeepCopy()
+		pool.Spec.ClusterSpec.Bootstrap = bootstrap
+		return pool
+	}
+
 	tests := map[string]struct {
 		objects      []client.Object
+		sqlIdentity  branchv1alpha1.SQLIdentityProfile
 		storageClass string
 		image        string
 		cpuRequest   string
@@ -222,6 +238,79 @@ func TestFindPoolCluster(t *testing.T) {
 			memory:       "4Gi",
 			storageSize:  "250Gi",
 		},
+		"white label branch takes a cluster from a white label pool": {
+			objects:      []client.Object{whiteLabelPool, availableCluster},
+			sqlIdentity:  branchv1alpha1.SQLIdentityWhiteLabel,
+			storageClass: "default-storage-class",
+			image:        whiteLabelPool.Spec.ClusterSpec.ImageName,
+			cpuRequest:   "2",
+			memory:       "4Gi",
+			storageSize:  "250Gi",
+			wantPoolName: "test-pool",
+			wantName:     "pool-cluster-1",
+		},
+		"white label pool with the legacy initdb names is skipped": {
+			objects:      []client.Object{whiteLabelPoolWithBootstrap(&apiv1.BootstrapConfiguration{InitDB: &apiv1.BootstrapInitDB{Database: "xata", Owner: "xata"}}), availableCluster},
+			sqlIdentity:  branchv1alpha1.SQLIdentityWhiteLabel,
+			storageClass: "default-storage-class",
+			image:        whiteLabelPool.Spec.ClusterSpec.ImageName,
+			cpuRequest:   "2",
+			memory:       "4Gi",
+			storageSize:  "250Gi",
+		},
+		"white label pool with a legacy initdb owner is skipped": {
+			objects:      []client.Object{whiteLabelPoolWithBootstrap(&apiv1.BootstrapConfiguration{InitDB: &apiv1.BootstrapInitDB{Database: "defaultdb", Owner: "xata"}}), availableCluster},
+			sqlIdentity:  branchv1alpha1.SQLIdentityWhiteLabel,
+			storageClass: "default-storage-class",
+			image:        whiteLabelPool.Spec.ClusterSpec.ImageName,
+			cpuRequest:   "2",
+			memory:       "4Gi",
+			storageSize:  "250Gi",
+		},
+		"white label pool with a legacy initdb database is skipped": {
+			objects:      []client.Object{whiteLabelPoolWithBootstrap(&apiv1.BootstrapConfiguration{InitDB: &apiv1.BootstrapInitDB{Database: "xata", Owner: "dbadmin"}}), availableCluster},
+			sqlIdentity:  branchv1alpha1.SQLIdentityWhiteLabel,
+			storageClass: "default-storage-class",
+			image:        whiteLabelPool.Spec.ClusterSpec.ImageName,
+			cpuRequest:   "2",
+			memory:       "4Gi",
+			storageSize:  "250Gi",
+		},
+		"white label pool with a noop bootstrap is skipped": {
+			objects:      []client.Object{whiteLabelPoolWithBootstrap(&apiv1.BootstrapConfiguration{Noop: &apiv1.BootstrapNoop{}}), availableCluster},
+			sqlIdentity:  branchv1alpha1.SQLIdentityWhiteLabel,
+			storageClass: "default-storage-class",
+			image:        whiteLabelPool.Spec.ClusterSpec.ImageName,
+			cpuRequest:   "2",
+			memory:       "4Gi",
+			storageSize:  "250Gi",
+		},
+		"white label pool without a bootstrap is skipped": {
+			objects:      []client.Object{whiteLabelPoolWithBootstrap(nil), availableCluster},
+			sqlIdentity:  branchv1alpha1.SQLIdentityWhiteLabel,
+			storageClass: "default-storage-class",
+			image:        whiteLabelPool.Spec.ClusterSpec.ImageName,
+			cpuRequest:   "2",
+			memory:       "4Gi",
+			storageSize:  "250Gi",
+		},
+		"white label branch skips a legacy pool": {
+			objects:      []client.Object{matchingPool, availableCluster},
+			sqlIdentity:  branchv1alpha1.SQLIdentityWhiteLabel,
+			storageClass: "default-storage-class",
+			image:        whiteLabelPool.Spec.ClusterSpec.ImageName,
+			cpuRequest:   "2",
+			memory:       "4Gi",
+			storageSize:  "250Gi",
+		},
+		"legacy branch skips a white label pool": {
+			objects:      []client.Object{whiteLabelPool, availableCluster},
+			storageClass: "default-storage-class",
+			image:        "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:17.5",
+			cpuRequest:   "2",
+			memory:       "4Gi",
+			storageSize:  "250Gi",
+		},
 		"no pools at all": {
 			objects:      nil,
 			storageClass: "default-storage-class",
@@ -238,7 +327,7 @@ func TestFindPoolCluster(t *testing.T) {
 			k8sClient := newPoolTestClient(t, tt.objects...)
 
 			gotPoolName, got, err := findPoolCluster(ctx, k8sClient, k8sClient, namespace,
-				tt.storageClass, tt.image, tt.cpuRequest, tt.memory, tt.storageSize)
+				tt.sqlIdentity, tt.storageClass, tt.image, tt.cpuRequest, tt.memory, tt.storageSize)
 			if tt.wantErr {
 				require.Error(t, err)
 				return
@@ -331,7 +420,7 @@ func TestFindPoolClusterConcurrent(t *testing.T) {
 	for i := range concurrency {
 		wg.Go(func() {
 			<-start
-			poolName, c, err := findPoolCluster(context.Background(), k8sClient, k8sClient, namespace, storageClass, image, cpuRequest, memory, storageSize)
+			poolName, c, err := findPoolCluster(context.Background(), k8sClient, k8sClient, namespace, branchv1alpha1.SQLIdentityLegacy, storageClass, image, cpuRequest, memory, storageSize)
 			results[i] = result{poolName: poolName, cluster: c, err: err}
 		})
 	}
