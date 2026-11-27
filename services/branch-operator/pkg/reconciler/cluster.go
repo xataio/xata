@@ -52,6 +52,7 @@ func (r *BranchReconciler) reconcileCluster(
 		PgBackRestWebIdentityRoleARN: r.PgBackRestWebIdentityRoleARN,
 		PgBackRestRestoreRoleARN:     r.restoreRoleARN(branch),
 		PgBackRestGCSWebIdentity:     r.PgBackRestWorkloadIdentityPool != "",
+		SQLIdentity:                  branch.Spec.SQLIdentity,
 	}
 
 	ac := apiv1ac.Cluster(branch.ClusterName(), r.ClustersNamespace).

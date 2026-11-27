@@ -677,12 +677,24 @@ spec:
                 x-kubernetes-validations:
                 - message: restore.pgbackrest is immutable
                   rule: has(oldSelf.pgbackrest) == has(self.pgbackrest)
+              sqlIdentity:
+                description: |-
+                  SQLIdentity selects the names of the application login, its database
+                  and its privilege group. When empty, the branch uses the legacy names.
+                enum:
+                - WhiteLabel
+                type: string
+                x-kubernetes-validations:
+                - message: sqlIdentity is immutable
+                  rule: self == oldSelf
             required:
             - cluster
             type: object
             x-kubernetes-validations:
             - message: restore is immutable
               rule: has(oldSelf.restore) == has(self.restore)
+            - message: sqlIdentity is immutable
+              rule: has(oldSelf.sqlIdentity) == has(self.sqlIdentity)
           status:
             description: BranchStatus defines the observed state of a Branch
             properties:

@@ -32,6 +32,23 @@ func TestValidate(t *testing.T) {
 				CloudProvider:               CloudProviderAzure,
 			},
 		},
+		"valid white label sql identity profile": {
+			cfg: Config{
+				ClustersStorageClass:        "xatastor",
+				ClustersVolumeSnapshotClass: "xatastor",
+				CloudProvider:               CloudProviderAWS,
+				SQLIdentityProfile:          "WhiteLabel",
+			},
+		},
+		"invalid sql identity profile": {
+			cfg: Config{
+				ClustersStorageClass:        "xatastor",
+				ClustersVolumeSnapshotClass: "xatastor",
+				CloudProvider:               CloudProviderAWS,
+				SQLIdentityProfile:          "whitelabel",
+			},
+			wantErr: "sql identity profile must be empty or",
+		},
 		"invalid cloud provider": {
 			cfg: Config{
 				ClustersStorageClass:        "xatastor",

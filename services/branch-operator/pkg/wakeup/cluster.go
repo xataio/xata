@@ -23,19 +23,19 @@ import (
 const rolePasswordSyncInterval = 100 * time.Millisecond
 
 // setUserPasswordSecret updates the Cluster resource to set the user password
-// secret for the 'xata' role to the secret associated with the given Branch
+// secret for the Branch's login role to the secret associated with the Branch
 func (r *WakeupReconciler) setUserPasswordSecret(ctx context.Context, branch *v1alpha1.Branch, cluster *apiv1.Cluster) error {
 	ac := apiv1ac.Cluster(cluster.Name, cluster.Namespace).
 		WithSpec(apiv1ac.ClusterSpec().
 			WithManaged(apiv1ac.ManagedConfiguration().
-				WithRoles(shared.XataRoleConfiguration(branch.Name))))
+				WithRoles(shared.AppRoleConfiguration(branch.Name, shared.BranchSQLIdentity(branch)))))
 
 	return r.Apply(ctx, ac, client.FieldOwner(ReconcilerName), client.ForceOwnership)
 }
 
 // waitForRolePasswordSync polls the Cluster's status until it reports that the
-// 'xata' role is using a password derived from the current version of the
-// Branch's user password secret.
+// Branch's login role is using a password derived from the current version of
+// the Branch's user password secret.
 //
 // The wait is best-effort; the Branch reconciler re-applies the same
 // configuration after adoption, so the password sync will eventually occur. If
@@ -46,6 +46,7 @@ func (r *WakeupReconciler) waitForRolePasswordSync(
 	ctx context.Context,
 	log logr.Logger,
 	branchName string,
+	login string,
 	cluster *apiv1.Cluster,
 ) (outcome string, err error) {
 	// Start a span for the password sync wait operation
@@ -57,7 +58,7 @@ func (r *WakeupReconciler) waitForRolePasswordSync(
 			))
 	defer o11y.CloseSpan(span, &err)
 
-	// Get the branch password secret for the 'xata' user
+	// Get the branch password secret for the login role
 	secret := &corev1.Secret{}
 	err = r.Get(ctx, client.ObjectKey{
 		Name:      branchName + "-app",
@@ -67,7 +68,7 @@ func (r *WakeupReconciler) waitForRolePasswordSync(
 		return "", fmt.Errorf("get branch secret %q: %w", branchName+"-app", err)
 	}
 
-	// Poll the Cluster's status until it reports that the 'xata' user role is
+	// Poll the Cluster's status until it reports that the login role is
 	// using the password from the current version of the Branch secret, or until
 	// the timeout passes. The timeout is a condition result rather than a poll
 	// deadline so that it ends the wait successfully, while a cancelled reconcile
@@ -80,7 +81,7 @@ func (r *WakeupReconciler) waitForRolePasswordSync(
 			}
 
 			// Check if the cluster has synced the user password secret
-			if clusterUsesCredsFromSecretVersion(cluster, shared.XataRoleName, secret.ResourceVersion) {
+			if clusterUsesCredsFromSecretVersion(cluster, login, secret.ResourceVersion) {
 				outcome = tracing.PasswordSyncOutcomeSynced
 				return true, nil
 			}

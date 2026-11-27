@@ -1,6 +1,7 @@
 package clusters
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -36,6 +37,7 @@ import (
 	cpv1alpha1 "xata/proto/clusterpool-operator/api/v1alpha1"
 	branchv1alpha1 "xata/services/branch-operator/api/v1alpha1"
 	"xata/services/branch-operator/pkg/reconciler/resources"
+	"xata/services/branch-operator/pkg/shared"
 
 	ipfiltering "xata/services/clusters/internal/ipfiltering"
 
@@ -278,7 +280,8 @@ func (c *ClustersService) CreatePostgresCluster(ctx context.Context, req *cluste
 		WithPgBackRestRestoreCipher(restoreSource).
 		WithPgBackRestRestoreSource(restoreSource).
 		WithXataUtilsPreloadLibrary().
-		WithMandatoryPostgresParameters()
+		WithMandatoryPostgresParameters().
+		WithSQLIdentity(branchv1alpha1.SQLIdentityProfile(c.config.SQLIdentityProfile), cmp.Or(parent, restoreSource))
 
 	// Fail fast if pgbackrest is requested but the cell isn't configured for it.
 	if branch := branchBuilder.Build(); branch.Spec.BackupSpec.IsPgBackRest() {
@@ -292,9 +295,12 @@ func (c *ClustersService) CreatePostgresCluster(ctx context.Context, req *cluste
 	// branches do not use clusters from the create pool - their clusters are
 	// created via XVol cloning and then waking up a cluster using a
 	// WakeupRequest. A request with a data source restores into its own
-	// cluster, so it does not use the pool either.
+	// cluster, so it does not use the pool either. Pool clusters are
+	// bootstrapped with the legacy SQL names, so a Branch with another SQL
+	// identity is always created cold.
 	var poolCluster *apiv1.Cluster
-	if parent == nil && req.GetDataSource() == nil {
+	usesLegacySQLIdentity := branchBuilder.Build().Spec.SQLIdentity == branchv1alpha1.SQLIdentityLegacy
+	if parent == nil && req.GetDataSource() == nil && usesLegacySQLIdentity {
 		if err := c.waitForClusterCache(ctx); err != nil {
 			return nil, fmt.Errorf("wait for cluster cache: %w", err)
 		}
@@ -331,7 +337,7 @@ func (c *ClustersService) CreatePostgresCluster(ctx context.Context, req *cluste
 
 	branch := branchBuilder.Build()
 
-	// Provision the <branchID>-app secret holding the xata role credentials
+	// Provision the <branchID>-app secret holding the login role credentials
 	// before the Branch so that credentials for the branch are always available
 	// and don't depend on the operator reconciling the branch. Re-use the
 	// password that a pool cluster already uses so that there is no password
@@ -341,7 +347,8 @@ func (c *ClustersService) CreatePostgresCluster(ctx context.Context, req *cluste
 		return nil, fmt.Errorf("get app password: %w", err)
 	}
 
-	createdSecret, err := c.createAppSecret(ctx, req.GetId()+"-app", req, appPassword)
+	createdSecret, err := c.createAppSecret(ctx, req.GetId()+"-app", req,
+		shared.BranchSQLIdentity(branch).Login, appPassword)
 	if err != nil {
 		return nil, fmt.Errorf("create app secret: %w", err)
 	}
@@ -349,7 +356,14 @@ func (c *ClustersService) CreatePostgresCluster(ctx context.Context, req *cluste
 	// Create the Branch CR. A retry can reach this point after the first call
 	// created the Branch but lost its response. Treat the existing Branch as
 	// the result only when it has the same idempotency key.
-	createErr := c.kubeClient.Create(ctx, branch)
+	//
+	// An older Branch CRD removes the SQL identity without an error. Strict
+	// validation makes the API server refuse the Branch instead.
+	var createOpts []client.CreateOption
+	if branch.Spec.SQLIdentity != branchv1alpha1.SQLIdentityLegacy {
+		createOpts = append(createOpts, client.FieldValidation(metav1.FieldValidationStrict))
+	}
+	createErr := c.kubeClient.Create(ctx, branch, createOpts...)
 	if apierrors.IsAlreadyExists(createErr) {
 		existing, err := c.getBranch(ctx, req.GetId())
 		if err != nil {

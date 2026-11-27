@@ -153,6 +153,19 @@ func (b *BranchBuilder) WithOverridesFromParent(parent *v1alpha1.Branch) *Branch
 	return b
 }
 
+// WithSQLIdentity sets the SQL identity profile of a new Branch. A Branch made
+// from the data of another Branch (a clone or a restore) takes the profile of
+// that source, because the roles and the database already exist in its data.
+// Otherwise the Branch takes the profile of the cell.
+func (b *BranchBuilder) WithSQLIdentity(cellProfile v1alpha1.SQLIdentityProfile, source *v1alpha1.Branch) *BranchBuilder {
+	if source != nil {
+		b.branch.Spec.SQLIdentity = source.Spec.SQLIdentity
+		return b
+	}
+	b.branch.Spec.SQLIdentity = cellProfile
+	return b
+}
+
 // WithUpdatesFrom configures the BranchBuilder with updates from the
 // UpdatePostgresClusterRequest.
 func (b *BranchBuilder) WithUpdatesFrom(req *clustersv1.UpdatePostgresClusterRequest, useStorageQoSClasses bool) *BranchBuilder {

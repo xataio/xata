@@ -14,7 +14,7 @@ import (
 	"xata/internal/passwords"
 )
 
-// createAppSecret creates the kubernetes.io/basic-auth Secret holding the xata
+// createAppSecret creates the kubernetes.io/basic-auth Secret holding the login
 // role credentials for a new branch. The caller supplies the password: freshly
 // generated for a cluster that will be bootstrapped from scratch, or copied
 // from the pool cluster's CNPG secret when adopting a cluster from a pool. If
@@ -23,7 +23,7 @@ import (
 // overwritten — and nil is returned so the caller does not clean it up on
 // failure. The branch-operator adopts the secret (Branch ownership) on the
 // first reconcile.
-func (c *ClustersService) createAppSecret(ctx context.Context, name string, req *clustersv1.CreatePostgresClusterRequest, password string) (*corev1.Secret, error) {
+func (c *ClustersService) createAppSecret(ctx context.Context, name string, req *clustersv1.CreatePostgresClusterRequest, username, password string) (*corev1.Secret, error) {
 	secret := &corev1.Secret{
 		Name:      name,
 		Namespace: c.config.ClustersNamespace,
@@ -36,7 +36,7 @@ func (c *ClustersService) createAppSecret(ctx context.Context, name string, req 
 		},
 		Type: corev1.SecretTypeBasicAuth,
 		Data: map[string][]byte{
-			corev1.BasicAuthUsernameKey: []byte("xata"),
+			corev1.BasicAuthUsernameKey: []byte(username),
 			corev1.BasicAuthPasswordKey: []byte(password),
 		},
 	}

@@ -2,6 +2,8 @@ package clusters
 
 import (
 	"fmt"
+
+	branchv1alpha1 "xata/services/branch-operator/api/v1alpha1"
 )
 
 const (
@@ -30,6 +32,7 @@ type Config struct {
 	PgBackRestAzureContainer    string            `env:"XATA_PGBACKREST_AZURE_CONTAINER" env-default:"" env-description:"Azure Blob Storage container for pgbackrest backups (azure only)"`
 	PgBackRestEncryptionEnabled bool              `env:"XATA_PGBACKREST_ENCRYPTION_ENABLED" env-default:"false" env-description:"enable client-side encryption for new pgbackrest backup destinations in this cell"`
 	UseStorageQoSClasses        bool              `env:"XATA_USE_STORAGE_QOS_CLASSES" env-default:"false" env-description:"whether to use storage QoS classes for new branches"`
+	SQLIdentityProfile          string            `env:"XATA_SQL_IDENTITY_PROFILE" env-default:"" env-description:"SQL identity profile stamped on new root branches: empty for the legacy names, or WhiteLabel"`
 
 	// VictoriaMetricsURL points at the cell-local VictoriaMetrics single-node
 	// instance used to back GetBranchMetrics. Empty means no metrics backend
@@ -49,6 +52,11 @@ func (cfg *Config) Validate() error {
 	}
 	if cfg.CloudProvider != CloudProviderAWS && cfg.CloudProvider != CloudProviderGCP && cfg.CloudProvider != CloudProviderAzure {
 		return fmt.Errorf("cloud provider must be %q, %q, or %q, got: %q", CloudProviderAWS, CloudProviderGCP, CloudProviderAzure, cfg.CloudProvider)
+	}
+	switch branchv1alpha1.SQLIdentityProfile(cfg.SQLIdentityProfile) {
+	case branchv1alpha1.SQLIdentityLegacy, branchv1alpha1.SQLIdentityWhiteLabel:
+	default:
+		return fmt.Errorf("sql identity profile must be empty or %q, got: %q", branchv1alpha1.SQLIdentityWhiteLabel, cfg.SQLIdentityProfile)
 	}
 	return nil
 }

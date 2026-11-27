@@ -10,7 +10,15 @@ import (
 
 // BranchSpec defines the desired state of a Branch
 // +kubebuilder:validation:XValidation:rule="has(oldSelf.restore) == has(self.restore)",message="restore is immutable"
+// +kubebuilder:validation:XValidation:rule="has(oldSelf.sqlIdentity) == has(self.sqlIdentity)",message="sqlIdentity is immutable"
 type BranchSpec struct {
+	// SQLIdentity selects the names of the application login, its database
+	// and its privilege group. When empty, the branch uses the legacy names.
+	// +optional
+	// +kubebuilder:validation:Enum=WhiteLabel
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="sqlIdentity is immutable"
+	SQLIdentity SQLIdentityProfile `json:"sqlIdentity,omitempty"`
+
 	// Restore specifies how to restore the branch from a backup source.
 	// +kubebuilder:validation:Optional
 	Restore *RestoreSpec `json:"restore,omitempty"`
@@ -95,6 +103,16 @@ type RestorePgBackRestSpec struct {
 	// +optional
 	Azure *PgBackRestAzureSpec `json:"azure,omitempty"`
 }
+
+// SQLIdentityProfile names a fixed set of SQL identity names.
+type SQLIdentityProfile string
+
+const (
+	// SQLIdentityLegacy uses xata / xata / xata_superuser.
+	SQLIdentityLegacy SQLIdentityProfile = ""
+	// SQLIdentityWhiteLabel uses dbadmin / defaultdb / db_superuser.
+	SQLIdentityWhiteLabel SQLIdentityProfile = "WhiteLabel"
+)
 
 // RestoreType defines the type of restore source
 type RestoreType string

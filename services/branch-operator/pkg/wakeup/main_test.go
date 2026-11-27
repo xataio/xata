@@ -276,7 +276,7 @@ func clusterHasXataRole(cluster *apiv1.Cluster) bool {
 		return false
 	}
 	for _, role := range cluster.Spec.Managed.Roles {
-		if role.Name == shared.XataRoleName {
+		if role.Name == shared.LegacySQLIdentity.Login {
 			return true
 		}
 	}

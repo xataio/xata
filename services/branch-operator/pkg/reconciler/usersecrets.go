@@ -9,6 +9,7 @@ import (
 
 	"xata/internal/passwords"
 	"xata/services/branch-operator/api/v1alpha1"
+	"xata/services/branch-operator/pkg/shared"
 )
 
 // reconcileSuperuserSecret ensures that the superuser secret exists for the
@@ -19,12 +20,12 @@ func (r *BranchReconciler) reconcileSuperuserSecret(ctx context.Context,
 	return r.reconcileSecret(ctx, branch, branch.Name+"-superuser", "postgres")
 }
 
-// reconcileAppSecret ensures that the app user (xata) secret exists for the
-// given Branch.
+// reconcileAppSecret ensures that the app user secret exists for the given
+// Branch. The username is the login of the Branch's SQL identity.
 func (r *BranchReconciler) reconcileAppSecret(ctx context.Context,
 	branch *v1alpha1.Branch,
 ) (controllerutil.OperationResult, error) {
-	return r.reconcileSecret(ctx, branch, branch.Name+"-app", "xata")
+	return r.reconcileSecret(ctx, branch, branch.Name+"-app", shared.BranchSQLIdentity(branch).Login)
 }
 
 func (r *BranchReconciler) reconcileSecret(ctx context.Context,

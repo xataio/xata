@@ -2,11 +2,18 @@
 
 package v1alpha1
 
+import (
+	apiv1alpha1 "xata/services/branch-operator/api/v1alpha1"
+)
+
 // BranchSpecApplyConfiguration represents a declarative configuration of the BranchSpec type for use
 // with apply.
 //
 // BranchSpec defines the desired state of a Branch
 type BranchSpecApplyConfiguration struct {
+	// SQLIdentity selects the names of the application login, its database
+	// and its privilege group. When empty, the branch uses the legacy names.
+	SQLIdentity *apiv1alpha1.SQLIdentityProfile `json:"sqlIdentity,omitempty"`
 	// Restore specifies how to restore the branch from a backup source.
 	Restore *RestoreSpecApplyConfiguration `json:"restore,omitempty"`
 	// ClusterSpec defines the CNPG cluster configuration for the branch
@@ -26,6 +33,14 @@ type BranchSpecApplyConfiguration struct {
 // apply.
 func BranchSpec() *BranchSpecApplyConfiguration {
 	return &BranchSpecApplyConfiguration{}
+}
+
+// WithSQLIdentity sets the SQLIdentity field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the SQLIdentity field is set to the value of the last call.
+func (b *BranchSpecApplyConfiguration) WithSQLIdentity(value apiv1alpha1.SQLIdentityProfile) *BranchSpecApplyConfiguration {
+	b.SQLIdentity = &value
+	return b
 }
 
 // WithRestore sets the Restore field in the declarative configuration to the given value

@@ -36,7 +36,7 @@ var InheritedAnnotations = map[string]string{
 	"prometheus.io/scheme": "https",
 }
 
-// PostgreSQL version-specific privileges for xata_superuser role
+// PostgreSQL version-specific privileges for the privilege group role
 var (
 	// pg14Privileges contains privileges available in PostgreSQL 14 and earlier
 	pg14Privileges = []string{
@@ -91,8 +91,9 @@ var (
 	}
 )
 
-// GeneratePostInitSQL generates PostInitSQL statements based on PostgreSQL major version
-func GeneratePostInitSQL(majorVersion int) []string {
+// GeneratePostInitSQL generates PostInitSQL statements based on PostgreSQL
+// major version and the SQL names of the Branch
+func GeneratePostInitSQL(majorVersion int, id shared.SQLIdentity) []string {
 	// Select privileges based on version
 	var privileges []string
 	switch {
@@ -107,19 +108,19 @@ func GeneratePostInitSQL(majorVersion int) []string {
 		privileges = pg14Privileges
 	}
 
-	grantStatement := fmt.Sprintf("GRANT %s TO xata_superuser;", strings.Join(privileges, ", "))
+	grantStatement := fmt.Sprintf("GRANT %s TO %s;", strings.Join(privileges, ", "), id.PrivilegeGroup)
 
 	return []string{
 		// These are executed as the superuser.
-		// Create a pseudo-superuser role that we then assign to the `xata` user.
-		"CREATE ROLE xata_superuser NOLOGIN;",
+		// Create a pseudo-superuser role that we then assign to the login role.
+		fmt.Sprintf("CREATE ROLE %s NOLOGIN;", id.PrivilegeGroup),
 		grantStatement,
-		// make `xata` the pseudo-superuser
-		"GRANT xata_superuser TO xata;",
-		// Allow the xata role to own schemas in the `postgres` database, but not the database itself, so it cannot drop it.
-		"ALTER ROLE xata LOGIN INHERIT CREATEDB CREATEROLE BYPASSRLS REPLICATION;",
-		"ALTER SCHEMA public OWNER TO xata;",
-		"GRANT CREATE ON DATABASE postgres TO xata;",
+		// make the login role the pseudo-superuser
+		fmt.Sprintf("GRANT %s TO %s;", id.PrivilegeGroup, id.Login),
+		// Allow the login role to own schemas in the `postgres` database, but not the database itself, so it cannot drop it.
+		fmt.Sprintf("ALTER ROLE %s LOGIN INHERIT CREATEDB CREATEROLE BYPASSRLS REPLICATION;", id.Login),
+		fmt.Sprintf("ALTER SCHEMA public OWNER TO %s;", id.Login),
+		fmt.Sprintf("GRANT CREATE ON DATABASE postgres TO %s;", id.Login),
 	}
 }
 
@@ -150,6 +151,9 @@ type ClusterConfig struct {
 	// volume and the PGBACKREST_REPO1_GCS_KEY environment variable, which
 	// pgBackRest uses for Branches with gcs.keyType=web-id.
 	PgBackRestGCSWebIdentity bool
+	// SQLIdentity is the SQL identity profile stored on the Branch. The zero
+	// value selects the legacy names.
+	SQLIdentity v1alpha1.SQLIdentityProfile
 }
 
 // ClusterSpec generates the CNPG Cluster spec apply configuration from the
@@ -166,6 +170,8 @@ func ClusterSpec(
 			corev1ac.LocalObjectReference().WithName(secretName))
 	}
 
+	id := shared.SQLIdentityFor(cfg.SQLIdentity)
+
 	// Build Bootstrap configuration based on restore type
 	var bootstrap *apiv1ac.BootstrapConfigurationApplyConfiguration
 	var restoreType v1alpha1.RestoreType
@@ -176,17 +182,17 @@ func ClusterSpec(
 	switch restoreType {
 	case v1alpha1.RestoreTypeVolumeSnapshot:
 		bootstrap = apiv1ac.BootstrapConfiguration().
-			WithRecovery(VolumeSnapshotBootstrapRecovery(branchName, cfg.RestoreSpec.Name))
+			WithRecovery(VolumeSnapshotBootstrapRecovery(branchName, cfg.RestoreSpec.Name, id))
 	case v1alpha1.RestoreTypeObjectStore:
 		bootstrap = apiv1ac.BootstrapConfiguration().
-			WithRecovery(ObjectStoreBootstrapRecovery(branchName, cfg.RestoreSpec))
+			WithRecovery(ObjectStoreBootstrapRecovery(branchName, cfg.RestoreSpec, id))
 	case v1alpha1.RestoreTypeXVolClone:
 		bootstrap = apiv1ac.BootstrapConfiguration().
 			WithNoop(apiv1.BootstrapNoop{})
 	default:
 		majorVersion := postgresversions.ExtractMajorVersionFromImage(cfg.Image)
 		bootstrap = apiv1ac.BootstrapConfiguration().
-			WithInitDB(BootstrapInitDB(branchName, majorVersion))
+			WithInitDB(BootstrapInitDB(branchName, majorVersion, id))
 	}
 
 	// Build external clusters for object store recovery
@@ -246,7 +252,7 @@ func ClusterSpec(
 					apiv1.ServiceSelectorTypeR,
 					apiv1.ServiceSelectorTypeRO,
 				)).
-			WithRoles(shared.XataRoleConfiguration(branchName))).
+			WithRoles(shared.AppRoleConfiguration(branchName, id))).
 		WithMonitoring(apiv1ac.MonitoringConfiguration().
 			WithTLSConfig(apiv1ac.ClusterMonitoringTLSConfiguration().
 				WithEnabled(true)).
@@ -282,10 +288,10 @@ func ClusterSpec(
 
 // VolumeSnapshotBootstrapRecovery creates a BootstrapRecovery apply configuration
 // using the provided branch and target cluster names.
-func VolumeSnapshotBootstrapRecovery(branchName, targetBranchName string) *apiv1ac.BootstrapRecoveryApplyConfiguration {
+func VolumeSnapshotBootstrapRecovery(branchName, targetBranchName string, id shared.SQLIdentity) *apiv1ac.BootstrapRecoveryApplyConfiguration {
 	return apiv1ac.BootstrapRecovery().
-		WithOwner("xata").
-		WithDatabase("xata").
+		WithOwner(id.Login).
+		WithDatabase(id.Database).
 		WithSecret(corev1ac.LocalObjectReference().
 			WithName(branchName + "-app")).
 		WithVolumeSnapshots(apiv1ac.DataSource().
@@ -299,10 +305,10 @@ func VolumeSnapshotBootstrapRecovery(branchName, targetBranchName string) *apiv1
 
 // ObjectStoreBootstrapRecovery creates a BootstrapRecovery apply configuration
 // for point-in-time recovery from object storage.
-func ObjectStoreBootstrapRecovery(branchName string, restoreSpec *v1alpha1.RestoreSpec) *apiv1ac.BootstrapRecoveryApplyConfiguration {
+func ObjectStoreBootstrapRecovery(branchName string, restoreSpec *v1alpha1.RestoreSpec, id shared.SQLIdentity) *apiv1ac.BootstrapRecoveryApplyConfiguration {
 	recovery := apiv1ac.BootstrapRecovery().
-		WithOwner("xata").
-		WithDatabase("xata").
+		WithOwner(id.Login).
+		WithDatabase(id.Database).
 		WithSecret(corev1ac.LocalObjectReference().
 			WithName(branchName + "-app")).
 		WithSource(externalClusterName(restoreSpec))
@@ -383,16 +389,16 @@ func externalClusterName(restoreSpec *v1alpha1.RestoreSpec) string {
 }
 
 // BootstrapInitDB returns a BootstrapInitDB apply configuration with version-specific SQL
-func BootstrapInitDB(branchName string, majorVersion int) *apiv1ac.BootstrapInitDBApplyConfiguration {
+func BootstrapInitDB(branchName string, majorVersion int, id shared.SQLIdentity) *apiv1ac.BootstrapInitDBApplyConfiguration {
 	return apiv1ac.BootstrapInitDB().
-		WithDatabase("xata").
+		WithDatabase(id.Database).
 		WithEncoding("UTF8").
 		WithLocaleCType("C").
 		WithLocaleCollate("C").
-		WithOwner("xata").
+		WithOwner(id.Login).
 		WithSecret(corev1ac.LocalObjectReference().
 			WithName(branchName + "-app")).
-		WithPostInitSQL(GeneratePostInitSQL(majorVersion)...)
+		WithPostInitSQL(GeneratePostInitSQL(majorVersion, id)...)
 }
 
 // PostgresParametersToMap converts a list of PostgresParameter to a map

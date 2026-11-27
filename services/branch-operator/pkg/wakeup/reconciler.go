@@ -20,6 +20,7 @@ import (
 	"xata/internal/o11y"
 	poolv1alpha1 "xata/proto/clusterpool-operator/api/v1alpha1"
 	"xata/services/branch-operator/api/v1alpha1"
+	"xata/services/branch-operator/pkg/shared"
 	"xata/services/branch-operator/pkg/wakeup/tracing"
 )
 
@@ -198,7 +199,7 @@ func (r *WakeupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		}
 	}()
 
-	// Update the Cluster's spec to set the 'xata' user password secret
+	// Update the Cluster's spec to set the login role password secret
 	if wr.Spec.PasswordSync == v1alpha1.PasswordSyncModeWait {
 		err = r.setUserPasswordSecret(ctx, branch, cluster)
 		if err != nil {
@@ -228,10 +229,10 @@ func (r *WakeupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return ctrl.Result{}, ignoreTerminal(err)
 	}
 
-	// Wait for the 'xata' user password secret to be synced to the Cluster
+	// Wait for the login role password secret to be synced to the Cluster
 	if wr.Spec.PasswordSync == v1alpha1.PasswordSyncModeWait {
 		var outcome string
-		outcome, err = r.waitForRolePasswordSync(ctx, log, branch.Name, cluster)
+		outcome, err = r.waitForRolePasswordSync(ctx, log, branch.Name, shared.BranchSQLIdentity(branch).Login, cluster)
 		span.SetAttributes(tracing.AttrPasswordSyncOutcome.String(outcome))
 		if err != nil {
 			log.Error(err, "waiting for Cluster password secrets", "clusterName", cluster.Name)

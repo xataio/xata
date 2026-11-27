@@ -2254,6 +2254,7 @@ type testServiceConfig struct {
 	pgBackRestAzureAcct  string
 	pgBackRestAzureCont  string
 	interceptorFuncs     interceptor.Funcs
+	sqlIdentityProfile   string
 }
 
 type testServiceOption func(*testServiceConfig)
@@ -2370,6 +2371,7 @@ func setupTestClustersService(t *testing.T, opts ...testServiceOption) (*Cluster
 			PgBackRestAzureAccount:      cfg.pgBackRestAzureAcct,
 			PgBackRestAzureContainer:    cfg.pgBackRestAzureCont,
 			PgBackRestEncryptionEnabled: cfg.pgBackRestEncryption,
+			SQLIdentityProfile:          cfg.sqlIdentityProfile,
 		},
 		kubeClient:     fakeClient,
 		scheme:         scheme,
