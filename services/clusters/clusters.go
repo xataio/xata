@@ -279,7 +279,11 @@ func (c *ClustersService) CreatePostgresCluster(ctx context.Context, req *cluste
 		WithPgBackRestCipher(c.config.PgBackRestEncryptionEnabled).
 		WithPgBackRestRestoreCipher(restoreSource).
 		WithPgBackRestRestoreSource(restoreSource).
-		WithSQLIdentity(branchv1alpha1.SQLIdentityProfile(c.config.SQLIdentityProfile), cmp.Or(parent, restoreSource)).
+		WithSQLIdentity(branchv1alpha1.SQLIdentityProfile(c.config.SQLIdentityProfile), cmp.Or(parent, restoreSource))
+	if err := branchBuilder.WithSQLIdentityImage(c.config.SQLIdentityImages, parent, restoreSource); err != nil {
+		return nil, err
+	}
+	branchBuilder.
 		WithUtilsPreloadLibrary().
 		WithMandatoryPostgresParameters()
 
@@ -452,15 +456,23 @@ func (c *ClustersService) UpdatePostgresCluster(ctx context.Context, req *cluste
 			return errBackupsNotEnabled
 		}
 
-		branch = NewBranchBuilder().
+		builder := NewBranchBuilder().
 			FromExistingBranch(existing).
-			WithUpdatesFrom(req, c.config.UseStorageQoSClasses).
+			WithUpdatesFrom(req, c.config.UseStorageQoSClasses)
+		if err := builder.WithSQLIdentityImageUpdate(c.config.SQLIdentityImages, req, existing.Spec.ClusterSpec.Image); err != nil {
+			return err
+		}
+		branch = builder.
 			WithUtilsPreloadLibrary().
 			WithMandatoryPostgresParameters().
 			Build()
 
 		return c.kubeClient.Update(ctx, branch)
 	})
+	// The refusal of an image is a gRPC status already
+	if st, ok := status.FromError(err); ok && st.Code() != codes.OK {
+		return nil, err
+	}
 	if errors.Is(err, errBackupsNotEnabled) {
 		return nil, status.Errorf(codes.InvalidArgument, "branch %s has no backups to configure", req.GetId())
 	}

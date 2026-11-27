@@ -85,3 +85,34 @@ func TestClusterSpecSQLIdentity(t *testing.T) {
 		})
 	}
 }
+
+// The post-init SQL depends on the major version that the image tag names.
+func TestClusterSpecPostInitSQLImageReference(t *testing.T) {
+	const digest = "@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
+	tests := map[string]struct {
+		image string
+		major int
+	}{
+		"tag":                      {image: "ghcr.io/xataio/postgres-images/cnpg-postgres-plus:18.1", major: 18},
+		"tag suffix":               {image: "registry.example.com/pg/cnpg-postgres-plus:18.7-wl1", major: 18},
+		"tag suffix and digest":    {image: "registry.example.com/pg/cnpg-postgres-plus:18.7-wl1" + digest, major: 18},
+		"registry port and digest": {image: "localhost:5000/cnpg-postgres-plus:17.7-wl1" + digest, major: 17},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			base := v1alpha1.ClusterSpec{
+				Image:   tc.image,
+				Storage: v1alpha1.StorageSpec{Size: "1Gi"},
+			}
+			spec := resources.ClusterSpec("b1", "b1", resources.ClusterConfig{
+				ClusterSpec: base,
+				SQLIdentity: v1alpha1.SQLIdentityWhiteLabel,
+			})
+			require.Equal(t, tc.image, *spec.ImageName)
+			require.Equal(t, resources.GeneratePostInitSQL(tc.major, shared.WhiteLabelSQLIdentity), spec.Bootstrap.InitDB.PostInitSQL)
+			require.NotEqual(t, resources.GeneratePostInitSQL(14, shared.WhiteLabelSQLIdentity), spec.Bootstrap.InitDB.PostInitSQL)
+		})
+	}
+}

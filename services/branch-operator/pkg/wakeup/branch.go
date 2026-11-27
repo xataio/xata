@@ -86,8 +86,12 @@ func (r *WakeupReconciler) assignClusterToBranch(ctx context.Context, branch *v1
 // kind of mismatch. Adopting newer minors makes a pool image bump propagate
 // to its branches for free on their next wakeup, instead of every wakeup
 // paying an extra rollout to move the warm cluster back to the branch's
-// older image.
-func adoptableImage(branchImage, clusterImage string) string {
+// older image. A Branch with a non-legacy SQL identity runs an image that
+// the clusters service picks, so it never adopts a pool image.
+func adoptableImage(profile v1alpha1.SQLIdentityProfile, branchImage, clusterImage string) string {
+	if profile != v1alpha1.SQLIdentityLegacy {
+		return ""
+	}
 	if branchImage == "" || clusterImage == "" || branchImage == clusterImage {
 		return ""
 	}

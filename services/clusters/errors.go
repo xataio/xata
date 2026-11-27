@@ -34,9 +34,19 @@ const ImageUnavailableReason = "IMAGE_UNAVAILABLE"
 
 // restoreSourceUnsupportedError refuses a restore from the backups of source.
 func restoreSourceUnsupportedError(source, reason string) error {
-	st := status.New(codes.FailedPrecondition, fmt.Sprintf("restore source %s: %s", source, reason))
+	return failedPrecondition(RestoreSourceUnsupportedReason, fmt.Sprintf("restore source %s: %s", source, reason))
+}
+
+// imageUnavailableError refuses an image the cell does not offer.
+func imageUnavailableError(format string, args ...any) error {
+	return failedPrecondition(ImageUnavailableReason, fmt.Sprintf(format, args...))
+}
+
+// failedPrecondition returns a FailedPrecondition error tagged with reason.
+func failedPrecondition(reason, msg string) error {
+	st := status.New(codes.FailedPrecondition, msg)
 	withDetails, err := st.WithDetails(&errdetails.ErrorInfo{
-		Reason: RestoreSourceUnsupportedReason,
+		Reason: reason,
 		Domain: "xata",
 	})
 	if err != nil {

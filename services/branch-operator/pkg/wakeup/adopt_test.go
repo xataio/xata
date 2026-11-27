@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"xata/services/branch-operator/api/v1alpha1"
 )
 
 func TestAdoptableImage(t *testing.T) {
@@ -11,7 +13,10 @@ func TestAdoptableImage(t *testing.T) {
 
 	const repo = "ghcr.io/xataio/postgres-images/"
 
+	const digest = "@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
 	tests := map[string]struct {
+		profile      v1alpha1.SQLIdentityProfile
 		branchImage  string
 		clusterImage string
 		want         string
@@ -61,6 +66,17 @@ func TestAdoptableImage(t *testing.T) {
 			clusterImage: repo + "cnpg-postgres-plus:18rc1",
 			want:         "",
 		},
+		"digest pinned tags compare on version": {
+			branchImage:  repo + "cnpg-postgres-plus:17.10" + digest,
+			clusterImage: repo + "cnpg-postgres-plus:17.11-wl1" + digest,
+			want:         repo + "cnpg-postgres-plus:17.11-wl1" + digest,
+		},
+		"white label branch does not adopt": {
+			profile:      v1alpha1.SQLIdentityWhiteLabel,
+			branchImage:  "registry.example.com/cnpg-postgres-plus:17.10-wl1" + digest,
+			clusterImage: repo + "cnpg-postgres-plus:17.11",
+			want:         "",
+		},
 		"empty branch image is not adopted": {
 			branchImage:  "",
 			clusterImage: repo + "cnpg-postgres-plus:17.11",
@@ -77,7 +93,7 @@ func TestAdoptableImage(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			got := adoptableImage(tc.branchImage, tc.clusterImage)
+			got := adoptableImage(tc.profile, tc.branchImage, tc.clusterImage)
 			require.Equal(t, tc.want, got)
 		})
 	}

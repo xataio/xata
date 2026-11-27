@@ -251,7 +251,7 @@ func (r *WakeupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	// image, so that a pool version bump propagates to the branch on its next
 	// wakeup instead of the branch reconciler rolling the warm cluster back to
 	// the branch's older image right after adoption
-	image := adoptableImage(branch.Spec.ClusterSpec.Image, cluster.Spec.ImageName)
+	image := adoptableImage(branch.Spec.SQLIdentity, branch.Spec.ClusterSpec.Image, cluster.Spec.ImageName)
 	if image != "" {
 		log.Info("adopting pool cluster image", "branchName", branch.Name,
 			"branchImage", branch.Spec.ClusterSpec.Image, "clusterImage", image)

@@ -38,6 +38,19 @@ func TestValidate(t *testing.T) {
 				ClustersVolumeSnapshotClass: "xatastor",
 				CloudProvider:               CloudProviderAWS,
 				SQLIdentityProfile:          "WhiteLabel",
+				SQLIdentityImages:           map[string]string{"18": "registry.example.com/cnpg-postgres-plus:18.7-wl1"},
+			},
+		},
+		"valid white label sql identity profile with postgres images": {
+			cfg: Config{
+				ClustersStorageClass:        "xatastor",
+				ClustersVolumeSnapshotClass: "xatastor",
+				CloudProvider:               CloudProviderAWS,
+				SQLIdentityProfile:          "WhiteLabel",
+				SQLIdentityImages: map[string]string{
+					"17": "registry.example.com/postgres:17.7@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+					"18": "registry.example.com/postgres:18.7@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+				},
 			},
 		},
 		"invalid sql identity profile": {

@@ -2256,6 +2256,7 @@ type testServiceConfig struct {
 	pgBackRestAzureCont  string
 	interceptorFuncs     interceptor.Funcs
 	sqlIdentityProfile   string
+	sqlIdentityImages    map[string]string
 }
 
 type testServiceOption func(*testServiceConfig)
@@ -2323,8 +2324,9 @@ func withInterceptorFuncs(funcs interceptor.Funcs) testServiceOption {
 
 func setupTestClustersService(t *testing.T, opts ...testServiceOption) (*ClustersService, client.Client) {
 	cfg := &testServiceConfig{
-		pgBackRestBucket: "test-pgbackrest-bucket",
-		cloudProvider:    CloudProviderAWS,
+		pgBackRestBucket:  "test-pgbackrest-bucket",
+		cloudProvider:     CloudProviderAWS,
+		sqlIdentityImages: testSQLIdentityImages,
 	}
 	for _, opt := range opts {
 		opt(cfg)
@@ -2373,6 +2375,7 @@ func setupTestClustersService(t *testing.T, opts ...testServiceOption) (*Cluster
 			PgBackRestAzureContainer:    cfg.pgBackRestAzureCont,
 			PgBackRestEncryptionEnabled: cfg.pgBackRestEncryption,
 			SQLIdentityProfile:          cfg.sqlIdentityProfile,
+			SQLIdentityImages:           cfg.sqlIdentityImages,
 		},
 		kubeClient:     fakeClient,
 		scheme:         scheme,

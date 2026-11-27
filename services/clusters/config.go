@@ -33,6 +33,7 @@ type Config struct {
 	PgBackRestEncryptionEnabled bool              `env:"XATA_PGBACKREST_ENCRYPTION_ENABLED" env-default:"false" env-description:"enable client-side encryption for new pgbackrest backup destinations in this cell"`
 	UseStorageQoSClasses        bool              `env:"XATA_USE_STORAGE_QOS_CLASSES" env-default:"false" env-description:"whether to use storage QoS classes for new branches"`
 	SQLIdentityProfile          string            `env:"XATA_SQL_IDENTITY_PROFILE" env-default:"" env-description:"SQL identity profile stamped on new root branches: empty for the legacy names, or WhiteLabel"`
+	SQLIdentityImages           map[string]string `env:"XATA_SQL_IDENTITY_IMAGES" env-default:"" env-description:"Postgres image per major version for branches with a non-legacy SQL identity, as major:image pairs separated by commas, e.g. 18:registry.example.com/postgres:18.7@sha256:<digest>"`
 
 	// VictoriaMetricsURL points at the cell-local VictoriaMetrics single-node
 	// instance used to back GetBranchMetrics. Empty means no metrics backend
@@ -57,6 +58,12 @@ func (cfg *Config) Validate() error {
 	case branchv1alpha1.SQLIdentityLegacy, branchv1alpha1.SQLIdentityWhiteLabel:
 	default:
 		return fmt.Errorf("sql identity profile must be empty or %q, got: %q", branchv1alpha1.SQLIdentityWhiteLabel, cfg.SQLIdentityProfile)
+	}
+	if err := validateSQLIdentityImages(cfg.SQLIdentityImages); err != nil {
+		return err
+	}
+	if cfg.SQLIdentityProfile != string(branchv1alpha1.SQLIdentityLegacy) && len(cfg.SQLIdentityImages) == 0 {
+		return fmt.Errorf("sql identity images are required with the sql identity profile %q", cfg.SQLIdentityProfile)
 	}
 	return nil
 }

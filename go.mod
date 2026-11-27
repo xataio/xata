@@ -14,6 +14,7 @@ require (
 	github.com/cloudnative-pg/machinery v0.3.3
 	github.com/coder/websocket v1.8.15
 	github.com/customerio/go-customerio/v3 v3.11.0
+	github.com/distribution/reference v0.6.0
 	github.com/elastic/go-concert v0.3.1
 	github.com/getkin/kin-openapi v0.149.0
 	github.com/go-logr/logr v1.4.4
@@ -221,7 +222,6 @@ require (
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.1 // indirect
 	github.com/denis-tingaikin/go-header v0.5.0 // indirect
-	github.com/distribution/reference v0.6.0 // indirect
 	github.com/dlclark/regexp2/v2 v2.2.1 // indirect
 	github.com/dmarkham/enumer v1.5.10 // indirect
 	github.com/docker/cli v29.5.3+incompatible // indirect
