@@ -21,11 +21,21 @@ func (r *BranchReconciler) reconcileAdditionalServiceRW(
 }
 
 // reconcileAdditionalServiceR ensures that the read additional service exists
-// for the given Branch.
+// for the given Branch only if the Branch has replicas
 func (r *BranchReconciler) reconcileAdditionalServiceR(
 	ctx context.Context,
 	branch *v1alpha1.Branch,
 ) (controllerutil.OperationResult, error) {
+	// If the branch has no replicas, ensure that the read service does not
+	// exist
+	if branch.Spec.ClusterSpec.Instances == 1 {
+		return controllerutil.OperationResultNone, client.IgnoreNotFound(
+			r.Delete(ctx, &v1.Service{
+				Name:      "branch-" + branch.Name + "-r",
+				Namespace: r.ClustersNamespace,
+			}))
+	}
+
 	return r.reconcileAdditionalService(ctx, branch, "branch-"+branch.Name+"-r", "r")
 }
 
