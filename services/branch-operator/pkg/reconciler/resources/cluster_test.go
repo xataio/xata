@@ -1219,6 +1219,7 @@ func TestGeneratePostInitSQL(t *testing.T) {
 		majorVersion       int
 		expectedPrivileges []string
 		shouldNotContain   []string
+		pgMonitorAdmin     bool
 		description        string
 	}{
 		{
@@ -1277,6 +1278,7 @@ func TestGeneratePostInitSQL(t *testing.T) {
 				"pg_use_reserved_connections",
 			},
 			shouldNotContain: []string{},
+			pgMonitorAdmin:   true,
 			description:      "PG 16 should have all privileges",
 		},
 		{
@@ -1296,6 +1298,7 @@ func TestGeneratePostInitSQL(t *testing.T) {
 				"pg_use_reserved_connections",
 			},
 			shouldNotContain: []string{},
+			pgMonitorAdmin:   true,
 			description:      "PG 17 should have all privileges",
 		},
 		{
@@ -1315,6 +1318,7 @@ func TestGeneratePostInitSQL(t *testing.T) {
 				"pg_use_reserved_connections",
 			},
 			shouldNotContain: []string{},
+			pgMonitorAdmin:   true,
 			description:      "PG 18 should have all privileges",
 		},
 		{
@@ -1358,6 +1362,13 @@ func TestGeneratePostInitSQL(t *testing.T) {
 
 			for _, privilege := range tc.shouldNotContain {
 				require.NotContains(t, grantStatement, privilege, "GRANT statement should not contain %s for %s", privilege, tc.description)
+			}
+
+			adminGrant := "GRANT pg_monitor TO xata_superuser WITH ADMIN OPTION;"
+			if tc.pgMonitorAdmin {
+				require.Contains(t, sql, adminGrant, tc.description)
+			} else {
+				require.NotContains(t, sql, adminGrant, tc.description)
 			}
 		})
 	}
