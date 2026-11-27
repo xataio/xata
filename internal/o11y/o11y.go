@@ -100,7 +100,7 @@ func New(ctx context.Context, config *Config) System {
 		metrics = initMetrics(ctx, &monitoringLogger, resource.Default(), config.MetricsPeriod)
 	}
 
-	// TODO: just copied from original code. Find some better way?
+
 	var profiler profiler
 	var profilingServer *http.Server
 	initGlobalOnce.Do(func() {
@@ -116,36 +116,36 @@ func New(ctx context.Context, config *Config) System {
 
 		otel.SetTracerProvider(tracing.Provider(ctx, &otelLogger, "xata", "global"))
 		otel.SetMeterProvider(metrics.Provider("xata", "global"))
-
-		var err error
-		profiler, err = config.Profiling.GetValue().Start(config)
-		if err != nil {
-			profiler = (*noopProfiler)(nil)
-		}
-
-		if addr := config.ProfilingServer; addr != "" {
-			mux := http.NewServeMux()
-			mux.HandleFunc("/debug/pprof/", pprof.Index)
-			mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
-			mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
-			mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
-			mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
-
-			server := &http.Server{
-				Addr:              addr,
-				Handler:           mux,
-				ReadHeaderTimeout: 10 * time.Second,
-			}
-
-			profilingServer = server
-
-			go func() {
-				if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-					logger.Error().Err(err).Msg("Failed to start profiling server")
-				}
-			}()
-		}
 	})
+
+	var err error
+	profiler, err = config.Profiling.GetValue().Start(config)
+	if err != nil {
+		profiler = (*noopProfiler)(nil)
+	}
+
+	if addr := config.ProfilingServer; addr != "" {
+		mux := http.NewServeMux()
+		mux.HandleFunc("/debug/pprof/", pprof.Index)
+		mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+		mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+		mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+		mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+
+		server := &http.Server{
+			Addr:              addr,
+			Handler:           mux,
+			ReadHeaderTimeout: 10 * time.Second,
+		}
+
+		profilingServer = server
+
+		go func() {
+			if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				logger.Error().Err(err).Msg("Failed to start profiling server")
+			}
+		}()
+	}
 
 	idStyle := config.IDStyle.style
 	if idStyle == nil {
